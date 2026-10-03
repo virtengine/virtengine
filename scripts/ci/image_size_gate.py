@@ -200,6 +200,24 @@ def resolve_max_bytes() -> int:
     return value
 
 
+def derived_runtime_layer_bytes() -> int:
+    """The non-binary part of the image, DERIVED BY SUBTRACTION.
+
+    `MEASURED_IMAGE_BYTES` is a real `docker image inspect` value;
+    `MEASURED_BINARY_BYTES` is a real build output. Their difference is what
+    the alpine base plus `bash`, `ca-certificates`, `curl` and `jq` add, but
+    nobody has `stat`ed the runtime stage: the numbers were taken on a host
+    with no docker daemon. So this is inference, and it is only ever used for
+    the diagnostic print -- `evaluate()` decides on `image_bytes` against
+    `MAX_IMAGE_BYTES` alone.
+
+    Extracted as a function so the test asserts the SUBTRACTION and its
+    bounds instead of restating the expression (a restatement cannot detect
+    its own inversion).
+    """
+    return MEASURED_IMAGE_BYTES - MEASURED_BINARY_BYTES
+
+
 def resolve_image_size() -> int | None:
     """The image size under test.
 
@@ -232,18 +250,16 @@ def evaluate(
     print(f"Image size: {image_bytes} bytes ({image_bytes / mib:.2f} MiB)")
     print(f"Recorded measurement: {MEASURED_IMAGE_BYTES} bytes ({MEASURED_IMAGE_BYTES / mib:.2f} MiB)")
     print(f"Recorded binary:       {MEASURED_BINARY_BYTES} bytes ({MEASURED_BINARY_BYTES / mib:.2f} MiB)")
-    print(
-        f"Recorded binary unstripped: {MEASURED_UNSTRIPPED_BINARY_BYTES} bytes "
-        f"({MEASURED_UNSTRIPPED_BINARY_BYTES / mib:.2f} MiB), so stripping already "
-        f"removes {(MEASURED_UNSTRIPPED_BINARY_BYTES - MEASURED_BINARY_BYTES) / mib:.2f} MiB"
-    )
     # Labelled "derived" because it is a subtraction, not a stat() of the runtime
     # stage -- the numbers were taken on a host with no docker daemon.
-    derived_runtime = MEASURED_IMAGE_BYTES - MEASURED_BINARY_BYTES
+    derived_runtime = derived_runtime_layer_bytes()
     print(
         f"Runtime layer (derived by subtraction, not stat()ed): {derived_runtime} bytes "
         f"({derived_runtime / mib:.2f} MiB)"
     )
+    print(f"Recorded binary unstripped: {MEASURED_UNSTRIPPED_BINARY_BYTES} bytes "
+          f"({MEASURED_UNSTRIPPED_BINARY_BYTES / mib:.2f} MiB), so stripping already "
+          f"removes {(MEASURED_UNSTRIPPED_BINARY_BYTES - MEASURED_BINARY_BYTES) / mib:.2f} MiB")
     print(f"Enforced ratchet ceiling: {max_bytes} bytes ({max_bytes / mib:.0f} MiB), tracking {BUDGET_ISSUE}")
 
     if image_bytes > TARGET_IMAGE_BYTES:
