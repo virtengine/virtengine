@@ -94,8 +94,74 @@ class RecordedMeasurementTest(unittest.TestCase):
         self.assertEqual(self.gate.MEASURED_IMAGE_BYTES, MEASURED_IN_CI)
 
     def test_the_recorded_binary_is_the_measured_one(self):
-        """193,314,978 B: linux/amd64, Dockerfile flags, develop @ 1cd9af8e3."""
-        self.assertEqual(self.gate.MEASURED_BINARY_BYTES, 193314978)
+        """193,294,498 B: linux/amd64, Dockerfile flags, develop @ 1cd9af8e3.
+
+        HOW this was measured -- reproduce it this way, or you will record a
+        binary that never ships:
+
+            git worktree add --detach <path> <sha>
+            cd <path>
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \\
+              go build -trimpath -buildvcs=false -ldflags "-s -w" -o out ./cmd/virtengine
+            wc -c < out
+
+        Do NOT add `GOWORK=off`. `_build/Dockerfile.virtengine` sets only
+        CGO_ENABLED/GOOS/GOARCH and never sets GOWORK, `go.work` is not excluded
+        by `.dockerignore`, and `COPY . .` puts it in the build context -- so the
+        container builds in workspace mode. At c2cd1baf the two modes differ:
+
+            workspace mode (what the image ships)  193,294,498 B
+            GOWORK=off      (a different binary)    193,314,978 B  (+20,480)
+
+        Re-pinning this assertion to whatever a re-measure happens to print is
+        exactly the mutation class the falsification harness exists to catch, so
+        if this test fails, confirm the build MODE first and then update the
+        constant, the docstring and the ci.yaml comment together.
+        """
+        self.assertEqual(self.gate.MEASURED_BINARY_BYTES, 193294498)
+
+    def test_recorded_binary_is_the_workspace_mode_build(self):
+        """The recorded binary must be the workspace-mode (shipped) build.
+
+        The gate never fails on this constant -- `evaluate()` decides on
+        `image_bytes` against `MAX_IMAGE_BYTES` -- so a regression here would be
+        invisible to CI. Without this test the diagnostic print can attribute the
+        image gap to a binary the container never copies, which is how the
+        GOWORK=off figure got in originally.
+        """
+        # The size of the GOWORK=off build of the same tree, same toolchain and
+        # same flags. Kept as a distinct literal rather than a recomputation so
+        # that swapping the recorded constant back to it fails here.
+        gowork_off_build = 193314978
+        self.assertNotEqual(
+            self.gate.MEASURED_BINARY_BYTES,
+            gowork_off_build,
+            "recorded binary is the GOWORK=off build, which the image does not ship",
+        )
+        # Workspace mode is the smaller build here; record that as the
+        # direction, so a future toolchain change that flips it is visible.
+        self.assertLess(
+            self.gate.MEASURED_BINARY_BYTES,
+            gowork_off_build,
+            "workspace-mode build stopped being smaller than GOWORK=off",
+        )
+        # Unstripped must exceed stripped, or the stripping figure is nonsense.
+        self.assertGreater(
+            self.gate.MEASURED_UNSTRIPPED_BINARY_BYTES,
+            self.gate.MEASURED_BINARY_BYTES,
+        )
+        # The binary must remain the dominant layer, and must still be over the
+        # reported 100 MiB target on its own -- the premise of the whole design.
+        self.assertLess(
+            self.gate.MEASURED_BINARY_BYTES,
+            self.gate.MEASURED_IMAGE_BYTES,
+            "recorded binary exceeds the recorded image; attribution is wrong",
+        )
+        self.assertGreater(
+            self.gate.MEASURED_BINARY_BYTES,
+            self.gate.TARGET_IMAGE_BYTES,
+            "recorded binary is now under the INFRA-003 target; re-measure the image",
+        )
 
     def test_ratchet_is_tight_enough_to_notice_growth(self):
         """~2.2% of headroom. A ceiling with huge headroom is a disabled check."""
@@ -283,6 +349,9 @@ class ProductionShapeTest(unittest.TestCase):
 class WorkflowWiringTest(unittest.TestCase):
     """The workflow must call the script, not re-inline the comparison."""
 
+    def setUp(self):
+        self.gate_module = load_module()
+
     def test_image_size_step_invokes_the_gate_script(self):
         text = CI_YAML.read_text(encoding="utf-8")
         self.assertIn("scripts/ci/image_size_gate.py", text)
@@ -307,6 +376,69 @@ class WorkflowWiringTest(unittest.TestCase):
         """A step's own output is empty in its own env -- it would blank the gate."""
         text = CI_YAML.read_text(encoding="utf-8")
         self.assertNotIn("IMAGE_SIZE_BYTES: ${{ steps.image_size.outputs", text)
+
+    def test_workflow_comment_records_the_same_binary_size_as_the_gate(self):
+        """ci.yaml must quote the binary size the gate actually records.
+
+        The figure only appears in a comment here, so nothing fails if it drifts
+        away from `MEASURED_BINARY_BYTES` -- and a stale comment is exactly how
+        the next engineer ends up re-pinning the constant from the wrong build.
+        This is the cross-file tie that makes the comment trustworthy.
+        """
+        text = CI_YAML.read_text(encoding="utf-8")
+        mib = 1024 * 1024
+        binary = self.gate_module.MEASURED_BINARY_BYTES
+        self.assertIn(
+            f"{binary:,} bytes ({binary / mib:.2f} MiB",
+            text,
+            "ci.yaml no longer states the recorded binary size; the comment has "
+            "drifted from scripts/ci/image_size_gate.py",
+        )
+        # And it must not still be quoting the GOWORK=off build.
+        self.assertNotIn("193,314,978", text)
+
+    def test_workflow_comment_records_which_build_mode_was_measured(self):
+        """ci.yaml must say the figure is the workspace-mode build.
+
+        The bare number alone is not enough: `193,294,498` is only meaningful
+        next to the reason it is the right number. Without the mode note a
+        future engineer can read the comment, re-measure with GOWORK=off, see a
+        slightly different figure, and "correct" the constant back. Removal of
+        the note is treated as a regression, same as removal of the number.
+        """
+        text = CI_YAML.read_text(encoding="utf-8")
+        self.assertIn("workspace-mode", text)
+        self.assertIn(".dockerignore", text)
+
+    def test_gate_script_documents_the_remeasure_method_and_the_gowork_trap(self):
+        """The re-measure recipe and its GOWORK=off trap must survive.
+
+        These comments are the only record of *how* the constant was measured.
+        Without them the cheapest fix for a failing measurement test is to edit
+        the number -- which is the exact mutation the harness exists to catch --
+        so their removal is treated as a failure rather than a cleanup.
+        """
+        text = SCRIPT_PATH.read_text(encoding="utf-8")
+        self.assertIn("HOW TO RE-MEASURE", text)
+        self.assertIn("Do NOT set `GOWORK=off`", text)
+        self.assertIn("workspace mode", text)
+        self.assertIn("193,294,498", text)
+        self.assertIn("MEASURED_UNSTRIPPED_BINARY_BYTES", text)
+        # The runtime-layer figure must stay labelled as derived, since no docker
+        # daemon was available to stat() the layers directly.
+        self.assertIn("derived by subtraction", text)
+
+    def test_reported_target_and_ceiling_are_untouched_by_the_measurement_fix(self):
+        """Correcting a recorded measurement must not move a threshold.
+
+        `MAX_IMAGE_BYTES`, `TARGET_IMAGE_BYTES` and the expiry are the enforced
+        part of this gate. The workspace-mode correction is diagnostic-only, so
+        if any of these move in the same commit the change is not a measurement
+        fix and needs a fresh sign-off.
+        """
+        self.assertEqual(self.gate_module.TARGET_IMAGE_BYTES, 104857600)
+        self.assertEqual(self.gate_module.MAX_IMAGE_BYTES, 211 * 1024 * 1024)
+        self.assertEqual(self.gate_module.MEASURED_IMAGE_BYTES, MEASURED_IN_CI)
 
 
 if __name__ == "__main__":

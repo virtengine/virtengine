@@ -983,11 +983,14 @@ jobs:
       # This was a fixed 100 MiB `MAX_BYTES` literal compared inline against
       # `docker image inspect`. The shipped image is 216,548,169 bytes
       # and the step has zero successful evaluations in the run history -- the
-      # binary alone is 193,314,978 bytes (184.36 MiB, 1.84x the budget) with
+      # binary alone is 193,294,498 bytes (184.34 MiB, 1.84x the budget) with
       # every standard reduction already applied in _build/Dockerfile.virtengine
-      # (CGO_ENABLED=0, -trimpath, -ldflags "-s -w"). Reaching 100 MiB requires
-      # cutting the statically linked cosmos-sdk/ibc/grpc binary by 57.8%, which
-      # is structural work, not a build-flag change.
+      # (CGO_ENABLED=0, -trimpath, -ldflags "-s -w"). That binary is the
+      # *workspace-mode* build: the Dockerfile never sets GOWORK and go.work is
+      # not in .dockerignore, so COPY . . compiles in workspace mode. See
+      # scripts/ci/image_size_gate.py for the re-measure command. Reaching
+      # 100 MiB requires cutting the statically linked cosmos-sdk/ibc/grpc
+      # binary by 57.8%, which is structural work, not a build-flag change.
       #
       # The threshold and its expiry now live in scripts/ci/image_size_gate.py,
       # asserted by .github/tests/test_image_size_gate.py, so the gate is a
