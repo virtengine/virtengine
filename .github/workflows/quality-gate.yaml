@@ -103,7 +103,7 @@ jobs:
           cache: true
 
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Install build dependencies for cgo packages
         run: |
@@ -135,7 +135,7 @@ jobs:
           cache: true
 
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Install build dependencies for cgo packages
         run: |
@@ -146,6 +146,61 @@ jobs:
         env:
           GOFLAGS: "-mod=readonly"
         run: go vet ./...
+
+  # The retry wrapper is exactly the shape of thing that can rot into a vacuous
+  # pass, so its own self-test runs on every gate run - and deliberately in its
+  # OWN job rather than inside `vet`.
+  #
+  # If it lived in `vet`, a broken wrapper would fail that job at "Download
+  # dependencies" and the self-tests would never execute, so the one job whose
+  # purpose is to diagnose the wrapper could not run whenever the wrapper was
+  # actually broken. A wrapper that is only self-tested after it has already
+  # worked is not a self-test. This job has no `needs:` and needs no Go
+  # toolchain at all (the tests plant a `go` stub on PATH), so it stays cheap and
+  # always reports.
+  go-mod-download-selftest:
+    name: go-mod-download selftest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: go-mod-download self-tests
+        run: |
+          rc=0
+          node --test scripts/ci/go-mod-download.test.mjs > go-mod-download-tests.log 2>&1 || rc=$?
+          # Always print the log, pass or fail: `set -e` would otherwise abort
+          # here and throw away the only evidence of why a self-test failed.
+          cat go-mod-download-tests.log
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::go-mod-download self-tests failed (exit $rc)"
+            exit "$rc"
+          fi
+          # A test run that discovers no tests also exits 0, so assert a positive
+          # count rather than trusting the exit status alone.
+          count=$(grep -oE 'tests[[:space:]]+[0-9]+' go-mod-download-tests.log | head -1 | grep -oE '[0-9]+')
+          if [ -z "${count:-}" ] || [ "$count" -eq 0 ]; then
+            echo "::error::go-mod-download self-tests did not run"
+            exit 1
+          fi
+          echo "go-mod-download self-tests: ${count} test(s) passed"
+
+      # The wrapper this job protects is executed with `bash` on every runner, so
+      # its line endings must survive the checkout intact. A CRLF blob parses as
+      # a syntax error on ubuntu (`case ... in $'\r'`) and turns this whole gate
+      # red; fail loudly here instead of as a mystery failure in five other jobs.
+      - name: The wrapper must be LF-only
+        run: |
+          if grep -qU $'\r' scripts/ci/go-mod-download.sh; then
+            echo "::error::scripts/ci/go-mod-download.sh contains CRLF; on ubuntu bash this is a syntax error"
+            exit 1
+          fi
+          echo "go-mod-download.sh is LF-only"
 
   build:
     name: build
@@ -162,7 +217,7 @@ jobs:
           cache: true
 
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Install build dependencies for cgo packages
         run: |
@@ -187,7 +242,7 @@ jobs:
           cache: true
 
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Install build dependencies for cgo packages
         run: |
@@ -264,7 +319,7 @@ jobs:
           cache: true
 
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Run economics simulation suite
         run: |
@@ -512,6 +567,7 @@ jobs:
       - analyze-changes
       - lint
       - vet
+      - go-mod-download-selftest
       - build
       - test-go
       - agents-docs
@@ -537,6 +593,14 @@ jobs:
 
           if [ "${{ needs.vet.result }}" != "success" ]; then
             echo "::error::vet failed"
+            failed=1
+          fi
+
+          # Unconditional, unlike the change-gated checks below: the wrapper this
+          # guards protects EVERY job in this workflow, so a red here is not
+          # conditional on what the PR touched.
+          if [ "${{ needs.go-mod-download-selftest.result }}" != "success" ]; then
+            echo "::error::go-mod-download selftest failed"
             failed=1
           fi
 
