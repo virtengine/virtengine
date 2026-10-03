@@ -80,7 +80,6 @@ require (
 	cosmossdk.io/schema v1.1.0 // indirect
 	filippo.io/edwards25519 v1.1.1 // indirect
 	github.com/99designs/go-keychain v0.0.0-20191008050251-8e49817e8af4 // indirect
-	github.com/CosmWasm/wasmvm/v2 v2.1.4 // indirect
 	github.com/DataDog/datadog-go v4.8.3+incompatible // indirect
 	github.com/DataDog/zstd v1.5.7 // indirect
 	github.com/GoogleCloudPlatform/opentelemetry-operations-go/detectors/gcp v1.33.0 // indirect
@@ -133,8 +132,6 @@ require (
 	github.com/cosmos/btcutil v1.0.5 // indirect
 	github.com/cosmos/gogogateway v1.2.0 // indirect
 	github.com/cosmos/iavl v1.2.6 // indirect
-	github.com/cosmos/ibc-go/modules/capability v1.0.1 // indirect
-	github.com/cosmos/ibc-go/v8 v8.4.0 // indirect
 	github.com/cosmos/ics23/go v0.11.0 // indirect
 	github.com/cosmos/ledger-cosmos-go v0.14.0 // indirect
 	github.com/danieljoos/wincred v1.2.2 // indirect
@@ -282,7 +279,6 @@ require (
 )
 
 replace (
-	github.com/CosmWasm/wasmd => github.com/CosmWasm/wasmd v0.53.4
 	// sonic < v1.15.0 references runtime.GoMapIterator, removed in Go 1.26.
 	// Mirrors the root module's pin so this module also builds with GOWORK=off.
 	github.com/bytedance/sonic => github.com/bytedance/sonic v1.15.4
