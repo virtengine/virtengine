@@ -9,9 +9,9 @@ import type { DeepPartial, MessageFns } from "../../../../../../encoding/typeEnc
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
+import { Any } from "../../../../google/protobuf/any.ts";
 import { Event } from "../../../../tendermint/abci/types.ts";
 import { Block } from "../../../../tendermint/types/block.ts";
-import { Any } from "../../../../google/protobuf/any.ts";
 
 /**
  * TxResponse defines a structure containing relevant tx data and metadata. The
