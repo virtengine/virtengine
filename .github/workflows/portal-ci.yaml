@@ -151,6 +151,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Fails if any App Router /api route cannot survive `output: 'export'`.
+      # portal-deploy-pages.yaml sets GITHUB_PAGES=true, which makes
+      # next.config.mjs select output:'export'; a route handler without
+      # `export const dynamic = 'force-static'` aborts that build with
+      # "export const dynamic = force-static not configured on route ...".
+      # That workflow has never run green (98 of 98 runs failed), and this
+      # job builds WITHOUT GITHUB_PAGES, so nothing else in CI exercised that
+      # path. The census names every offending route at once instead of the
+      # one Next happens to abort on first.
+      - name: Check /api routes can be statically exported
+        run: node scripts/ci/check-portal-export-routes.mjs
+
       - name: Build portal
         run: pnpm -C portal build
         env:
