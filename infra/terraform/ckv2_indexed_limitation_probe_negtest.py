@@ -61,7 +61,7 @@ except Exception:                                       # noqa: BLE001
     traceback.print_exc()
     sys.exit(2)
 
-holder = tempfile.TemporaryDirectory(dir=str(probe.REPO.parent))
+holder = tempfile.TemporaryDirectory()
 copy = Path(holder.name) / "terraform"
 shutil.copytree(probe.TF_DIR, copy)
 probe.TF_DIR = copy            # redirect the real probe at the copy
