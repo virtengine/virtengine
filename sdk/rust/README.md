@@ -4,14 +4,13 @@ Rust SDK for interacting with the VirtEngine chain via gRPC.
 
 ## Install
 
-> **UNVERIFIED — not published to crates.io.** `cargo add virtengine-sdk` does not
-> work: `https://crates.io/api/v1/crates/virtengine-sdk` returns
-> `{"errors":[{"detail":"crate \`virtengine-sdk\` does not exist"}]}`, and
-> `https://docs.rs/virtengine-sdk` returns 404. The crate is published by
-> `.github/workflows/sdk-publish.yaml` on the `release: published` event, and
-> `gh release list -R virtengine/virtengine` shows only `0.1.0` — a **draft** from
-> 2021 — so that workflow has never run. Depend on the path from a checkout
-> (see task `t_9d3b0f86`):
+> **This SDK is source-only and will not be published to crates.io** (operator decision,
+> 2026-09-29, task `t_9d3b0f86`). `cargo add virtengine-sdk` therefore does not and will
+> never work: `https://crates.io/api/v1/crates/virtengine-sdk` returns
+> `{"errors":[{"detail":"crate \`virtengine-sdk\` does not exist"}]}`, `https://docs.rs/virtengine-sdk`
+> returns 404, and `.github/workflows/sdk-publish.yaml` is disabled (it no longer triggers
+> on a release event, so publishing can never be an unattended side effect of tagging).
+> Depend on the path from a checkout:
 
 ```toml
 [dependencies]

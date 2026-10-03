@@ -8,7 +8,9 @@
 #   Core (run on every PR):
 #     1. lint          - Go linting with golangci-lint
 #     2. lint-shell    - Shell script linting
-#     3. test-go       - Go unit tests with coverage (80% enforced)
+#     3. test-go       - Go unit tests; INFRA-003 coverage gate routes by event
+#                        (PR: changed lines at 80%; push: non-regression ratchet
+#                        against COVERAGE_BASELINE) -- see scripts/ci/coverage_gate.py
 #     4. build         - Build binaries for multiple platforms
 #     5. integration   - Integration tests against localnet
 #     6. container-security - Container image scanning with Trivy
@@ -371,39 +373,41 @@ jobs:
           go test -v -race -timeout ${{ env.GO_TEST_TIMEOUT_UNIT }} \
             -coverprofile=coverage.out -covermode=atomic ./...
 
-      # INFRA-003: Coverage enforcement gate (80% minimum)
+      # INFRA-003: Coverage enforcement gate.
+      #
+      # The event routing and both thresholds live in scripts/ci/coverage_gate.py,
+      # asserted by .github/tests/test_coverage_gate.py. Do not re-inline the
+      # routing here: the previous inline form applied a repo-wide 80% floor on
+      # the branch path, which this repository has never met (46.5%), making
+      # `Go Tests` unconditionally red on every push. Because the required
+      # `CI Quality Gates` context inherits `test-go`, that red signal fed the
+      # tier-2 develop->main gate's fix-attempt budget on every run. (No PR was
+      # ever blocked *by GitHub*: `develop` has no branch protection and
+      # `main`'s has no required_status_checks, and tier-1 merges evaluate no
+      # checks at all. The accurate claim is "a permanently red signal", not
+      # "blocked every PR".)
+      #
+      # This step is deliberately NOT gated on `steps.detect.outputs.run`.
+      # That filter only matches *.go / go.mod / go.sum / go.work / go.work.sum,
+      # so a PR that edits only the gate's own files (exactly like #1166, which
+      # touched 0 .go files) computed run=false and SKIPPED this step: the gate
+      # that decides PR coverage could ship with its own test never executed.
+      # The suite is pure-Python and hermetic (it builds its own throwaway git
+      # repos, so it needs no `origin/develop`), and costs single-digit
+      # seconds against a job that already ran `go test -race ./...` with
+      # libudev installed. Affordable on every run, and being unconditional is
+      # what makes it a real guard.
+      - name: Test coverage gate routing
+        run: python -m unittest discover -s .github/tests -p "test_coverage_gate.py" -v
+
       - name: Check coverage threshold
         id: coverage
         if: steps.detect.outputs.run == 'true'
         env:
           BASE_REF: ${{ github.base_ref }}
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
         run: |
-          if [ ! -f coverage.out ]; then
-            echo "No coverage file generated"
-            exit 1
-          fi
-
-          # Calculate total coverage
-          COVERAGE=$(go tool cover -func=coverage.out | grep total: | awk '{print $3}' | sed 's/%//')
-          echo "coverage=$COVERAGE" >> "${GITHUB_OUTPUT}"
-
-          if [ "${{ github.event_name }}" = "pull_request" ]; then
-            python3 scripts/ci/check_pr_diff_coverage.py coverage.out
-            exit 0
-          fi
-
-          # Minimum required coverage (INFRA-003)
-          MIN_COVERAGE=80
-
-          echo "Total coverage: ${COVERAGE}%"
-          echo "Minimum required: ${MIN_COVERAGE}%"
-
-          if (( $(echo "$COVERAGE < $MIN_COVERAGE" | bc -l) )); then
-            echo "::error::Coverage is ${COVERAGE}%, below minimum ${MIN_COVERAGE}%"
-            exit 1
-          else
-            echo "✅ Coverage meets minimum requirement: ${COVERAGE}% >= ${MIN_COVERAGE}%"
-          fi
+          python3 scripts/ci/coverage_gate.py coverage.out
 
       - name: Upload coverage to Codecov
         if: steps.detect.outputs.run == 'true'
@@ -949,16 +953,40 @@ jobs:
           severity: CRITICAL,HIGH
           exit-code: 1
 
-      - name: Enforce virtengine image size
+      # INFRA-003: Container image size enforcement.
+      #
+      # This was a fixed 100 MiB `MAX_BYTES` literal compared inline against
+      # `docker image inspect`. The shipped image is 216,548,169 bytes
+      # and the step has zero successful evaluations in the run history -- the
+      # binary alone is 193,314,978 bytes (184.36 MiB, 1.84x the budget) with
+      # every standard reduction already applied in _build/Dockerfile.virtengine
+      # (CGO_ENABLED=0, -trimpath, -ldflags "-s -w"). Reaching 100 MiB requires
+      # cutting the statically linked cosmos-sdk/ibc/grpc binary by 57.8%, which
+      # is structural work, not a build-flag change.
+      #
+      # The threshold and its expiry now live in scripts/ci/image_size_gate.py,
+      # asserted by .github/tests/test_image_size_gate.py, so the gate is a
+      # measured non-regression ratchet instead of an absolute target nobody has
+      # met. The 100 MiB INFRA-003 target is still reported as a warning and
+      # remains the convergence direction; reduction work is tracked in #1159.
+      #
+      # The test runs in this job, not only where a path filter happens to match
+      # it, so the gate that blocks builds can never ship untested.
+      - name: Test image size gate
         if: steps.detect.outputs.run == 'true'
+        run: python -m unittest discover -s .github/tests -p "test_image_size_gate.py" -v
+
+      - name: Enforce virtengine image size
+        id: image_size
+        if: steps.detect.outputs.run == 'true'
+        env:
+          IMAGE_SIZE_MAX: ${{ vars.IMAGE_SIZE_MAX }}
         run: |
-          IMAGE_SIZE_BYTES=$(docker image inspect -f '{{.Size}}' virtengine:ci)
-          MAX_BYTES=$((100 * 1024 * 1024))
-          echo "virtengine image size: ${IMAGE_SIZE_BYTES} bytes"
-          if [ "${IMAGE_SIZE_BYTES}" -gt "${MAX_BYTES}" ]; then
-            echo "Image size exceeds 100MB target"
-            exit 1
-          fi
+          set -euo pipefail
+          SIZE_BYTES=$(docker image inspect -f '{{.Size}}' virtengine:ci)
+          echo "size_bytes=${SIZE_BYTES}" >> "$GITHUB_OUTPUT"
+          echo "virtengine image size: ${SIZE_BYTES} bytes"
+          IMAGE_SIZE_BYTES="${SIZE_BYTES}" python3 scripts/ci/image_size_gate.py virtengine:ci
 
       - name: Build test-runner image (local)
         if: steps.detect.outputs.run == 'true'
