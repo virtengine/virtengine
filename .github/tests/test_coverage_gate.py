@@ -34,6 +34,21 @@ rounds found the difference matters:
   comment, and `if false; then <invocation>; fi` all satisfy it, as does
   `continue-on-error` on the step that runs this suite. The gate was still
   deletable with the suite reporting OK.
+* Round 5: the allow-list above hardened *how the command is written* and never
+  asked *whether the step runs at all*. `step_problems` read `run` and
+  `continue-on-error` but not `step["if"]`, and the committed gate step carries
+  one -- so `if: false`, an inverted `if:`, an `if:` narrowed to `pull_request`,
+  and `if: always()` all disabled the INFRA-003 gate with 19 green tests. The
+  same gap existed on the suite's own inputs (`env: COVERAGE_BASELINE: "0"`
+  silently zeroes the ratchet) and on the routing step's name. See
+  `gate_input_problems` and `job_problems`.
+* Round 6: round 5's pin fixed the gate step's `if:` but asked nothing of the
+  step that PRODUCES its input. Narrowing the producer's `if:` (with
+  `&& github.event_name == 'push'`, or with a `hashFiles(...)` pathspec) or
+  giving it `continue-on-error: true` left all 25 tests green while the gate
+  scored a stale profile on the runs where the producer was skipped. The pin is
+  now two-sided: the producer must run at least as often as the gate and its
+  failure must be fatal. Measured, with the mutations named in the harness.
 
 So the wiring tests here locate the real step object in
 `doc["jobs"]["test-go"]["steps"]` and assert it is *structurally* an execution
@@ -106,6 +121,208 @@ ROUTING_COMMAND_RE = re.compile(
 # of the command so a legitimate continuation is not mistaken for a bypass.
 _EXIT_OVERRIDE_TAIL_RE = re.compile(r"(?:;|&&|\|\|)\s*(?:exit\s+0\b|true\b|:)\s*$")
 _BARE_EXIT_RE = re.compile(r"^exit\s+[01]$")
+
+# --------------------------------------------------------------------------
+# Round-5 review defect 6: the allow-list above says nothing about WHETHER the
+# step runs, so it reads `run` and `continue-on-error` but never `step["if"]` --
+# and the committed gate step carries one. Reproduced on this tree at
+# cebdb3d33; all four left the suite green with the INFRA-003 gate
+# total-loss disabled:
+#
+#   if: false                                    -> the gate never runs
+#   if: <detect> && github.event_name == 'pull_request'  -> the branch
+#                                                   ratchet is silently dead
+#   if: steps.detect.outputs.run != 'true'       -> inverted; runs only when
+#                                                   the Go tests did NOT
+#   if: always()                                  -> runs even with no profile
+#
+# The two bypasses are opposite in sign, which is what makes this unambiguous:
+# the first and last make the gate never run, the second and third make it run
+# in the wrong circumstances. All are total loss of enforcement.
+#
+# The honest form of the assertion is POSITIVE -- pin the exact condition the
+# gate is allowed to carry -- not "has no `if:` key", because `if: always()`
+# satisfies "no restriction is written" while being weaker than the step that
+# produces its input. Any change to the pin must be made here, in the diff,
+# where it is reviewable.
+# --------------------------------------------------------------------------
+
+# The one condition under which the gate may run: exactly when the step that
+# produced `coverage.out` ran. Same expression, same truth value, same event.
+#
+# The review offered two acceptable forms: make the gate step unconditional, or
+# require its `if:` to be no weaker than the producer of its input. This is the
+# second, and the first would be actively harmful: on a pull_request that
+# touches no Go files, `detect` reports run=false, `go test` never runs, and
+# `coverage.out` does not exist -- so an unconditional gate would call
+# `coverage_gate.py` with no profile, and `main()` exits 1 on
+# "Coverage file not found", turning every non-Go PR red. That is the same
+# failure class this gate exists to end. So the pin is equality with the
+# producer's condition, which is the strongest honest form.
+ALLOWED_GATE_IF = "steps.detect.outputs.run == 'true'"
+
+# The complete set of variables the gate step is allowed to receive, and the
+# exact value each must carry. An allow-list of KEYS alone is not enough: a
+# hardcoded `GITHUB_EVENT_NAME: push` keeps both keys present and makes every PR
+# take the branch path, which is the routing defect this whole file exists to
+# prevent. (My own meta-test caught that while I was adding it -- the first
+# draft of `gate_input_problems` checked key sets only.)
+GATE_ENV_KEYS = ("GITHUB_EVENT_NAME", "BASE_REF")
+GATE_ENV_VALUES = {
+    "GITHUB_EVENT_NAME": "${{ github.event_name }}",
+    "BASE_REF": "${{ github.base_ref }}",
+}
+
+
+def gate_input_problems(
+    step: dict,
+    producer_run: str,
+    producer_condition: str | None,
+    producer_fatal: bool,
+) -> list[str]:
+    """Every reason `step` would not enforce the gate it is wired to enforce.
+
+    `step_problems` answers "does this command run?"; this answers "is it even
+    reached, and is it measuring what it claims to?". Five properties:
+
+    1. `if:` is exactly `ALLOWED_GATE_IF` -- absent is NOT accepted, because the
+       gate's input (`coverage.out`) is produced by a step carrying that same
+       condition, and a gate that runs when its input does not exist fails
+       closed on a missing file but silently passes on a STALE one;
+    2. `env:` is exactly the two event-derived routing inputs, each carrying its
+       exact value, and nothing else. An extra key is an input the gate can
+       consume without anyone reasoning about it -- round-5 measurement:
+       `env: COVERAGE_BASELINE: "0"` zeroed the enforced non-regression floor
+       with all 19 tests green, because `resolve_baseline` prefers the variable
+       over the recorded baseline;
+    3. the profile the producer writes is the profile the gate is passed;
+    4. neither value is hardcoded, which would re-route the gate silently;
+    5. the PRODUCER runs at least as often as the gate, and its failure is
+       fatal. This is round-6 measurement, and it is the direction the pin in
+       (1) alone does not cover: pinning the gate's `if:` to the honest
+       condition while leaving the producer free to carry a narrower one means
+       the gate scores a stale or absent profile on the runs where the producer
+       was skipped. Measured at 25 green tests on this tree, all three of:
+           producer `if:` narrowed with `&& event == 'push'`
+           producer `if:` narrowed with `&& hashFiles(...) != ''`
+           `continue-on-error: true` on the producer
+       The first two leave the gate reading last run's `coverage.out`; the last
+       lets a failed test run still hand the gate a truncated profile.
+
+    `producer_condition`/`producer_fatal` are required rather than defaulted: a
+    checker that can be called without the input it needs is how rounds 3-5
+    happened, one assertion at a time, each still green on the real workflow.
+    An ABSENT producer `if:` is accepted and means "unconditional", which is
+    strictly *wider* than the gate and therefore safe -- the risk runs one way.
+    """
+    problems = []
+
+    condition = step.get("if")
+    if condition != ALLOWED_GATE_IF:
+        problems.append(
+            f"the gate step's `if:` must be exactly {ALLOWED_GATE_IF!r}, but it is "
+            f"{condition!r}. This is round-5 review defect 6: the step that "
+            "produced coverage.out carries that condition, so the gate must too. "
+            "`if: false`/`always()` disables the gate outright, an inverted `if:` "
+            "runs it only when the Go tests did not, and an extra `&& "
+            "github.event_name == 'pull_request'` kills the branch ratchet -- "
+            "all four were accepted by the suite before this check existed."
+        )
+
+    if producer_condition is not None and producer_condition != ALLOWED_GATE_IF:
+        problems.append(
+            f"the step producing coverage.out carries `if: {producer_condition!r}`, "
+            f"but the gate runs under {ALLOWED_GATE_IF!r}. The producer must run "
+            "at least as often as the gate, never less: a narrower `if:` on the "
+            "producer means the gate scores a STALE profile from an earlier run "
+            "while reporting success (round-6 measurement: narrowing the producer "
+            "to `&& github.event_name == 'push'`, or to a `hashFiles(...)` "
+            "pathspec, left the whole suite green)."
+        )
+
+    if not producer_fatal:
+        problems.append(
+            "the step producing coverage.out sets continue-on-error, so a failing "
+            "`go test` still lets the gate score whatever partial profile was "
+            "written (round-6 measurement: accepted with the whole suite green)."
+        )
+
+    env = step.get("env") or {}
+    if not isinstance(env, dict):
+        problems.append(f"the gate step's `env:` must be a mapping, got {env!r}")
+        env = {}
+    extra = sorted(set(env) - set(GATE_ENV_KEYS))
+    missing = sorted(set(GATE_ENV_KEYS) - set(env))
+    if extra:
+        problems.append(
+            f"the gate step's `env:` carries unexpected keys {extra!r}. Every extra "
+            "key is an input the gate does not reason about but can still consume "
+            "-- `COVERAGE_BASELINE: \"0\"` was measured to zero the enforced "
+            "non-regression floor with the whole suite green. The gate reads "
+            f"{sorted(GATE_ENV_KEYS)} and nothing else."
+        )
+    if missing:
+        problems.append(
+            f"the gate step's `env:` is missing {missing!r}; the gate's event "
+            "routing is driven entirely by these variables"
+        )
+    for key, expected in GATE_ENV_VALUES.items():
+        if key in env and env[key] != expected:
+            problems.append(
+                f"the gate step's `env: {key}` is {env[key]!r}, but it must be "
+                f"{expected!r}. A hardcoded value silently re-routes the gate: "
+                "`GITHUB_EVENT_NAME: push` sends every pull_request down the "
+                "branch path, which is the exact defect this gate exists to "
+                "prevent."
+            )
+
+    consumed = re.search(r"(\S*coverage\.out)\s*$", str(step.get("run", "")))
+    if not consumed:
+        problems.append(
+            f"the gate step does not consume a coverage profile: {step.get('run')!r}"
+        )
+    elif f"-coverprofile={consumed.group(1)}" not in producer_run:
+        problems.append(
+            f"the gate scores {consumed.group(1)!r} but the producer step writes "
+            f"{producer_run!r}: no `-coverprofile={consumed.group(1)}` was found, "
+            "so the gate reads a file that step never wrote (round-5 measurement: "
+            "renaming the producer's profile was accepted with 19 green tests)"
+        )
+    return problems
+
+
+def job_problems(job: dict, expected_steps: tuple[str, ...]) -> list[str]:
+    """Every reason `job` could report success without running its steps.
+
+    A step-level guard cannot see its own job: `if: false` on the job skips all
+    of it, and so does a `needs:` that never completes. Measured at cebdb3d33:
+    `if: false` on `jobs.test-go` left the suite green, so "Go Tests" could be
+    skipped wholesale with nothing in this file objecting.
+    """
+    problems = []
+    condition = job.get("if")
+    if condition is not None:
+        problems.append(
+            f"the test-go job carries `if: {condition!r}`, which can skip every "
+            "step in it. The job that owns the INFRA-003 gate must be "
+            "unconditional: a job-level condition is how the whole gate -- "
+            "including the routing suite that guards it -- disappears (round-5 "
+            "review)."
+        )
+
+    needs = job.get("needs")
+    if needs:
+        listed = [needs] if isinstance(needs, str) else list(needs)
+        problems.append(
+            f"the test-go job declares `needs: {listed!r}`, so its steps can be "
+            "skipped wholesale whenever a listed job does not succeed. The "
+            "INFRA-003 gate must not be behind another job's outcome."
+        )
+    names = [s.get("name") for s in job.get("steps", []) if isinstance(s, dict)]
+    for step_name in expected_steps:
+        if step_name not in names:
+            problems.append(f"the test-go job has no step named {step_name!r}")
+    return problems
 
 
 def step_commands(run: str) -> list[str]:
@@ -410,34 +627,63 @@ class WorkflowWiringTest(unittest.TestCase):
 
     CI_YAML = REPO_ROOT / ".github" / "workflows" / "ci.yaml"
 
-    # The coverage gate step, identified by name. A step that is renamed, or
-    # whose `run` no longer invokes the script, fails the lookup below rather
-    # than silently matching a different step.
+    # Both steps located by name. The gate step was always located this way; the
+    # routing step was located by a content match on its `run` string
+    # (`'test_coverage_gate.py' in step['run']`), which is why renaming it was
+    # invisible to three separate assertions -- they followed the rename and
+    # passed (round-5 review, mutation R4). A guard that follows its own target
+    # is not a guard.
     COVERAGE_STEP_NAME = "Check coverage threshold"
+    ROUTING_STEP_NAME = "Test coverage gate routing"
 
     @classmethod
     def setUpClass(cls):
         cls.text = cls.CI_YAML.read_text(encoding="utf-8")
         cls.doc = yaml.safe_load(cls.text)
         cls.steps = cls.doc["jobs"]["test-go"]["steps"]
+        cls.job = cls.doc["jobs"]["test-go"]
 
-    def find_coverage_step(self):
-        """The single parsed step that runs the gate. Fails if it is gone.
+    def find_step(self, name, what):
+        """The single parsed step called `name`. Fails if it is gone or renamed.
 
-        Located by name so the assertions below cannot be satisfied by some
-        other step's text, and required to be exactly one so the gate cannot be
-        duplicated into a second, unenforced copy.
+        Required to be exactly one so the gate cannot be duplicated into a
+        second, unenforced copy.
         """
-        matches = [
-            s for s in self.steps
-            if isinstance(s, dict) and s.get("name") == self.COVERAGE_STEP_NAME
-        ]
+        matches = [s for s in self.steps
+                   if isinstance(s, dict) and s.get("name") == name]
         self.assertEqual(
             len(matches), 1,
-            f"expected exactly one step named {self.COVERAGE_STEP_NAME!r} in "
-            f"jobs.test-go, found {len(matches)}: the INFRA-003 gate step must "
-            "exist and must not be duplicated",
+            f"expected exactly one step named {name!r} in jobs.test-go, found "
+            f"{len(matches)}: {what} must exist under that exact name and must "
+            f"not be duplicated. Found: "
+            f"{[s.get('name') for s in self.steps if isinstance(s, dict)]}",
         )
+        return matches[0]
+
+    def find_coverage_step(self):
+        """The single parsed step that runs the gate. Fails if it is gone."""
+        return self.find_step(self.COVERAGE_STEP_NAME, "the INFRA-003 gate step")
+
+    def find_routing_step(self):
+        """The single parsed step that runs this suite. Fails if it is gone."""
+        return self.find_step(self.ROUTING_STEP_NAME, "the routing-suite step")
+
+    def find_profile_producer(self):
+        """The step whose `run` writes the coverprofile the gate consumes."""
+        matches = [s for s in self.steps
+                   if isinstance(s, dict) and "-coverprofile=" in str(s.get("run", ""))]
+        self.assertEqual(
+            len(matches), 1,
+            f"expected exactly one step writing a coverprofile, found "
+            f"{len(matches)}: the gate's input must have exactly one producer",
+        )
+        return matches[0]
+
+    def find_detect_step(self):
+        matches = [s for s in self.steps
+                   if isinstance(s, dict) and s.get("id") == "detect"]
+        self.assertEqual(
+            len(matches), 1, f"expected one step with id 'detect', found {len(matches)}")
         return matches[0]
 
     def assert_step_runs_its_command(self, step, command_re, what):
@@ -445,6 +691,26 @@ class WorkflowWiringTest(unittest.TestCase):
         self.assertEqual(
             problems, [],
             f"{what} must be a single command that executes it:\n  - "
+            + "\n  - ".join(problems),
+        )
+
+    def assert_gate_inputs_are_wired(self):
+        """`gate_input_problems` over the real gate step and its producer.
+
+        The producer's `if:` and `continue-on-error` are part of the input, not
+        decoration: the gate's only input is whatever that step wrote.
+        """
+        producer = self.find_profile_producer()
+        problems = gate_input_problems(
+            self.find_coverage_step(),
+            producer["run"],
+            producer.get("if"),
+            not producer.get("continue-on-error", False),
+        )
+        self.assertEqual(
+            problems, [],
+            "the coverage gate step must be reached under exactly the condition "
+            "that produced its input, and must carry no unhandled inputs:\n  - "
             + "\n  - ".join(problems),
         )
 
@@ -482,17 +748,94 @@ class WorkflowWiringTest(unittest.TestCase):
         was written to protect is disabled. Same allow-list shape, applied to
         the step that runs this file.
         """
-        routing = [
-            s for s in self.steps
-            if isinstance(s, dict) and "test_coverage_gate.py" in str(s.get("run", ""))
-        ]
-        self.assertEqual(
-            len(routing), 1,
-            f"expected exactly one routing-test step, found {len(routing)}",
-        )
         self.assert_step_runs_its_command(
-            routing[0], ROUTING_COMMAND_RE,
+            self.find_routing_step(), ROUTING_COMMAND_RE,
             "the coverage gate routing step (it runs this suite)",
+        )
+
+    def test_gate_step_runs_under_exactly_the_condition_that_produced_its_input(self):
+        """DEFECT 6, the load-bearing assertion of this round.
+
+        Reproduced on this tree at cebdb3d33 -- each of these disabled the
+        INFRA-003 gate with all 19 tests green, because `step_problems` read
+        `run` and `continue-on-error` but never `step["if"]`:
+
+            if: false                        the gate never runs
+            if: <detect> && event == 'pull_request'   the branch ratchet dies
+            if: steps.detect.outputs.run != 'true'   inverted: runs only when
+                                                      the Go tests did NOT
+            if: always()                     runs with no profile present
+
+        The assertion is a positive pin on the exact condition rather than
+        "has no `if:` key", because `always()` satisfies the latter while being
+        weaker than the step that writes `coverage.out`.
+        """
+        self.assert_gate_inputs_are_wired()
+
+    def test_gate_step_carries_no_unhandled_env(self):
+        """DEFECT 6's quieter half: the same field, one line over.
+
+        `env: COVERAGE_BASELINE: "0"` on the gate step was measured green at
+        cebdb3d33. It does not disable the gate -- it disables the floor the
+        gate exists to enforce, since `resolve_baseline` prefers the variable
+        over the recorded baseline. The suite's event-routing assertions kept
+        passing because they only checked that the two expected keys were
+        *present*, never that they were the only ones.
+        """
+        step = self.find_coverage_step()
+        env = step.get("env") or {}
+        self.assertEqual(
+            sorted(env), sorted(GATE_ENV_KEYS),
+            f"the gate step's env must be exactly {sorted(GATE_ENV_KEYS)!r}, got "
+            f"{sorted(env)!r}. An extra key is an input the gate can consume "
+            "without the suite reasoning about it -- COVERAGE_BASELINE=0 zeroes "
+            "the enforced non-regression floor.",
+        )
+
+    def test_the_gate_reads_the_profile_its_producer_writes(self):
+        """The gate must score the file the test run actually produced.
+
+        Renaming the producer's `-coverprofile` while leaving the gate's
+        argument alone was green at cebdb3d33: the gate would then score a
+        stale (or absent) artifact while every test in this file passed.
+        """
+        consumed = self.find_coverage_step()["run"].strip().split()[-1]
+        produced = self.find_profile_producer()["run"]
+        self.assertIn(
+            f"-coverprofile={consumed}", produced,
+            f"the gate scores {consumed!r} but the producing step does not write "
+            f"it; it writes {produced!r}",
+        )
+
+    def test_detect_step_is_unconditional_so_the_gate_pin_is_not_vacuous(self):
+        """`ALLOWED_GATE_IF` is evaluated from `detect`; `detect` must run.
+
+        Otherwise the pin can be made vacuous: gating the producer of the flag
+        on a second condition the gate does not see means the gate's `if` is
+        true or false for reasons the gate cannot observe.
+        """
+        detect = self.find_detect_step()
+        self.assertNotIn(
+            "if", detect,
+            "the `detect` step must be unconditional: the gate's pinned `if:` is "
+            "evaluated from its output, so gating `detect` makes that pin "
+            "vacuous",
+        )
+
+    def test_test_go_job_cannot_skip_its_own_steps(self):
+        """DEFECT 6's outer ring: the job, not just the step.
+
+        `if: false` on `jobs.test-go` was green at cebdb3d33. Every step-level
+        guard in this file is satisfied by a job that never runs any of them --
+        including the gate and the suite guarding it.
+        """
+        problems = job_problems(
+            self.job, (self.COVERAGE_STEP_NAME, self.ROUTING_STEP_NAME),
+        )
+        self.assertEqual(
+            problems, [],
+            "the job owning the INFRA-003 gate must be unconditional and must "
+            "not wait on another job:\n  - " + "\n  - ".join(problems),
         )
 
     def test_the_allow_list_itself_rejects_the_round_4_mutations(self):
@@ -505,14 +848,21 @@ class WorkflowWiringTest(unittest.TestCase):
         the checker's own contract is under test.
         """
         real_gate = self.find_coverage_step()
-        real_routing = next(
-            s for s in self.steps
-            if isinstance(s, dict) and "test_coverage_gate.py" in str(s.get("run", ""))
-        )
+        real_routing = self.find_routing_step()
+        producer = self.find_profile_producer()
+        producer_run = producer["run"]
         # The control: the real steps are clean, so the checks below cannot pass
         # vacuously by flagging everything.
         self.assertEqual(step_problems(real_gate, GATE_COMMAND_RE), [])
         self.assertEqual(step_problems(real_routing, ROUTING_COMMAND_RE), [])
+        self.assertEqual(
+            gate_input_problems(real_gate, producer_run, producer.get("if"),
+                                not producer.get("continue-on-error", False)),
+            [],
+        )
+        self.assertEqual(
+            job_problems(self.job, (self.COVERAGE_STEP_NAME, self.ROUTING_STEP_NAME)), [],
+        )
 
         invocation = "python3 scripts/ci/coverage_gate.py coverage.out"
         bypasses = {
@@ -535,6 +885,131 @@ class WorkflowWiringTest(unittest.TestCase):
                     f"the allow-list must reject the {label} bypass",
                 )
 
+    def test_the_input_guards_themselves_reject_the_round_5_mutations(self):
+        """Pins defect 6's regression *in the suite*, not only in my sweep.
+
+        Without this, `gate_input_problems` and `job_problems` could be relaxed
+        the same way `step_problems` was over rounds 3-5 -- one assertion at a
+        time, each still green on the real workflow -- and the next review round
+        would be the first place it showed up. Feeding each bypass shape to the
+        checkers directly puts the checkers' own contract under test.
+
+        The control comes first and is load-bearing in its own right: it is what
+        proved the first draft of `gate_input_problems` under-specified. It
+        validated the env KEY set but not the values, so a hardcoded
+        `GITHUB_EVENT_NAME: push` -- which sends every PR down the branch path
+        -- satisfied it. The checker was fixed, not the test.
+        """
+        producer_run = self.find_profile_producer()["run"]
+        producer_if = self.find_profile_producer().get("if")
+        good = {
+            "if": ALLOWED_GATE_IF,
+            "env": dict(GATE_ENV_VALUES),
+            "run": "python3 scripts/ci/coverage_gate.py coverage.out",
+        }
+        # The controls. Without these the subTests below could all pass for the
+        # wrong reason -- a checker that flags everything, or one that cannot be
+        # called without the input it needs.
+        self.assertEqual(gate_input_problems(good, producer_run, producer_if, True), [])
+        self.assertEqual(
+            gate_input_problems(good, producer_run, None, True), [],
+            "an UNCONDITIONAL producer must be accepted: it is strictly wider "
+            "than the gate, so the profile is always fresh. The risk runs one "
+            "way and this is the safe end of it.",
+        )
+        with self.assertRaises(TypeError):
+            gate_input_problems(good, producer_run)
+
+        bypasses = {
+            "if false": {**good, "if": "false"},
+            "if always": {**good, "if": "always()"},
+            "if inverted": {**good, "if": "steps.detect.outputs.run != 'true'"},
+            "if pull-request only": {
+                **good,
+                "if": "steps.detect.outputs.run == 'true' && github.event_name == 'pull_request'",
+            },
+            "if undefined matrix": {**good, "if": "matrix.event == 'pull_request'"},
+            "if absent": {k: v for k, v in good.items() if k != "if"},
+            "baseline override": {
+                **good, "env": {**good["env"], "COVERAGE_BASELINE": "0"},
+            },
+            "pythonpath override": {
+                **good, "env": {**good["env"], "PYTHONPATH": "/nonexistent"},
+            },
+            "event dropped": {**good, "env": {"BASE_REF": GATE_ENV_VALUES["BASE_REF"]}},
+            "event hardcoded": {
+                **good, "env": {**good["env"], "GITHUB_EVENT_NAME": "push"},
+            },
+            "base ref hardcoded": {
+                **good, "env": {**good["env"], "BASE_REF": "develop"},
+            },
+        }
+        for label, step in bypasses.items():
+            with self.subTest(bypass=label):
+                self.assertNotEqual(
+                    gate_input_problems(step, producer_run, producer_if, True), [],
+                    f"gate_input_problems must reject the {label} bypass",
+                )
+
+        # Round 6: the PRODUCER's reach. Pinning the gate's own `if:` says
+        # nothing about whether the step that writes coverage.out ran, and the
+        # three shapes below were all measured green on this tree.
+        producer_bypasses = {
+            "producer narrowed to push": (
+                "steps.detect.outputs.run == 'true' && github.event_name == 'push'"),
+            "producer narrowed to a pathspec": (
+                "steps.detect.outputs.run == 'true' && hashFiles('x/y.go') != ''"),
+            "producer if false": "false",
+            "producer if inverted": "steps.detect.outputs.run != 'true'",
+        }
+        for label, condition in producer_bypasses.items():
+            with self.subTest(bypass=label):
+                self.assertNotEqual(
+                    gate_input_problems(good, producer_run, condition, True), [],
+                    f"gate_input_problems must reject a producer that runs less "
+                    f"often than the gate: {label}",
+                )
+        with self.subTest(bypass="producer continue-on-error"):
+            self.assertNotEqual(
+                gate_input_problems(good, producer_run, producer_if, False), [],
+                "gate_input_problems must reject a producer whose failure is not "
+                "fatal: it can hand the gate a truncated profile",
+            )
+        self.assertEqual(
+            gate_input_problems(good, producer_run, producer_if, True), [],
+            "the control must accept a fatal producer carrying the allowed if:",
+        )
+
+        # The producer must agree with what the gate is handed.
+        self.assertNotEqual(
+            gate_input_problems(
+                good,
+                producer_run.replace("-coverprofile=coverage.out",
+                                     "-coverprofile=other.out"),
+                producer_if, True),
+            [],
+            "gate_input_problems must reject a gate scoring a file nobody writes",
+        )
+
+        # And the job-level guards.
+        names = (self.COVERAGE_STEP_NAME, self.ROUTING_STEP_NAME)
+        clean_job = {"steps": [{"name": n} for n in names]}
+        self.assertEqual(job_problems(clean_job, names), [])
+        job_bypasses = {
+            "job if false": {**clean_job, "if": "false"},
+            "job always": {**clean_job, "if": "always()"},
+            "job needs list": {**clean_job, "needs": ["never-runs"]},
+            "job needs scalar": {**clean_job, "needs": "never-runs"},
+            "gate step gone": {"steps": [{"name": self.ROUTING_STEP_NAME}]},
+            "routing step gone": {"steps": [{"name": self.COVERAGE_STEP_NAME}]},
+        }
+        for label, job in job_bypasses.items():
+            with self.subTest(bypass=label):
+                self.assertNotEqual(
+                    job_problems(job, names), [],
+                    f"job_problems must reject the {label} bypass",
+                )
+
     def test_coverage_step_env_carries_the_real_event_and_base(self):
         """The routing inputs must come from the event, on the step itself.
 
@@ -543,14 +1018,11 @@ class WorkflowWiringTest(unittest.TestCase):
         """
         step = self.find_coverage_step()
         env = step.get("env") or {}
-        self.assertEqual(
-            env.get("GITHUB_EVENT_NAME"), "${{ github.event_name }}",
-            "the coverage step must set GITHUB_EVENT_NAME from github.event_name",
-        )
-        self.assertEqual(
-            env.get("BASE_REF"), "${{ github.base_ref }}",
-            "the coverage step must set BASE_REF from github.base_ref",
-        )
+        for key, expected in GATE_ENV_VALUES.items():
+            self.assertEqual(
+                env.get(key), expected,
+                f"the coverage step must set {key} from the event context",
+            )
 
     def test_workflow_passes_the_real_event_name(self):
         """Same guarantee, pinned on the text so a rename of the step cannot
@@ -579,17 +1051,11 @@ class WorkflowWiringTest(unittest.TestCase):
         scripts/ci/coverage_gate.py and this test file -- 0 .go files -- so
         detect reported run=false and the step was SKIPPED in its own PR. A
         guard that skips on the PRs that most need it is not a guard.
+
+        Located by name, not by the content match that made a rename invisible
+        (round-5 review, mutation R4).
         """
-        steps = self.doc["jobs"]["test-go"]["steps"]
-        routing_steps = [
-            s for s in steps
-            if isinstance(s, dict) and "test_coverage_gate.py" in str(s.get("run", ""))
-        ]
-        self.assertEqual(
-            len(routing_steps), 1,
-            f"expected exactly one routing-test step, found {len(routing_steps)}",
-        )
-        step = routing_steps[0]
+        step = self.find_routing_step()
         self.assertNotIn(
             "if",
             step,
@@ -604,12 +1070,7 @@ class WorkflowWiringTest(unittest.TestCase):
         minimum include the gate's own files. This pins the current filter
         (Go only), which is precisely why the step is unconditional instead.
         """
-        steps = self.doc["jobs"]["test-go"]["steps"]
-        detect = next(
-            s for s in steps
-            if isinstance(s, dict) and s.get("id") == "detect"
-        )
-        run = detect["run"]
+        run = self.find_detect_step()["run"]
         for path in GATE_OWN_FILES:
             if path == ".github/workflows/ci.yaml":
                 continue  # YAML cannot use a *.go pathspec; this is the point.
