@@ -94,15 +94,25 @@ It has two modes:
   the mutated scan comes back empty while the **baseline** (scanned from the
   untouched tree) stays perfectly live. This is the "a valid empty result is
   indistinguishable from a verdict" gap, and it must exit 3, never 0.
-* `dangling` — informational only. Measured on checkov 3.3.22, checkov
-  **tolerates** the dangling `logs[0].id`: it still scans the bucket and still
-  reports `aws_s3_bucket.logs` as genuinely PASSING, so the probe's exit 0 is a
-  *true* verdict rather than a false pass. The mode asserts only that a PASS is
-  justified, not that one occurs. Worth recording because it means the
-  inconsistency the reviewer expected to make `logs` vanish does not in fact do
-  so on this tool version — the movement assertion is still the right
-  protection, but it is protecting against the *scan dropping the resource*,
-  not against a half-applied mutation.
+* `dangling` — informational only, and it does **not** exit 0. This mode
+  *replaces `probe.delete_block` wholesale* (so it sabotages T1 and T2a as well
+  as running its own mutation), which is why the run reports T1 and T2a
+  FALSIFIED and the probe exits **1**. Read that as a fact about this driver's
+  design, not as evidence against the document: the whole point of the mode is
+  what checkov does with a dangling `logs[0].id`, and that is T3's line, which
+  still reads `OK: aws_s3_bucket.logs[0] moved FAILED -> aws_s3_bucket.logs
+  PASSED`.
+
+  Measured on checkov 3.3.22 (2026-10-04, `.ckv2probe-venv`), the substantive
+  claim is **true**: checkov **tolerates** the dangling `logs[0].id` — it still
+  scans the bucket and still reports `aws_s3_bucket.logs` as genuinely PASSING,
+  so T3's movement assertion holds rather than being satisfied by a resource
+  vanishing. That was previously asserted here as prose on the strength of a run
+  that had not been executed; it is now a measured result. Worth recording
+  because the inconsistency the reviewer expected to make `logs` vanish does not
+  in fact do so on this tool version — the movement assertion is still the right
+  protection, but it is protecting against the *scan dropping the resource*, not
+  against a half-applied mutation.
 
 Two things it refuses to do, because both previously produced a confident wrong
 answer:
@@ -209,4 +219,7 @@ Re-verified 2026-10-04 on this hardening, checkov 3.3.22: full run exits 0 in
 431 s with `passed=9 failed=2` baseline and the table's `8/3`, `9/2`, `9/2`,
 `10/1` reproduced exactly, control `CKV_AWS_338` red (5 failures) on the
 baseline **and** on every mutated copy, and T3 confirming `aws_s3_bucket.logs`
-present in PASSED — movement, not absence. `--self-test` passes 22/22.
+present in PASSED — movement, not absence. `--self-test` reports 24/24
+assertions, 0 failures (the count is derived by the probe and printed by it, so
+this line quotes a script's output rather than carrying a number that can drift;
+the pass criterion is 0 failures, not the total).
