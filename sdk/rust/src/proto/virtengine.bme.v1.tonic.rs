@@ -542,7 +542,7 @@ pub mod msg_client {
             self.inner.unary(req, path, codec).await
         }
         /** BurnMint allows users to burn one token and mint another at current oracle prices.
- Typically used to burn unused ACT tokens back to AKT.
+ Typically used to burn unused VCC tokens back to VE.
  The operation may be delayed or rejected based on circuit breaker status.
 */
         pub async fn burn_mint(
@@ -570,15 +570,15 @@ pub mod msg_client {
                 .insert(GrpcMethod::new("virtengine.bme.v1.Msg", "BurnMint"));
             self.inner.unary(req, path, codec).await
         }
-        /** MintACT mints ACT tokens by burning the specified source token.
+        /** MintVCC mints VCC tokens by burning the specified source token.
  The mint amount is calculated based on current oracle prices and
  the collateral ratio. May be halted if circuit breaker is triggered.
 */
-        pub async fn mint_act(
+        pub async fn mint_vcc(
             &mut self,
-            request: impl tonic::IntoRequest<super::MsgMintAct>,
+            request: impl tonic::IntoRequest<super::MsgMintVcc>,
         ) -> std::result::Result<
-            tonic::Response<super::MsgMintActResponse>,
+            tonic::Response<super::MsgMintVccResponse>,
             tonic::Status,
         > {
             self.inner
@@ -592,22 +592,22 @@ pub mod msg_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/virtengine.bme.v1.Msg/MintACT",
+                "/virtengine.bme.v1.Msg/MintVCC",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("virtengine.bme.v1.Msg", "MintACT"));
+                .insert(GrpcMethod::new("virtengine.bme.v1.Msg", "MintVCC"));
             self.inner.unary(req, path, codec).await
         }
-        /** BurnACT burns ACT tokens and mints the specified destination token.
+        /** BurnVCC burns VCC tokens and mints the specified destination token.
  The burn operation uses remint credits when available, otherwise
  requires adequate collateral backing based on oracle prices.
 */
-        pub async fn burn_act(
+        pub async fn burn_vcc(
             &mut self,
-            request: impl tonic::IntoRequest<super::MsgBurnAct>,
+            request: impl tonic::IntoRequest<super::MsgBurnVcc>,
         ) -> std::result::Result<
-            tonic::Response<super::MsgBurnActResponse>,
+            tonic::Response<super::MsgBurnVccResponse>,
             tonic::Status,
         > {
             self.inner
@@ -621,11 +621,11 @@ pub mod msg_client {
                 })?;
             let codec = tonic::codec::ProstCodec::default();
             let path = http::uri::PathAndQuery::from_static(
-                "/virtengine.bme.v1.Msg/BurnACT",
+                "/virtengine.bme.v1.Msg/BurnVCC",
             );
             let mut req = request.into_request();
             req.extensions_mut()
-                .insert(GrpcMethod::new("virtengine.bme.v1.Msg", "BurnACT"));
+                .insert(GrpcMethod::new("virtengine.bme.v1.Msg", "BurnVCC"));
             self.inner.unary(req, path, codec).await
         }
     }
@@ -645,7 +645,7 @@ pub mod msg_server {
             tonic::Status,
         >;
         /** BurnMint allows users to burn one token and mint another at current oracle prices.
- Typically used to burn unused ACT tokens back to AKT.
+ Typically used to burn unused VCC tokens back to VE.
  The operation may be delayed or rejected based on circuit breaker status.
 */
         async fn burn_mint(
@@ -655,26 +655,26 @@ pub mod msg_server {
             tonic::Response<super::MsgBurnMintResponse>,
             tonic::Status,
         >;
-        /** MintACT mints ACT tokens by burning the specified source token.
+        /** MintVCC mints VCC tokens by burning the specified source token.
  The mint amount is calculated based on current oracle prices and
  the collateral ratio. May be halted if circuit breaker is triggered.
 */
-        async fn mint_act(
+        async fn mint_vcc(
             &self,
-            request: tonic::Request<super::MsgMintAct>,
+            request: tonic::Request<super::MsgMintVcc>,
         ) -> std::result::Result<
-            tonic::Response<super::MsgMintActResponse>,
+            tonic::Response<super::MsgMintVccResponse>,
             tonic::Status,
         >;
-        /** BurnACT burns ACT tokens and mints the specified destination token.
+        /** BurnVCC burns VCC tokens and mints the specified destination token.
  The burn operation uses remint credits when available, otherwise
  requires adequate collateral backing based on oracle prices.
 */
-        async fn burn_act(
+        async fn burn_vcc(
             &self,
-            request: tonic::Request<super::MsgBurnAct>,
+            request: tonic::Request<super::MsgBurnVcc>,
         ) -> std::result::Result<
-            tonic::Response<super::MsgBurnActResponse>,
+            tonic::Response<super::MsgBurnVccResponse>,
             tonic::Status,
         >;
     }
@@ -840,23 +840,23 @@ pub mod msg_server {
                     };
                     Box::pin(fut)
                 }
-                "/virtengine.bme.v1.Msg/MintACT" => {
+                "/virtengine.bme.v1.Msg/MintVCC" => {
                     #[allow(non_camel_case_types)]
-                    struct MintACTSvc<T: Msg>(pub Arc<T>);
-                    impl<T: Msg> tonic::server::UnaryService<super::MsgMintAct>
-                    for MintACTSvc<T> {
-                        type Response = super::MsgMintActResponse;
+                    struct MintVCCSvc<T: Msg>(pub Arc<T>);
+                    impl<T: Msg> tonic::server::UnaryService<super::MsgMintVcc>
+                    for MintVCCSvc<T> {
+                        type Response = super::MsgMintVccResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::MsgMintAct>,
+                            request: tonic::Request<super::MsgMintVcc>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Msg>::mint_act(&inner, request).await
+                                <T as Msg>::mint_vcc(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -867,7 +867,7 @@ pub mod msg_server {
                     let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let method = MintACTSvc(inner);
+                        let method = MintVCCSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(
@@ -883,23 +883,23 @@ pub mod msg_server {
                     };
                     Box::pin(fut)
                 }
-                "/virtengine.bme.v1.Msg/BurnACT" => {
+                "/virtengine.bme.v1.Msg/BurnVCC" => {
                     #[allow(non_camel_case_types)]
-                    struct BurnACTSvc<T: Msg>(pub Arc<T>);
-                    impl<T: Msg> tonic::server::UnaryService<super::MsgBurnAct>
-                    for BurnACTSvc<T> {
-                        type Response = super::MsgBurnActResponse;
+                    struct BurnVCCSvc<T: Msg>(pub Arc<T>);
+                    impl<T: Msg> tonic::server::UnaryService<super::MsgBurnVcc>
+                    for BurnVCCSvc<T> {
+                        type Response = super::MsgBurnVccResponse;
                         type Future = BoxFuture<
                             tonic::Response<Self::Response>,
                             tonic::Status,
                         >;
                         fn call(
                             &mut self,
-                            request: tonic::Request<super::MsgBurnAct>,
+                            request: tonic::Request<super::MsgBurnVcc>,
                         ) -> Self::Future {
                             let inner = Arc::clone(&self.0);
                             let fut = async move {
-                                <T as Msg>::burn_act(&inner, request).await
+                                <T as Msg>::burn_vcc(&inner, request).await
                             };
                             Box::pin(fut)
                         }
@@ -910,7 +910,7 @@ pub mod msg_server {
                     let max_encoding_message_size = self.max_encoding_message_size;
                     let inner = self.inner.clone();
                     let fut = async move {
-                        let method = BurnACTSvc(inner);
+                        let method = BurnVCCSvc(inner);
                         let codec = tonic::codec::ProstCodec::default();
                         let mut grpc = tonic::server::Grpc::new(codec)
                             .apply_compression_config(

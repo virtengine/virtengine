@@ -818,19 +818,19 @@
                 "http": []
               },
               {
-                "name": "MintACT",
-                "fullName": "virtengine.bme.v1.Msg.MintACT",
-                "grpcPath": "/virtengine.bme.v1.Msg/MintACT",
-                "requestType": "virtengine.bme.v1.MsgMintACT",
-                "responseType": "virtengine.bme.v1.MsgMintACTResponse",
+                "name": "MintVCC",
+                "fullName": "virtengine.bme.v1.Msg.MintVCC",
+                "grpcPath": "/virtengine.bme.v1.Msg/MintVCC",
+                "requestType": "virtengine.bme.v1.MsgMintVCC",
+                "responseType": "virtengine.bme.v1.MsgMintVCCResponse",
                 "http": []
               },
               {
-                "name": "BurnACT",
-                "fullName": "virtengine.bme.v1.Msg.BurnACT",
-                "grpcPath": "/virtengine.bme.v1.Msg/BurnACT",
-                "requestType": "virtengine.bme.v1.MsgBurnACT",
-                "responseType": "virtengine.bme.v1.MsgBurnACTResponse",
+                "name": "BurnVCC",
+                "fullName": "virtengine.bme.v1.Msg.BurnVCC",
+                "grpcPath": "/virtengine.bme.v1.Msg/BurnVCC",
+                "requestType": "virtengine.bme.v1.MsgBurnVCC",
+                "responseType": "virtengine.bme.v1.MsgBurnVCCResponse",
                 "http": []
               }
             ]

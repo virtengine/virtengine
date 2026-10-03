@@ -83,9 +83,9 @@ func (m *EventMintStatusChange) GetNewStatus() MintStatus {
 	return MintStatusUnspecified
 }
 
-// EventVaultSeeded is emitted when the vault is seeded with AKT
+// EventVaultSeeded is emitted when the vault is seeded with VE
 type EventVaultSeeded struct {
-	// amount is the AKT amount added to vault
+	// amount is the VE amount added to vault
 	Amount types.Coin `protobuf:"bytes,1,opt,name=amount,proto3" json:"amount"`
 	// source is where the funds came from
 	Source string `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`

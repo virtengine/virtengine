@@ -29,7 +29,7 @@ message MsgUpdateParams {
 // MsgUpdateParamsResponse is the response type for MsgUpdateParams
 message MsgUpdateParamsResponse {}
 
-// MsgSeedVault defines the message for seeding the BME vault with AKT
+// MsgSeedVault defines the message for seeding the BME vault with VE
 // This is used to provide an initial volatility buffer
 message MsgSeedVault {
   option (cosmos.msg.v1.signer) = "authority";
@@ -40,7 +40,7 @@ message MsgSeedVault {
     (cosmos_proto.scalar) = "cosmos.AddressString"
   ];
 
-  // amount is the AKT amount to seed the vault with
+  // amount is the VE amount to seed the vault with
   cosmos.base.v1beta1.Coin amount = 2 [
     (gogoproto.nullable) = false
   ];
@@ -51,8 +51,8 @@ message MsgSeedVault {
 
 // MsgSeedVaultResponse is the response type for MsgSeedVault
 message MsgSeedVaultResponse {
-  // vault_akt is the new vault AKT balance
-  string vault_akt = 1 [
+  // vault_native is the new vault VE balance
+  string vault_native = 1 [
     (cosmos_proto.scalar) = "cosmos.Int",
     (gogoproto.customtype) = "cosmossdk.io/math.Int",
     (gogoproto.nullable) = false
@@ -60,7 +60,7 @@ message MsgSeedVaultResponse {
 }
 
 // MsgBurnMint defines the message for burning one token to mint another
-// Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+// Allows burning VE to mint VCC, or burning unused VCC back to VE
 message MsgBurnMint {
   option (cosmos.msg.v1.signer) = "owner";
   option (amino.name) = "virtengine/bme/v1/MsgBurnMint";
@@ -73,7 +73,7 @@ message MsgBurnMint {
   ];
 
   // to destination of the minted coins.
-  // if minted coin is ACT, "to" must be same as signer
+  // if minted coin is VCC, "to" must be same as signer
   string to = 2 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "to",
@@ -96,11 +96,11 @@ message MsgBurnMint {
   ];
 }
 
-// MsgMintACT defines the message for burning one token to mint another
-// Allows burning AKT to mint ACT, or burning unused ACT back to AKT
-message MsgMintACT {
+// MsgMintVCC defines the message for burning one token to mint another
+// Allows burning VE to mint VCC, or burning unused VCC back to VE
+message MsgMintVCC {
   option (cosmos.msg.v1.signer) = "owner";
-  option (amino.name) = "virtengine/bme/v1/MsgMintACT";
+  option (amino.name) = "virtengine/bme/v1/MsgMintVCC";
 
   // owner source of the coins to be burned
   string owner = 1 [
@@ -110,7 +110,7 @@ message MsgMintACT {
   ];
 
   // to destination of the minted coins.
-  // if minted coin is ACT, "to" must be same as signer
+  // if minted coin is VCC, "to" must be same as signer
   string to = 2 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "to",
@@ -126,11 +126,11 @@ message MsgMintACT {
   ];
 }
 
-// MsgMintACT defines the message for burning one token to mint another
-// Allows burning AKT to mint ACT, or burning unused ACT back to AKT
-message MsgBurnACT {
+// MsgMintVCC defines the message for burning one token to mint another
+// Allows burning VE to mint VCC, or burning unused VCC back to VE
+message MsgBurnVCC {
   option (cosmos.msg.v1.signer) = "owner";
-  option (amino.name) = "virtengine/bme/v1/MsgBurnACT";
+  option (amino.name) = "virtengine/bme/v1/MsgBurnVCC";
 
   // owner source of the coins to be burned
   string owner = 1 [
@@ -140,7 +140,7 @@ message MsgBurnACT {
   ];
 
   // to destination of the minted coins.
-  // if minted coin is ACT, "to" must be same as signer
+  // if minted coin is VCC, "to" must be same as signer
   string to = 2 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "to",
@@ -170,7 +170,7 @@ message MsgBurnMintResponse {
 }
 
 // MsgBurnMintResponse is the response type for MsgBurnMint
-message MsgMintACTResponse {
+message MsgMintVCCResponse {
   LedgerRecordID id = 1 [
     (gogoproto.nullable)   = false,
     (gogoproto.customname) = "ID",
@@ -182,7 +182,7 @@ message MsgMintACTResponse {
 }
 
 // MsgBurnMintResponse is the response type for MsgBurnMint
-message MsgBurnACTResponse {
+message MsgBurnVCCResponse {
   LedgerRecordID id = 1 [
     (gogoproto.nullable)   = false,
     (gogoproto.customname) = "ID",

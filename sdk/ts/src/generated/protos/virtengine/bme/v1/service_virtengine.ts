@@ -1,4 +1,4 @@
-import { MsgBurnACT, MsgBurnACTResponse, MsgBurnMint, MsgBurnMintResponse, MsgMintACT, MsgMintACTResponse, MsgUpdateParams, MsgUpdateParamsResponse } from "./msgs.ts";
+import { MsgBurnMint, MsgBurnMintResponse, MsgBurnVCC, MsgBurnVCCResponse, MsgMintVCC, MsgMintVCCResponse, MsgUpdateParams, MsgUpdateParamsResponse } from "./msgs.ts";
 
 export const Msg = {
   typeName: "virtengine.bme.v1.Msg",
@@ -15,16 +15,16 @@ export const Msg = {
       output: MsgBurnMintResponse,
       get parent() { return Msg; },
     },
-    mintACT: {
-      name: "MintACT",
-      input: MsgMintACT,
-      output: MsgMintACTResponse,
+    mintVCC: {
+      name: "MintVCC",
+      input: MsgMintVCC,
+      output: MsgMintVCCResponse,
       get parent() { return Msg; },
     },
-    burnACT: {
-      name: "BurnACT",
-      input: MsgBurnACT,
-      output: MsgBurnACTResponse,
+    burnVCC: {
+      name: "BurnVCC",
+      input: MsgBurnVCC,
+      output: MsgBurnVCCResponse,
       get parent() { return Msg; },
     },
   },
