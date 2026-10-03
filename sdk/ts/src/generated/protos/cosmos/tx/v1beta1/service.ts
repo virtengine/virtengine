@@ -9,8 +9,8 @@ import type { DeepPartial, MessageFns } from "../../../../../encoding/typeEncodi
 /* eslint-disable */
 import { BinaryReader, BinaryWriter } from "@bufbuild/protobuf/wire";
 import Long from "long";
-import { Block } from "../../../cometbft/types/v2/block.ts";
-import { BlockID } from "../../../cometbft/types/v2/types.ts";
+import { Block } from "../../../tendermint/types/block.ts";
+import { BlockID } from "../../../tendermint/types/types.ts";
 import { GasInfo, Result, TxResponse } from "../../base/abci/v1beta1/abci.ts";
 import { PageRequest, PageResponse } from "../../base/query/v1beta1/pagination.ts";
 import { Tx } from "./tx.ts";
