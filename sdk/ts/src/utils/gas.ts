@@ -8,7 +8,7 @@ import type { StdFee } from "@cosmjs/stargate";
  * Gas configuration options
  */
 export interface GasConfig {
-  /** Gas price with denomination (e.g., "0.025uakt") */
+  /** Gas price with denomination (e.g., "0.025uve") */
   gasPrice: string;
   /** Multiplier applied to estimated gas (default: 1.3) */
   gasAdjustment: number;
@@ -20,7 +20,7 @@ export interface GasConfig {
  * Default gas configuration for VirtEngine
  */
 export const DEFAULT_GAS_CONFIG: GasConfig = {
-  gasPrice: "0.025uakt",
+  gasPrice: "0.025uve",
   gasAdjustment: 1.3,
   defaultGasLimit: 200000,
 };
@@ -35,7 +35,7 @@ export interface ParsedGasPrice {
 
 /**
  * Parses a gas price string into amount and denomination
- * @param gasPrice - Gas price string (e.g., "0.025uakt")
+ * @param gasPrice - Gas price string (e.g., "0.025uve")
  * @returns Parsed gas price with amount and denom
  * @throws Error if format is invalid
  */
@@ -50,7 +50,7 @@ export function parseGasPrice(gasPrice: string): ParsedGasPrice {
 /**
  * Calculates the fee for a transaction based on gas limit and price
  * @param gasLimit - Gas limit for the transaction
- * @param gasPrice - Gas price string (e.g., "0.025uakt")
+ * @param gasPrice - Gas price string (e.g., "0.025uve")
  * @returns StdFee object for the transaction
  */
 export function calculateFee(gasLimit: number, gasPrice: string): StdFee {

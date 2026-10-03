@@ -23,7 +23,7 @@ message LedgerID {
 }
 // CollateralRatio represents the current collateral ratio
 message CollateralRatio {
-  // ratio is CR = (VaultAKT * Price) / OutstandingACT
+  // ratio is CR = (VaultNative * Price) / OutstandingVCC
   string ratio = 1 [
     (cosmos_proto.scalar) = "cosmos.Dec",
     (gogoproto.customtype) = "cosmossdk.io/math.LegacyDec",
@@ -192,7 +192,7 @@ message LedgerPendingRecord {
   ];
 
   // to destination of the minted coins.
-  // if minted coin is ACT, "to" must be same as signer
+  // if minted coin is VCC, "to" must be same as signer
   string to = 2 [
     (cosmos_proto.scalar) = "cosmos.AddressString",
     (gogoproto.jsontag)   = "to",

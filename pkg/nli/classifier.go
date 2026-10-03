@@ -288,7 +288,7 @@ func (c *RuleBasedClassifier) extractEntities(message string) map[string]string 
 	}
 
 	// Extract token amounts
-	amountPattern := regexp.MustCompile(`(\d+(?:\.\d+)?)\s*(uve|tokens?|uact)`)
+	amountPattern := regexp.MustCompile(`(\d+(?:\.\d+)?)\s*(uve|tokens?|uvcc)`)
 	if matches := amountPattern.FindStringSubmatch(message); len(matches) > 1 {
 		entities["amount"] = matches[1]
 		if len(matches) > 2 {

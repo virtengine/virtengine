@@ -857,18 +857,6 @@
       "title": "MintStatus indicates the current state of mint",
       "type": "string"
     },
-    "virtengine.bme.v1.MsgBurnACTResponse": {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/virtengine.bme.v1.LedgerRecordID"
-        },
-        "status": {
-          "$ref": "#/definitions/virtengine.bme.v1.LedgerRecordStatus"
-        }
-      },
-      "title": "MsgBurnMintResponse is the response type for MsgBurnMint",
-      "type": "object"
-    },
     "virtengine.bme.v1.MsgBurnMintResponse": {
       "properties": {
         "id": {
@@ -881,7 +869,19 @@
       "title": "MsgBurnMintResponse is the response type for MsgBurnMint",
       "type": "object"
     },
-    "virtengine.bme.v1.MsgMintACTResponse": {
+    "virtengine.bme.v1.MsgBurnVCCResponse": {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/virtengine.bme.v1.LedgerRecordID"
+        },
+        "status": {
+          "$ref": "#/definitions/virtengine.bme.v1.LedgerRecordStatus"
+        }
+      },
+      "title": "MsgBurnMintResponse is the response type for MsgBurnMint",
+      "type": "object"
+    },
+    "virtengine.bme.v1.MsgMintVCCResponse": {
       "properties": {
         "id": {
           "$ref": "#/definitions/virtengine.bme.v1.LedgerRecordID"
@@ -917,12 +917,12 @@
         },
         "min_epoch_blocks": {
           "format": "int64",
-          "title": "min_epoch_blocks is the minimum amount of blocks required for ACT mints",
+          "title": "min_epoch_blocks is the minimum amount of blocks required for VCC mints",
           "type": "string"
         },
         "mint_spread_bps": {
           "format": "int64",
-          "title": "mint_spread_bps is the spread in basis points applied during ACT mint\n(default: 25 bps = 0.25%)",
+          "title": "mint_spread_bps is the spread in basis points applied during VCC mint\n(default: 25 bps = 0.25%)",
           "type": "integer"
         },
         "settle_spread_bps": {
@@ -954,11 +954,11 @@
           "type": "string"
         },
         "mints_allowed": {
-          "title": "mints_allowed indicates if new ACT mints are allowed",
+          "title": "mints_allowed indicates if new VCC mints are allowed",
           "type": "boolean"
         },
         "refunds_allowed": {
-          "title": "refunds_allowed indicates if ACT refunds are allowed",
+          "title": "refunds_allowed indicates if VCC refunds are allowed",
           "type": "boolean"
         },
         "status": {
@@ -3366,7 +3366,7 @@
           "description": "Balance amount of funds available to spend in this deposit."
         },
         "direct": {
-          "title": "direct indicates if deposited currency should be swapped to ACT (false) at time of the deposit",
+          "title": "direct indicates if deposited currency should be swapped to VCC (false) at time of the deposit",
           "type": "boolean"
         },
         "height": {

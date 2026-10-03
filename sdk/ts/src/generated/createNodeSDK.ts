@@ -342,7 +342,7 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
           }, { path: [7, 0] }),
           /**
            * burnMint allows users to burn one token and mint another at current oracle prices.
-           * Typically used to burn unused ACT tokens back to AKT.
+           * Typically used to burn unused VCC tokens back to VE.
            * The operation may be delayed or rejected based on circuit breaker status.
            */
           burnMint: withMetadata(async function burnMint(input: DeepSimplify<virtengine_bme_v1_msgs.MsgBurnMint>, options?: TxCallOptions) {
@@ -350,22 +350,22 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             return getMsgClient(service).burnMint(input, options);
           }, { path: [7, 1] }),
           /**
-           * mintACT mints ACT tokens by burning the specified source token.
+           * mintVCC mints VCC tokens by burning the specified source token.
            * The mint amount is calculated based on current oracle prices and
            * the collateral ratio. May be halted if circuit breaker is triggered.
            */
-          mintACT: withMetadata(async function mintACT(input: DeepSimplify<virtengine_bme_v1_msgs.MsgMintACT>, options?: TxCallOptions) {
+          mintVCC: withMetadata(async function mintVCC(input: DeepSimplify<virtengine_bme_v1_msgs.MsgMintVCC>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(7);
-            return getMsgClient(service).mintACT(input, options);
+            return getMsgClient(service).mintVCC(input, options);
           }, { path: [7, 2] }),
           /**
-           * burnACT burns ACT tokens and mints the specified destination token.
+           * burnVCC burns VCC tokens and mints the specified destination token.
            * The burn operation uses remint credits when available, otherwise
            * requires adequate collateral backing based on oracle prices.
            */
-          burnACT: withMetadata(async function burnACT(input: DeepSimplify<virtengine_bme_v1_msgs.MsgBurnACT>, options?: TxCallOptions) {
+          burnVCC: withMetadata(async function burnVCC(input: DeepSimplify<virtengine_bme_v1_msgs.MsgBurnVCC>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(7);
-            return getMsgClient(service).burnACT(input, options);
+            return getMsgClient(service).burnVCC(input, options);
           }, { path: [7, 3] })
         }
       },

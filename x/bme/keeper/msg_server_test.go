@@ -61,7 +61,7 @@ func TestMsgServerBurnMint(t *testing.T) {
 		Owner:       "cosmos1test",
 		To:          "cosmos1test",
 		CoinsToBurn: sdk.NewCoin("uve", math.NewInt(100)),
-		DenomToMint: "uvact",
+		DenomToMint: "uvcc",
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
@@ -69,11 +69,11 @@ func TestMsgServerBurnMint(t *testing.T) {
 	require.Equal(t, types.LedgerRecordSatusPending, resp.Status)
 }
 
-func TestMsgServerMintACT(t *testing.T) {
+func TestMsgServerMintVCC(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	ms := keeper.NewMsgServer(k)
 
-	resp, err := ms.MintACT(ctx, &types.MsgMintACT{
+	resp, err := ms.MintVCC(ctx, &types.MsgMintVCC{
 		Owner:       "cosmos1test",
 		To:          "cosmos1test",
 		CoinsToBurn: sdk.NewCoin("uve", math.NewInt(100)),
@@ -83,14 +83,14 @@ func TestMsgServerMintACT(t *testing.T) {
 	require.Equal(t, types.LedgerRecordSatusPending, resp.Status)
 }
 
-func TestMsgServerBurnACT(t *testing.T) {
+func TestMsgServerBurnVCC(t *testing.T) {
 	k, ctx := setupKeeper(t)
 	ms := keeper.NewMsgServer(k)
 
-	resp, err := ms.BurnACT(ctx, &types.MsgBurnACT{
+	resp, err := ms.BurnVCC(ctx, &types.MsgBurnVCC{
 		Owner:       "cosmos1test",
 		To:          "cosmos1test",
-		CoinsToBurn: sdk.NewCoin("uvact", math.NewInt(50)),
+		CoinsToBurn: sdk.NewCoin("uvcc", math.NewInt(50)),
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)

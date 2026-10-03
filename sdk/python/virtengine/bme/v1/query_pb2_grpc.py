@@ -5,7 +5,7 @@ import grpc
 from virtengine.bme.v1 import query_pb2 as virtengine_dot_bme_dot_v1_dot_query__pb2
 
 
-class QueryStub(object):
+class QueryStub:
     """Query defines the gRPC querier service for the BME module
     """
 
@@ -32,7 +32,7 @@ class QueryStub(object):
                 _registered_method=True)
 
 
-class QueryServicer(object):
+class QueryServicer:
     """Query defines the gRPC querier service for the BME module
     """
 
@@ -83,7 +83,7 @@ def add_QueryServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Query(object):
+class Query:
     """Query defines the gRPC querier service for the BME module
     """
 
