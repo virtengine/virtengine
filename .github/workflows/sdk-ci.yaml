@@ -105,6 +105,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: sdk/go/go.mod
+          cache: true
+          cache-dependency-path: sdk/go/go.sum
+
+      # The Jest harness stages its buf modules out of `sdk/go/vendor/`:
+      #   go/vendor/github.com/cosmos/gogoproto          (test/helpers/proto.ts)
+      #   go/vendor/github.com/cosmos/cosmos-sdk/proto   (test/functional/protoc-gen-sdk-object.spec.ts)
+      # Nothing else in this job builds that tree, so without this step the
+      # functional specs die with ENOENT and fail 75 tests across 9 suites.
+      #
+      # `go mod vendor` creates the first path but NOT the second: vendor/ only
+      # carries Go packages, and cosmos-sdk's proto/ tree is .proto files. The
+      # sdk/go replace directive redirects github.com/cosmos/cosmos-sdk to
+      # github.com/virtengine/cosmos-sdk, so the source has to be copied from the
+      # resolved module directory rather than hard-coded to a version.
+      - name: Stage sdk/go vendor tree for the Jest buf harness
+        working-directory: sdk/go
+        env:
+          GOWORK: "off"
+        run: |
+          go mod vendor
+          SDK_DIR="$(go list -m -f '{{.Dir}}' github.com/cosmos/cosmos-sdk)"
+          mkdir -p vendor/github.com/cosmos/cosmos-sdk
+          cp -r "${SDK_DIR}/proto" vendor/github.com/cosmos/cosmos-sdk/proto
+
       - name: Setup Node.js
         uses: actions/setup-node@v6
         with:
