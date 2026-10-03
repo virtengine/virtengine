@@ -14,15 +14,20 @@ byte-identical to what ships. Each run costs a full run's scans (~6 min).
            must exit 3 (nothing measured), and must never exit 0.
 
   dangling Drops `count` from the logs bucket only, leaving its block still
-           saying `logs[0].id`. Recorded as INFORMATIONAL: measured on
-           checkov 3.3.22, checkov tolerates the dangling reference, still scans
-           the bucket, and still reports `aws_s3_bucket.logs` as genuinely
-           PASSING -- so exit 0 is a TRUE verdict, not a false pass. This mode
+           saying `logs[0].id`. INFORMATIONAL, and it does NOT exit 0: because
+           this mode REPLACES probe.delete_block wholesale, it sabotages T1 and
+           T2a as well as running its own mutation, so the probe reports T1 and
+           T2a FALSIFIED and exits 1. That is this driver's design, not a
+           verdict about the document. What the mode is for is T3's line, and
+           measured on checkov 3.3.22 (2026-10-04) checkov really does TOLERATE
+           the dangling reference: it still scans the bucket and still reports
+           `aws_s3_bucket.logs` as genuinely PASSING, so T3's movement assertion
+           holds instead of being satisfied by a resource vanishing. This mode
            asserts the verdict is justified (the unindexed name really is in the
-           passed list) instead of asserting a failure.
+           passed list) rather than asserting a failure.
 
 Usage:  python ckv2_indexed_limitation_probe_negtest.py [wipe|dangling]
-Exit:   0 = the probe refused (or, for dangling, its PASS was justified).
+Exit:   0 = the probe refused (or, for dangling, its verdict was justified).
         1 = the probe reported an unjustified PASS -- a real defect.
         2 = this driver could not set up or run the probe -- a fault HERE, not
             a verdict about the probe, and kept distinct from 1 on purpose.
@@ -90,9 +95,11 @@ def dangling(rel: str, name: str):
     """Return a mutator dropping `count` from the logs bucket ONLY.
 
     The block keeps saying `logs[0].id`, so the pair is left inconsistent. Also
-    a factory, for the same reason as `wipe`. The path argument is unused: this
-    mutation is always about the scaling module's logs pair, wherever it is
-    copied to.
+    a factory, for the same reason as `wipe`. `rel` is deliberately unused: this
+    mode's mutation is fixed to the scaling module's logs pair, and it
+    REPLACES delete_block for every call, which is why T1 and T2a are sabotaged
+    with it. That is the documented cost of the mode, not an oversight -- its
+    subject is T3 alone, and its verdict is T3's movement assertion.
     """
     def apply(tf: Path) -> None:
         target = tf / "modules/scaling/main.tf"
@@ -115,8 +122,9 @@ print(f"NEGATIVE MODE: {MODE}")
 if MODE == "wipe":
     print("Mutated tree destroyed; baseline left live. Probe must NOT exit 0.")
 else:
-    print("Dangling logs[0].id left behind. Probe must not PASS without the")
-    print("unindexed resource genuinely appearing in the passed list.")
+    print("Dangling logs[0].id left behind. This mode also replaces T1/T2a's")
+    print("mutator, so expect them FALSIFIED and the probe to exit 1; what")
+    print("matters is that T3's movement assertion really fires.")
 print("=" * 70)
 _captured = io.StringIO()
 try:
@@ -144,22 +152,26 @@ if MODE == "wipe":
         print(f"NEGATIVE TEST PASSED: destroyed tree produced exit {code}, not 0")
         rc = 0
 else:
-    # Informational: assert only that a PASS is justified, i.e. the probe's own
-    # movement assertion really did see the unindexed name pass. The run's
-    # stdout above is the record of what checkov did.
+    # What this mode is really for, and the only falsifiable claim here: T3's
+    # movement assertion must FIRE, which is what proves checkov tolerated the
+    # dangling reference and still reported the unindexed bucket as genuinely
+    # PASSING. That is asserted, not swallowed. The probe's exit code is
+    # REPORTED but is not this mode's verdict -- it replaces T1/T2a's mutator,
+    # so the probe legitimately exits 1 on a healthy tree.
     justified = "moved FAILED -> aws_s3_bucket.logs PASSED" in _captured.getvalue()
-    if code == 0 and justified:
-        print("INFORMATIONAL: checkov tolerated the dangling reference and "
-              "genuinely reported the unindexed bucket as PASSING; exit 0 is a "
-              "true verdict, not a false pass")
+    if justified:
+        print(f"INFORMATIONAL (probe exit {code}): checkov tolerated the dangling "
+              "reference and genuinely reported the unindexed bucket as PASSING "
+              "-- T3's movement assertion fired, so the claim this document makes "
+              "holds. The non-zero exit is T1/T2a, sabotaged by this mode by "
+              "design, not a verdict about the document.")
         rc = 0
-    elif code == 0:
-        print("NEGATIVE TEST FAILED: exit 0 without the movement assertion "
-              "firing -- the PASS is not justified")
-        rc = 1
     else:
-        print(f"INFORMATIONAL: probe refused (exit {code})")
-        rc = 0
+        print(f"NEGATIVE TEST FAILED: T3's movement assertion did NOT fire on a "
+              f"tree with a dangling logs[0].id (probe exit {code}), so the claim "
+              f"that checkov tolerates it is unbacked. The run's stdout above is "
+              f"the record of what checkov actually did")
+        rc = 1
 
 holder.cleanup()
 sys.exit(rc)

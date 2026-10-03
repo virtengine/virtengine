@@ -397,11 +397,23 @@ def self_test() -> int:
     FAIL loudly rather than report a PASS.
     """
     failures: list[str] = []
+    assertions = 0
 
-    def check(label: str, ok: bool, detail: str = "") -> None:
-        print(f"  {'ok  ' if ok else 'FAIL'}  {label}{f' -- {detail}' if detail and not ok else ''}")
+    # Every assertion goes through here, and the TOTAL is counted by the probe
+    # itself and printed at the end. CHECKOV_SCANER_LIMITATION.md quotes that
+    # total instead of carrying its own copy: this file used to print a
+    # hardcoded "22/22" that had drifted from the real 24, in the one document
+    # whose whole argument is that its numbers come from a script that fails
+    # when they change. The pass criterion is "0 failures, exit 0" -- the total
+    # is REPORTED, never asserted, so adding a case can never make this file
+    # wrong. Anything that prints an ok/FAIL line must go through this.
+    def check(label: str, ok: bool = True, detail: str = "") -> None:
+        nonlocal assertions
+        assertions += 1
         if not ok:
             failures.append(label)
+        print(f"  {'ok  ' if ok else 'FAIL'}  {label}"
+              f"{f' -- {detail}' if detail and not ok else ''}")
 
     print("VERDICT LOGIC")
     base, t1, t2, t3 = healthy_scans()
@@ -447,10 +459,9 @@ def self_test() -> int:
         try:
             require_live(scan_obj, control_obj, label, floor=floor)
         except ScanNotLive:
-            print(f"  ok    {label}")
-            return
-        print(f"  FAIL  {label}")
-        failures.append(label)
+            check(f"{label}")
+        else:
+            check(label, False, "it was accepted, so a dead scan would pass")
 
     refused(None, _control_ok(), None, "no JSON at all is refused")
     refused(_scan([], [], resource_count=0), _control_ok(), None,
@@ -470,10 +481,9 @@ def self_test() -> int:
         try:
             require_live(obj, ctl, label, floor=floor)
         except ScanNotLive as exc:
-            print(f"  FAIL  {label} was refused -- {exc}")
-            failures.append(label)
+            check(label, False, f"was refused -- {exc}")
         else:
-            print(f"  ok    {label}")
+            check(label)
 
     print("\nMUTATOR GRIP: a mutation that cannot be applied is exit 2, NOT exit 1")
     # Runs against a THROWAWAY copy of the tree, never TF_DIR: these mutators
@@ -493,11 +503,10 @@ def self_test() -> int:
                 grip_failures += 1
                 continue
             except Exception as exc:                     # noqa: BLE001
-                print(f"  FAIL  {rel}/{name} raised {type(exc).__name__}, "
+                check(f"{rel}/{name} raised {type(exc).__name__}", False,
                       "which main() does NOT catch as a fault -> would exit 1")
-                failures.append(f"delete_block {rel}/{name}")
                 continue
-            print(f"  ok    {rel}/{name} mutated")
+            check(f"{rel}/{name} mutated")
         check("delete_block raises HarnessFault, never ValueError/SystemExit",
               grip_failures == 1)
 
@@ -512,14 +521,13 @@ def self_test() -> int:
         try:
             unindex_logs(grip_tree)
         except HarnessFault as exc:
-            print("  ok    unindex_logs on a shape-changed tree -> HarnessFault "
+            check(f"unindex_logs on a shape-changed tree -> HarnessFault "
                   f"({str(exc)[:48]}...)")
         except Exception as exc:                          # noqa: BLE001
-            print(f"  FAIL  unindex_logs raised {type(exc).__name__}, "
+            check(f"unindex_logs raised {type(exc).__name__}", False,
                   "which main() does NOT catch as a fault -> would exit 1")
-            failures.append("unindex_logs grip")
         else:
-            print("  ok    unindex_logs matched the tree as it stands")
+            check("unindex_logs matched the tree as it stands")
 
     print("\nNON-OVERLAPPING EXIT CODES")
     # The falsified cases above must actually flip the summary verdict, or
@@ -537,12 +545,17 @@ def self_test() -> int:
 
     print()
     if failures:
-        print(f"SELF-TEST FAILED: {len(failures)} check(s) did not hold:")
+        print(f"SELF-TEST FAILED: {len(failures)} of {assertions} assertions "
+              f"did not hold:")
         for f in failures:
             print(f"    - {f}")
         return 1
-    print("SELF-TEST PASSED: the probe's decision logic rejects every broken "
-          "scan above and accepts the healthy one.")
+    # The total is printed so the document can quote it instead of guessing it,
+    # but it is not a pass criterion -- adding a case must not be able to make
+    # this fail. See the comment on check().
+    print(f"SELF-TEST PASSED: {assertions}/{assertions} assertions held, 0 "
+          f"failures -- the probe's decision logic rejects every broken scan "
+          f"above and accepts the healthy one.")
     return 0
 
 
