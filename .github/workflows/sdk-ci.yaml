@@ -64,6 +64,13 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v5
 
+      # Required by the --new-from-rev step below. actions/checkout defaults to
+      # fetch-depth 1, which fetches only the PR merge commit; origin/<base>
+      # is then an unknown revision and golangci-lint aborts on every run.
+      # This mirrors .github/workflows/quality-gate.yaml (the lint job).
+      - name: Fetch base ref for lint diff
+        run: git fetch origin "${{ github.base_ref || 'develop' }}" --depth=1
+
       - name: Setup Go
         uses: actions/setup-go@v6
         with:
