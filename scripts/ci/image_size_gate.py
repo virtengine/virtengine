@@ -19,17 +19,28 @@ The budget is not reachable by optimisation
 `CGO_ENABLED=0`, `-trimpath`, `-buildvcs=false`, and `-ldflags "-s -w"`. The
 shipped binary, built with those exact flags, is:
 
-    linux/amd64, stripped, develop @ 1cd9af8e3   193,314,978 B (184.36 MiB)
-    linux/amd64, unstripped (-trimpath only)     274,090,576 B (261.38 MiB)
+    linux/amd64, stripped, develop @ 1cd9af8e3   193,294,498 B (184.34 MiB)
+    linux/amd64, unstripped (-trimpath only)     274,068,165 B (261.37 MiB)
 
-Stripping alone accounts for ~77 MiB, and it is already applied. The binary is
+Both figures were re-measured in workspace mode (see `MEASURED_BINARY_BYTES`
+for why that is the mode that matters). Stripping alone accounts for
+80,772,998 B (77.03 MiB), and it is already applied. The binary is
 **1.84x the entire 100 MiB budget before a single runtime layer is added**.
 The alpine base plus `bash`, `curl`, `jq` and `ca-certificates` contribute
-23,233,191 B (22.16 MiB), which does fit under the budget on its own -- so the
-only way to satisfy 100 MiB is to cut the binary to <= 77.84 MiB, i.e. a 57.8%
+23,253,671 B (22.18 MiB), which does fit under the budget on its own -- so the
+only way to satisfy 100 MiB is to cut the binary to <= 77.82 MiB, i.e. a 57.8%
 reduction of statically linked cosmos-sdk/ibc/grpc code. That is a structural
 effort (splitting subsystems behind a process boundary, or a distroless
 runtime), not a build-flag change, and it is separately tracked.
+
+The runtime-layer figure is DERIVED BY SUBTRACTION
+(`MEASURED_IMAGE_BYTES - MEASURED_BINARY_BYTES`), not measured directly: the
+machine the numbers were taken on has no docker daemon, so no one has run
+`docker image inspect` on the runtime stage or `stat`ed the layers. It is
+consistent with an alpine 3.24 base plus `bash`, `ca-certificates`, `curl` and
+`jq`, and it is only ever used for the diagnostic print -- `evaluate()` decides
+on `image_bytes` against `MAX_IMAGE_BYTES` alone. Re-measure it on a docker
+host before treating it as exact.
 
 So the fixed target is a number no one has ever met, which makes it a gate that
 can only ever say "fail" -- and a gate that can only ever say "fail" is not a
@@ -86,10 +97,36 @@ TARGET_IMAGE_BYTES = 100 * 1024 * 1024
 # measurement noise.
 MEASURED_IMAGE_BYTES = 216548169
 
-# The measured size of the binary the Dockerfile copies into the image, built
-# with the Dockerfile's exact flags. Recorded so the gap to the target is
-# attributed to the right layer instead of guessed at.
-MEASURED_BINARY_BYTES = 193314978
+# The measured size of the binary the Dockerfile copies into the image.
+# Recorded so the gap to the target is attributed to the right layer instead of
+# guessed at.
+#
+# HOW TO RE-MEASURE (this is the part that matters -- reproduce the container's
+# build, not your shell's):
+#
+#   git worktree add --detach <path> <sha>
+#   cd <path>
+#   CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+#     go build -trimpath -buildvcs=false -ldflags "-s -w" -o /tmp/ve ./cmd/virtengine
+#   wc -c < /tmp/ve
+#
+# Do NOT set `GOWORK=off`. The Dockerfile sets only CGO_ENABLED/GOOS/GOARCH and
+# never sets GOWORK, `go.work` is NOT in `.dockerignore`, and `COPY . .` puts
+# it in the build context -- so the container compiles in **workspace mode**,
+# and a `GOWORK=off` build is a *different binary* (193,314,978 B, 20,480 B
+# larger at this commit). Recording the GOWORK=off figure here would attribute
+# the image gap to a binary that never ships. Verified both modes at c2cd1baf
+# on go1.26.8 with GOFLAGS emptied in both cases, so the delta is the build
+# mode and nothing else.
+#
+# This constant is DIAGNOSTIC ONLY. `evaluate()` decides on `image_bytes`
+# against `MAX_IMAGE_BYTES`; nothing about the gate's pass/fail depends on it.
+MEASURED_BINARY_BYTES = 193294498
+
+# The unstripped size of the same build (`-trimpath` but no `-ldflags "-s -w"`),
+# measured the same way. Only used to show how much stripping is already
+# contributing; also diagnostic only.
+MEASURED_UNSTRIPPED_BINARY_BYTES = 274068165
 
 # 211 MiB: ~2.2% above the measured image. Tight deliberately -- the point of a
 # ratchet is that growth is noticed, not absorbed.
@@ -163,6 +200,24 @@ def resolve_max_bytes() -> int:
     return value
 
 
+def derived_runtime_layer_bytes() -> int:
+    """The non-binary part of the image, DERIVED BY SUBTRACTION.
+
+    `MEASURED_IMAGE_BYTES` is a real `docker image inspect` value;
+    `MEASURED_BINARY_BYTES` is a real build output. Their difference is what
+    the alpine base plus `bash`, `ca-certificates`, `curl` and `jq` add, but
+    nobody has `stat`ed the runtime stage: the numbers were taken on a host
+    with no docker daemon. So this is inference, and it is only ever used for
+    the diagnostic print -- `evaluate()` decides on `image_bytes` against
+    `MAX_IMAGE_BYTES` alone.
+
+    Extracted as a function so the test asserts the SUBTRACTION and its
+    bounds instead of restating the expression (a restatement cannot detect
+    its own inversion).
+    """
+    return MEASURED_IMAGE_BYTES - MEASURED_BINARY_BYTES
+
+
 def resolve_image_size() -> int | None:
     """The image size under test.
 
@@ -195,6 +250,16 @@ def evaluate(
     print(f"Image size: {image_bytes} bytes ({image_bytes / mib:.2f} MiB)")
     print(f"Recorded measurement: {MEASURED_IMAGE_BYTES} bytes ({MEASURED_IMAGE_BYTES / mib:.2f} MiB)")
     print(f"Recorded binary:       {MEASURED_BINARY_BYTES} bytes ({MEASURED_BINARY_BYTES / mib:.2f} MiB)")
+    # Labelled "derived" because it is a subtraction, not a stat() of the runtime
+    # stage -- the numbers were taken on a host with no docker daemon.
+    derived_runtime = derived_runtime_layer_bytes()
+    print(
+        f"Runtime layer (derived by subtraction, not stat()ed): {derived_runtime} bytes "
+        f"({derived_runtime / mib:.2f} MiB)"
+    )
+    print(f"Recorded binary unstripped: {MEASURED_UNSTRIPPED_BINARY_BYTES} bytes "
+          f"({MEASURED_UNSTRIPPED_BINARY_BYTES / mib:.2f} MiB), so stripping already "
+          f"removes {(MEASURED_UNSTRIPPED_BINARY_BYTES - MEASURED_BINARY_BYTES) / mib:.2f} MiB")
     print(f"Enforced ratchet ceiling: {max_bytes} bytes ({max_bytes / mib:.0f} MiB), tracking {BUDGET_ISSUE}")
 
     if image_bytes > TARGET_IMAGE_BYTES:

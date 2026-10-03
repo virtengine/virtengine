@@ -295,6 +295,49 @@ on:
 - Use `continue-on-error: true` for non-critical steps
 - Increase timeouts
 
+### Go Module-Proxy Transport Errors (false red, no code defect)
+
+**Symptom:** a `quality-gate` job (`vet`, `build`, `test-go`, `lint`, `economics-sim`)
+fails at the **Download dependencies** step with no vet/build/test
+diagnostic anywhere in the log:
+
+```
+go: github.com/cockroachdb/pebble@v1.1.5: read
+"https://proxy.golang.org/github.com/cockroachdb/pebble/@v/v1.1.5.zip":
+stream error: stream ID 7079; INTERNAL_ERROR; received from peer
+```
+
+**Cause:** on a cold module cache (`go mod download` must actually reach
+the network) the proxy serves zips over HTTP/2 and occasionally resets the
+stream. The failure is emitted by the HTTP/2 transport, not by the Go
+toolchain, so the tool under test never ran and the red says nothing about
+the code.
+
+**This is already handled.** Every `go mod download` in `quality-gate.yaml`
+runs through `scripts/ci/go-mod-download.sh`, which retries **only** when the
+log matches a transport signature, up to `VE_GO_MOD_DOWNLOAD_ATTEMPTS`
+(default 3, backoff `VE_GO_MOD_DOWNLOAD_BACKOFF_SECONDS` x attempt, default 5).
+
+Two properties make this safe rather than a `|| true`:
+
+- Checksum mismatches, missing `go.sum` entries, 404s and unknown revisions
+  match **no** transport signature, so they fail on the first attempt with the
+  diagnostic intact.
+- After the final attempt the script exits with `go`'s own non-zero code. It
+  cannot exit 0 for a failed download.
+
+**Do not "fix" this by** disabling vet, or adding `|| true` to the job, or
+removing the wrapper. That is precisely the vacuous-pass bug fixed in PR #1137.
+
+**Verifying the wrapper still behaves:**
+```bash
+node --test scripts/ci/go-mod-download.test.mjs   # 13 cases, no Go/network needed
+node scripts/ci/go-mod-download.e2e.mjs           # real go + fault-injecting loopback proxy
+```
+Both run in the gate: the unit tests in the dedicated `go-mod-download-selftest`
+job, which is deliberately a separate job with no `needs:` so the wrapper's
+self-test still reports when the wrapper is broken.
+
 ### Permission Errors
 
 **Symptom:**
