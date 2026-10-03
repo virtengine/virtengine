@@ -86,14 +86,33 @@ test("repository inventory has exact Go module replaces and TypeScript proto par
   // that changes go.mod, and say in that PR which directive was added or
   // repointed.
   //
-  // 24 as of 2026-10-01: 15 in go.mod + 1 in sdk/generation/go.mod + 8 in
-  // sdk/go/go.mod. It was 23 until b488f79a (#960) regenerated the inventory
-  // after #848 repointed the ledger directives to akash-network/ledger-go;
-  // that regeneration also carried a `bytedance/sonic` replace, and this
-  // constant was not updated with it. The contracts gate only reached the step
-  // that runs this test once #1102-#1107 made proto generation succeed, so the
-  // drift sat unreadable until then.
-  assert.equal(inventory.summaries.replaces, 24);
+  // 23 as of 2026-10-04: 15 in go.mod + 1 in sdk/generation/go.mod + 7 in
+  // sdk/go/go.mod. It was 24 until 797c5cd0 (#1200) dropped the
+  // `CosmWasm/wasmd => CosmWasm/wasmd v0.53.4` replace from sdk/go/go.mod,
+  // which was forcing wasmvm v2 to be selected alongside v3. That commit did
+  // not regenerate sdk/artifacts/proto/inventory.json, so the committed
+  // artifact kept advertising a directive the module graph no longer had.
+  // It was 23 before that; b488f79a (#960) had raised it from 23 to 24 after
+  // #848 repointed the ledger directives to akash-network/ledger-go, and that
+  // regeneration also carried a `bytedance/sonic` replace that this constant
+  // was not updated with. The contracts gate only reached the step that runs
+  // this test once #1102-#1107 made proto generation succeed, so that drift sat
+  // unreadable until then.
+  assert.equal(inventory.summaries.replaces, 23);
+
+  // The removed directive must stay removed: #1200 exists to stop sdk/go from
+  // resolving wasmvm v2. Asserting the absence of the directive, rather than
+  // relying on the count alone, means a future regenerate cannot quietly
+  // reintroduce it.
+  assert.equal(
+    inventory.modules.some((module) =>
+      module.replaces.some(
+        (replacement) =>
+          replacement.old === "github.com/CosmWasm/wasmd" && replacement.version === "v0.53.4",
+      ),
+    ),
+    false,
+  );
 
   // A replace must never point at the deleted virtengine/ledger-go repository
   // (#848); assert the target rather than trusting the count to catch it.
