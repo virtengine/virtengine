@@ -78,6 +78,34 @@ def run_gate(image_bytes: str | None, extra_env: dict | None = None):
     )
 
 
+def _code_string_literals(path: Path) -> list:
+    """String literals in a module's EXECUTABLE code, excluding docstrings.
+
+    A docstring is documentation and is allowed to quote a figure in prose; an
+    f-string inside `evaluate()` that hardcodes one is a value that will rot
+    when the measurement is re-taken. Walking the AST and skipping docstring
+    nodes tells those two apart, which a substring search cannot.
+    """
+    import ast
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    docstrings = set()
+    for node in ast.walk(tree):
+        if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)):
+            doc = ast.get_docstring(node, clean=False)
+            if doc is not None:
+                body = getattr(node, "body", [])
+                if body and isinstance(body[0], ast.Expr):
+                    docstrings.add(id(body[0].value))
+    return [
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Constant)
+        and isinstance(node.value, str)
+        and id(node) not in docstrings
+    ]
+
+
 class RecordedMeasurementTest(unittest.TestCase):
     """The recorded numbers must be the real measured ones, not convenient ones."""
 
@@ -119,6 +147,30 @@ class RecordedMeasurementTest(unittest.TestCase):
         constant, the docstring and the ci.yaml comment together.
         """
         self.assertEqual(self.gate.MEASURED_BINARY_BYTES, 193294498)
+
+    def test_recorded_unstripped_binary_is_the_measured_one(self):
+        """274,068,165 B: same tree, same mode, `-trimpath` but no `-s -w`.
+
+        This is a VALUE assertion, not a comparison. The only thing that
+        previously constrained this constant was
+        `assertGreater(unstripped, stripped)`, which admits any larger wrong
+        number -- so the gate's own line "stripping already removes 77.03 MiB"
+        could have been fabricated (set the constant to 193,294,499 and the
+        gate reports 0.00 MiB removed while the suite stays green).
+
+        Measured the same way as `MEASURED_BINARY_BYTES`, at the same commit,
+        in workspace mode, with GOFLAGS emptied:
+
+            git worktree add --detach <path> 1cd9af8e3 && cd <path>
+            CGO_ENABLED=0 GOOS=linux GOARCH=amd64 GOFLAGS= \\
+              go build -trimpath -buildvcs=false -o out ./cmd/virtengine
+            wc -c < out        # 274,068,165 -- no -ldflags "-s -w"
+
+        Do NOT set `GOWORK=off`; same trap, same reason (see the stripped
+        constant). If this test fails, re-measure in the same mode, then
+        update the constant, the docstring and the ci.yaml comment together.
+        """
+        self.assertEqual(self.gate.MEASURED_UNSTRIPPED_BINARY_BYTES, 274068165)
 
     def test_recorded_binary_is_the_workspace_mode_build(self):
         """The recorded binary must be the workspace-mode (shipped) build.
@@ -180,6 +232,129 @@ class RecordedMeasurementTest(unittest.TestCase):
     def test_budget_names_a_tracking_issue(self):
         """An unowned number is exactly what this change exists to prevent."""
         self.assertRegex(self.gate.BUDGET_ISSUE, r"virtengine/virtengine#\d+")
+
+
+class DerivedRuntimeLayerTest(unittest.TestCase):
+    """The runtime-layer figure is inference, and must stay labelled as it.
+
+    `MEASURED_IMAGE_BYTES` is a real `docker image inspect` value and
+    `MEASURED_BINARY_BYTES` is a real build output, but the difference between
+    them was never `stat`ed -- the measurements were taken on a host with no
+    docker daemon. So the runtime layer is DERIVED, and the only test that
+    mentioned it read a phrase out of the DOCSTRING, which no mutation of the
+    subtraction can affect. Both properties are asserted here.
+    """
+
+    def setUp(self):
+        self.gate = load_module()
+
+    def test_derived_runtime_layer_is_the_subtraction_and_is_bounded(self):
+        """It IS the subtraction, and it lands where a runtime layer must.
+
+        Asserting the expression by restating it would not help: a restatement
+        cannot detect its own inversion, which is why the arithmetic lives in
+        `derived_runtime_layer_bytes()` and is called from both sides. Zeroing
+        it, or flipping it to `binary - image`, now fails here.
+        """
+        derived = self.gate.derived_runtime_layer_bytes()
+        self.assertEqual(
+            derived,
+            self.gate.MEASURED_IMAGE_BYTES - self.gate.MEASURED_BINARY_BYTES,
+            "the runtime layer is no longer image-minus-binary",
+        )
+        # A layer cannot be zero, and the binary is the dominant one, so the
+        # remainder must be strictly positive and strictly below the binary.
+        # This is what catches a negative attribution (inverted subtraction).
+        self.assertGreater(derived, 0, "runtime layer attributed zero or negative bytes")
+        self.assertLess(
+            derived,
+            self.gate.MEASURED_BINARY_BYTES,
+            "runtime layer exceeds the binary; the attribution is inverted",
+        )
+
+    def test_derived_runtime_layer_figure_matches_the_recorded_value(self):
+        """23,253,671 B: the pinned value of the subtraction, byte for byte."""
+        self.assertEqual(self.gate.derived_runtime_layer_bytes(), 23253671)
+
+    def test_derived_runtime_layer_is_printed_with_its_provenance(self):
+        """The gate must not present derived inference as a measured stat()."""
+        import contextlib
+        import io
+
+        buffer = io.StringIO()
+        with contextlib.redirect_stdout(buffer):
+            self.gate.evaluate(MEASURED_IN_CI, self.gate.MAX_IMAGE_BYTES)
+        output = buffer.getvalue()
+        self.assertIn(
+            f"Runtime layer (derived by subtraction, not stat()ed): "
+            f"{self.gate.derived_runtime_layer_bytes()} bytes",
+            output,
+            "the gate no longer prints the derived runtime layer, or prints a "
+            "figure that is not the subtraction",
+        )
+        # And the stripping claim must still be printed from the real
+        # constants, so gutting that print is caught.
+        stripped_removed = (
+            self.gate.MEASURED_UNSTRIPPED_BINARY_BYTES - self.gate.MEASURED_BINARY_BYTES
+        ) / (1024 * 1024)
+        self.assertIn(f"so stripping already removes {stripped_removed:.2f} MiB", output)
+
+    def test_printed_figures_are_derived_not_hardcoded(self):
+        """The print path must COMPUTE its figures, not quote literals.
+
+        An output assertion cannot catch this: hardcoding the currently-correct
+        `23253671` into the print produces byte-identical output, so the test
+        above stays green. But the literal then rots silently the moment
+        either measurement is re-taken -- the gate would keep printing the old
+        figure with no test failure. So this asserts the STRUCTURE: the
+        runtime layer comes from `derived_runtime_layer_bytes()` and the
+        stripping figure is computed from the two constants.
+
+        This is the same mutation class the rest of this suite exists for, in
+        its purest form: a check that cannot go red is decoration.
+        """
+        text = SCRIPT_PATH.read_text(encoding="utf-8")
+        self.assertIn("derived_runtime = derived_runtime_layer_bytes()", text)
+        self.assertIn(
+            "(MEASURED_UNSTRIPPED_BINARY_BYTES - MEASURED_BINARY_BYTES) / mib:.2f",
+            text,
+            "the stripping figure is no longer computed from the two constants",
+        )
+        # The derived byte value must not be quoted as a literal in EXECUTABLE
+        # CODE: it is an output of the subtraction, not an input. The module
+        # docstring may legitimately quote it as prose, so the scan is AST-based
+        # and skips docstrings -- a blanket substring search would forbid the
+        # documentation from being accurate.
+        hardcoded = [
+            node.value
+            for node in _code_string_literals(SCRIPT_PATH)
+            if "23253671" in node.value or "77.03" in node.value
+        ]
+        self.assertEqual(
+            hardcoded,
+            [],
+            "a derived figure is hardcoded in executable code: "
+            f"{hardcoded}. It must be computed from the constants, or it rots "
+            "silently on the next re-measurement.",
+        )
+
+    def test_docstring_runtime_figure_matches_the_derived_value(self):
+        """The prose figure must be the same number the gate derives.
+
+        The docstring's 23,253,671 is the only place a human reads this
+        attribution, so a stale figure there propagates straight back into the
+        next re-measurement decision.
+        """
+        mib = 1024 * 1024
+        derived = self.gate.derived_runtime_layer_bytes()
+        self.assertIn(f"{derived:,} B ({derived / mib:.2f} MiB)", SCRIPT_PATH.read_text(encoding="utf-8"))
+        # The stripped/unstripped pair is quoted in the same block, so both
+        # must agree with the constants too.
+        text = SCRIPT_PATH.read_text(encoding="utf-8")
+        self.assertIn(f"{self.gate.MEASURED_BINARY_BYTES:,} B "
+                      f"({self.gate.MEASURED_BINARY_BYTES / mib:.2f} MiB)", text)
+        self.assertIn(f"{self.gate.MEASURED_UNSTRIPPED_BINARY_BYTES:,} B "
+                      f"({self.gate.MEASURED_UNSTRIPPED_BINARY_BYTES / mib:.2f} MiB)", text)
 
 
 class RatchetEvaluationTest(unittest.TestCase):
