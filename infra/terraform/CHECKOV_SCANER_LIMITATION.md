@@ -62,12 +62,59 @@ asserts each count moves exactly as the table above predicts. It exits non-zero
 if any case fails to move, so this document cannot silently drift away from the
 tool's behaviour — the failure mode of the previous two versions.
 
+Two things it refuses to do, because both previously produced a confident wrong
+answer:
+
+* **It never infers a pass from the absence of a failure.** T3 asserts that
+  `aws_s3_bucket.logs` appears in the *passed* list, because "not failing" is
+  satisfied equally by "passed" and by "stopped being scanned". Removing `count`
+  renames the resource, so the name to look for is the unindexed one.
+* **It never reports a verdict from a scan it could not show was live.** Every
+  scan — baseline and mutated alike — must parse, report a non-zero resource
+  count, and still report the control check `CKV_AWS_338` as failing. Mutated
+  scans must additionally see at least half the baseline's resources: a broken
+  tree does not necessarily scan as zero, because checkov reports the files that
+  still parse, so a resource-count *floor* is what catches a partly-broken tree
+  that a plain non-zero check would wave through.
+
+Exit codes are kept non-overlapping on purpose, because the two ways this can go
+wrong are "the document is wrong" and "the probe is wrong", and conflating them
+is how a broken probe comes to look like a clean bill of health:
+
+| exit | meaning | about |
+|---|---|---|
+| 0 | every claim above still holds | the document |
+| 1 | a claim no longer holds | the document |
+| 2 | checkov produced nothing, or a mutation could not be applied | the probe |
+| 3 | a scan could not be shown live, so nothing was measured | the probe |
+
+Only 0 and 1 are evidence about this document. A mutator that loses its grip on
+the terraform (renamed resource, reshaped module) exits 2 — never 1, because a
+harness fault must not be able to announce the document stale when only the
+harness broke.
+
 To see the baseline directly:
 
 ```bash
 python -m checkov.main -d infra/terraform --framework terraform \
   --compact --check CKV2_AWS_6 -o json
 ```
+
+### Running it
+
+**Deliberately manual — not wired into CI, and should not be.** Measured on
+2026-10-04 on the development host: **8 checkov runs, ~9 minutes wall clock** end
+to end, each run copying the whole `infra/terraform` tree. That is more than the
+Infrastructure Checkov job itself costs, and the claims it re-measures only go
+stale when checkov or the terraform changes — both of which already re-run the
+gate that flags them. **Wire it in only if a claim here has actually been
+contradicted in review, not on principle.** This decision is recorded so the
+question does not get re-opened on a hunch.
+
+Requires `pip install checkov` (3.3.22, the version the CI image ships). Note it
+must be the interpreter that runs the probe: the probe shells out to
+`sys.executable -m checkov.main`, so checkov has to be importable there or the
+run exits 2 rather than silently reporting nothing.
 
 ## What is NOT being claimed
 
@@ -107,3 +154,6 @@ Both of these produced wrong conclusions here before, so they are recorded:
 Refs: card `t_38224eaa` (authorisation to correct: project-steward, 2026-10-02),
 Infrastructure run `37065277068` (`develop @ 2191979db`),
 PR #1146 (retracted claim), PR #1145/#1151/#1153 (the fixes, undisputed).
+The probe's own hardening (assert movement, not absence; control every scan)
+came from the project-steward cross-review of PR #1171, card `t_235d925a`, and
+card `t_285211f4`.
