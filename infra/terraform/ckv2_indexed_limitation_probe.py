@@ -38,6 +38,7 @@ to catch. So T3 requires the unindexed name to be found in the PASSED list. No
 verdict anywhere in this file is inferred from the absence of a failure.
 
 Usage:  python infra/terraform/ckv2_indexed_limitation_probe.py
+        python infra/terraform/ckv2_indexed_limitation_probe.py --self-test
 Exit 0 = all claims hold. 1 = a claim was falsified. 2 = the harness itself
         failed: checkov produced nothing, or a mutation could not be applied.
         3 = a scan was not live, nothing was measured from it.
@@ -45,8 +46,16 @@ Only 0 and 1 are about the document. 2 and 3 are about the probe, and a mutator
 that loses its grip on the terraform must never be able to exit 1 -- that would
 announce the document stale when only the harness broke.
 
-Requires checkov importable (`pip install checkov`). If it is not, exit 2 --
-never a silent pass.
+`--self-test` runs the verdict logic against a stubbed scanner, in seconds,
+and asserts the exit-code contract: that a claim which stops holding exits 1,
+that a dead scan and an unappliable mutation exit 3 and 2 respectively and NOT
+1, and that T3's movement assertion rejects a resource which fell out of the
+scan. It is the negative half of this file -- the full run above only ever
+demonstrates that a healthy tree looks healthy, which is exactly the evidence a
+harness that had quietly stopped measuring would also produce.
+
+Requires checkov importable (`pip install checkov`) for a real run. If it is
+not, exit 2 -- never a silent pass. `--self-test` needs no checkov.
 
 Deliberately NOT wired into CI -- see "Running it" in
 CHECKOV_SCANER_LIMITATION.md for the measured cost and the decision.
@@ -314,6 +323,229 @@ def unindex_logs(tf: Path):
     target.write_text(text, encoding="utf-8")
 
 
+def verdicts_from(base: Scan, t1: Scan, t2: Scan, t3: Scan) -> dict[str, bool]:
+    """Decide T1/T2a/T2b/T3 from four live scans. Pure: no I/O, no exceptions.
+
+    Split out of `main` so `--self-test` can drive the DECISION LOGIC itself
+    rather than a paraphrase of it. A negative test written against a copy of
+    the rules proves only that the copy behaves as the author expected; here
+    the thing under test is the code that decides the probe's exit code.
+
+    Every clause is about movement between two named resources, never about a
+    count alone and never about the absence of a failure:
+
+      T1   the unindexed verdict tracks the control -- `ml_models` was PASSING
+           in the baseline and is FAILING once its block is deleted. Asserting
+           only that a new failure appeared would be satisfied by a failure on
+           some unrelated resource.
+      T2a  the indexed verdict is blind -- deleting the logs block leaves the
+           failure SET identical, resource for resource.
+      T2b  ...and that blindness is not module-specific: the same mutation
+           leaves `ml_models[0]` failing under T1's copy.
+      T3   the index is the cause -- the bucket that failed as `logs[0]` is now
+           PRESENT IN `t3.passed` under its unindexed name. Membership in the
+           passed list is what separates "it passed" from "it stopped being
+           scanned"; the latter reports neither name and fails this clause.
+    """
+    return {
+        "T1": (S3_ML in base.passed and S3_ML not in base.failed
+               and S3_ML in t1.failed),
+        "T2a": sorted(t2.failed) == sorted(base.failed),
+        "T2b": S3_ML_INDEXED in t1.failed,
+        "T3": (LOGS_INDEXED in base.failed
+               and LOGS_UNINDEXED in t3.passed
+               and LOGS_INDEXED not in t3.failed
+               and LOGS_UNINDEXED not in t3.failed),
+    }
+
+
+def _scan(passed: list[str], failed: list[str],
+          resource_count: int = 342, parsing_errors: int = 0) -> Scan:
+    return Scan(passed=list(passed), failed=list(failed),
+                resource_count=resource_count, parsing_errors=parsing_errors)
+
+
+def healthy_scans() -> tuple[Scan, Scan, Scan, Scan]:
+    """The four scans a healthy tree produces, as of the numbers in the table."""
+    base = _scan(
+        passed=[S3_ML, "aws_s3_bucket.manifests", "module.s3.aws_s3_bucket.other",
+                "aws_s3_bucket.tls", "module.s3.aws_s3_bucket.assets",
+                "aws_s3_bucket.access_logs", "module.s3.aws_s3_bucket.data",
+                "aws_s3_bucket.frontend", "aws_s3_bucket.backend"],
+        failed=[S3_ML_INDEXED, LOGS_INDEXED],
+    )
+    t1 = _scan(passed=[n for n in base.passed if n != S3_ML],
+               failed=base.failed + [S3_ML])          # 8 passed, 3 failed
+    t2 = _scan(passed=base.passed, failed=base.failed)  # unchanged: 9, 2
+    t3 = _scan(passed=base.passed + [LOGS_UNINDEXED],
+               failed=[S3_ML_INDEXED])                 # 10 passed, 1 failed
+    return base, t1, t2, t3
+
+
+def _control_ok() -> Scan:
+    """A scan of the control check that shows it still red on this tree."""
+    return _scan(passed=["aws_s3_bucket.somewhere_else"],
+                 failed=["module.s3.aws_s3_bucket.no_bucket_policy"])
+
+
+def self_test() -> int:
+    """Assert the exit-code contract against synthetic scans. Seconds, not minutes.
+
+    A passing full run only ever shows that a healthy tree looks healthy. That
+    is the same output a probe which stopped measuring entirely would produce,
+    so these are the cases that actually discriminate: every one of them must
+    FAIL loudly rather than report a PASS.
+    """
+    failures: list[str] = []
+
+    def check(label: str, ok: bool, detail: str = "") -> None:
+        print(f"  {'ok  ' if ok else 'FAIL'}  {label}{f' -- {detail}' if detail and not ok else ''}")
+        if not ok:
+            failures.append(label)
+
+    print("VERDICT LOGIC")
+    base, t1, t2, t3 = healthy_scans()
+    v = verdicts_from(base, t1, t2, t3)
+    check("healthy tree satisfies T1", v["T1"])
+    check("healthy tree satisfies T2a", v["T2a"])
+    check("healthy tree satisfies T2b", v["T2b"])
+    check("healthy tree satisfies T3", v["T3"])
+
+    print("\nREGRESSION: the two harness gaps this file was hardened against")
+
+    # GAP 1, restated as a test. Under the OLD rule ("logs absent from
+    # failed"), a T3 scan in which the resource was never scanned at all still
+    # satisfies the assertion -- both names simply missing. Under the rule in
+    # use, it must not.
+    vanished = _scan(passed=base.passed, failed=[S3_ML_INDEXED])
+    check("T3 rejects a resource that fell out of the scan entirely",
+          not verdicts_from(base, t1, t2, vanished)["T3"])
+    old_rule_would_have_passed = (LOGS_UNINDEXED not in vanished.failed
+                                  and LOGS_INDEXED not in vanished.failed)
+    check("  ...and that case is exactly what the old absence-rule missed",
+          old_rule_would_have_passed)
+    # Partially-dropped: present as unindexed but still failing.
+    still_failing = _scan(passed=base.passed, failed=[S3_ML_INDEXED, LOGS_UNINDEXED])
+    check("T3 rejects logs renamed but still failing",
+          not verdicts_from(base, t1, t2, still_failing)["T3"])
+
+    # GAP 2: T1 must not be satisfied by a failure on an unrelated resource.
+    unrelated = _scan(passed=[n for n in base.passed if n != S3_ML],
+                      failed=base.failed + ["aws_s3_bucket.some_other_bucket"])
+    check("T1 rejects a new failure on the wrong resource",
+          not verdicts_from(base, unrelated, t2, t3)["T1"])
+    # T2a must not be satisfied by "the failure set shrank" -- it is a SET
+    # equality, so losing a finding is a change.
+    lost_one = _scan(passed=base.passed, failed=[S3_ML_INDEXED])
+    check("T2a rejects a mutated scan that dropped a finding",
+          not verdicts_from(base, t1, lost_one, t3)["T2a"])
+
+    print("\nLIVENESS: a scan that cannot be shown live is REFUSED (exit 3)")
+
+    def refused(scan_obj: Scan | None, control_obj: Scan | None,
+                floor: int | None, label: str) -> None:
+        try:
+            require_live(scan_obj, control_obj, label, floor=floor)
+        except ScanNotLive:
+            print(f"  ok    {label}")
+            return
+        print(f"  FAIL  {label}")
+        failures.append(label)
+
+    refused(None, _control_ok(), None, "no JSON at all is refused")
+    refused(_scan([], [], resource_count=0), _control_ok(), None,
+            "0 resources (empty tree and broken tree look alike) is refused")
+    refused(_scan([], [], resource_count=0, parsing_errors=9), _control_ok(), None,
+            "0 resources with parsing errors is refused")
+    refused(base, _scan([], []), None,
+            "control not red -- scan is not seeing the real finding set")
+    refused(_scan(base.passed, base.failed, resource_count=12), _control_ok(),
+            171, "collapse below the resource floor is refused")
+
+    print("\nLIVENESS NOT INSUFFICIENT: live-looking scans still pass the gate")
+    for label, obj, ctl, floor in (
+        ("baseline at full count, no floor", base, _control_ok(), None),
+        ("mutated at 9/8 and 9/2 with floor 171", t1, _control_ok(), 171),
+    ):
+        try:
+            require_live(obj, ctl, label, floor=floor)
+        except ScanNotLive as exc:
+            print(f"  FAIL  {label} was refused -- {exc}")
+            failures.append(label)
+        else:
+            print(f"  ok    {label}")
+
+    print("\nMUTATOR GRIP: a mutation that cannot be applied is exit 2, NOT exit 1")
+    # Runs against a THROWAWAY copy of the tree, never TF_DIR: these mutators
+    # edit real files in place, and a self-test that left `ml_models` without
+    # its public-access-block behind would break the very tree it is asserting
+    # about. The copy is discarded either way.
+    with tempfile.TemporaryDirectory(dir=str(REPO.parent)) as tmp:
+        grip_tree = Path(tmp) / "terraform"
+        shutil.copytree(TF_DIR, grip_tree)
+        grip_failures = 0
+        for rel, name in (("modules/s3/main.tf", "ml_models"),
+                          ("modules/scaling/main.tf", "logs"),
+                          ("modules/s3/main.tf", "no_such_bucket")):
+            try:
+                delete_block(rel, name)(grip_tree)
+            except HarnessFault:
+                grip_failures += 1
+                continue
+            except Exception as exc:                     # noqa: BLE001
+                print(f"  FAIL  {rel}/{name} raised {type(exc).__name__}, "
+                      "which main() does NOT catch as a fault -> would exit 1")
+                failures.append(f"delete_block {rel}/{name}")
+                continue
+            print(f"  ok    {rel}/{name} mutated")
+        check("delete_block raises HarnessFault, never ValueError/SystemExit",
+              grip_failures == 1)
+
+        # The one target that genuinely exists must still be removable, or the
+        # "fault" path above would pass on a mutator that never works at all.
+        intact = (grip_tree / "modules/s3/main.tf").read_text(encoding="utf-8")
+        check("the real target was removed from the copy, not just located",
+              f'resource "{BLOCK}" "ml_models"' not in intact
+              and 'resource "aws_s3_bucket" "ml_models"' in intact,
+              "ml_models block still present after deletion")
+
+        try:
+            unindex_logs(grip_tree)
+        except HarnessFault as exc:
+            print("  ok    unindex_logs on a shape-changed tree -> HarnessFault "
+                  f"({str(exc)[:48]}...)")
+        except Exception as exc:                          # noqa: BLE001
+            print(f"  FAIL  unindex_logs raised {type(exc).__name__}, "
+                  "which main() does NOT catch as a fault -> would exit 1")
+            failures.append("unindex_logs grip")
+        else:
+            print("  ok    unindex_logs matched the tree as it stands")
+
+    print("\nNON-OVERLAPPING EXIT CODES")
+    # The falsified cases above must actually flip the summary verdict, or
+    # main() would print "All claims hold" and return 0 on them.
+    falsified = verdicts_from(base, unrelated, t2, vanished)
+    check("a falsified claim flips the run to non-zero",
+          not all(falsified.values()),
+          f"verdicts={falsified}")
+    check("exactly the broken claims flip False, the intact ones stay True",
+          sorted(k for k, v in falsified.items() if not v) == ["T1", "T3"],
+          f"expected T1 and T3 falsified, got {falsified}")
+    check("ScanNotLive and HarnessFault are distinct types",
+          not issubclass(ScanNotLive, HarnessFault)
+          and not issubclass(HarnessFault, ScanNotLive))
+
+    print()
+    if failures:
+        print(f"SELF-TEST FAILED: {len(failures)} check(s) did not hold:")
+        for f in failures:
+            print(f"    - {f}")
+        return 1
+    print("SELF-TEST PASSED: the probe's decision logic rejects every broken "
+          "scan above and accepts the healthy one.")
+    return 0
+
+
 def main() -> int:
     base = scan(CLAIM_CHECK, TF_DIR)
     base_control = scan(CONTROL_CHECK, TF_DIR)
@@ -347,50 +579,9 @@ def main() -> int:
     try:
         t1, t1_ctl = mutated(delete_block("modules/s3/main.tf", "ml_models"),
                              "T1 delete s3 ml_models block", floor=floor)
-        # T1: the unindexed verdict must TRACK its control. Deleting the block
-        # has to produce a NEW failure, and for the same unindexed resource the
-        # baseline reported as PASSING -- otherwise "a failure appeared" is a
-        # claim about some other resource entirely.
-        t1_ok = (S3_ML in t1.failed
-                 and S3_ML in base.passed
-                 and S3_ML not in base.failed)
-        verdicts["T1"] = t1_ok
-        print(f"T1  delete s3 ml_models block  -> {t1.describe()} "
-              f"(control on the same copy: {t1_ctl.describe()})")
-        print(f"    {'OK' if t1_ok else 'FALSIFIED'}: {S3_ML} moved PASS -> FAIL")
-
         t2, t2_ctl = mutated(delete_block("modules/scaling/main.tf", "logs"),
                              "T2a delete scaling logs block", floor=floor)
-        t2_ok = sorted(t2.failed) == sorted(base.failed)
-        verdicts["T2a"] = t2_ok
-        print(f"\nT2a delete scaling logs block -> {t2.describe()} "
-              f"(control on the same copy: {t2_ctl.describe()})")
-        print(f"    {'OK' if t2_ok else 'FALSIFIED'}: failure set unchanged -> "
-              f"[0] ignores the control")
-
-        # T2b reuses T1's copy deliberately: the point is that the OTHER module's
-        # indexed resource stayed blind under the same mutation.
-        t2b_ok = S3_ML_INDEXED in t1.failed
-        verdicts["T2b"] = t2b_ok
-        print(f"    {'OK' if t2b_ok else 'FALSIFIED'}: [0] still blind in the "
-              f"second module")
-
         t3, t3_ctl = mutated(unindex_logs, "T3 remove count from logs pair", floor=floor)
-        # T3 is the load-bearing claim ("the index is the cause"), so it asserts
-        # MOVEMENT rather than absence. Removing `count` RENAMES the resource, so
-        # the bucket that failed as `logs[0]` must now be PRESENT IN PASSED as
-        # `logs`: found and passing, not merely no longer failing. A scan that
-        # dropped the resource altogether reports neither name and so fails the
-        # second clause -- which is precisely the ambiguity this replaces.
-        t3_ok = (LOGS_INDEXED in base.failed
-                 and LOGS_UNINDEXED in t3.passed
-                 and LOGS_INDEXED not in t3.failed
-                 and LOGS_UNINDEXED not in t3.failed)
-        verdicts["T3"] = t3_ok
-        print(f"\nT3  remove count from logs pair -> {t3.describe()} "
-              f"(control on the same copy: {t3_ctl.describe()})")
-        print(f"    {'OK' if t3_ok else 'FALSIFIED'}: {LOGS_INDEXED} moved "
-              f"FAILED -> {LOGS_UNINDEXED} PASSED -> the index is the cause")
     except ScanNotLive as exc:
         print(f"\nREFUSED: {exc}")
         print("Nothing was measured from that scan, so no verdict is reported "
@@ -404,6 +595,35 @@ def main() -> int:
               "untested.")
         return 2
 
+    # One implementation of the rules, shared with --self-test. T2b reads T1's
+    # copy deliberately: the point is that the OTHER module's indexed resource
+    # stayed blind under that same mutation.
+    verdicts = verdicts_from(base, t1, t2, t3)
+
+    # T1: the unindexed verdict must TRACK its control. Deleting the block has
+    # to produce a NEW failure on the SAME resource the baseline reported as
+    # PASSING -- otherwise "a failure appeared" is a claim about something else.
+    print(f"T1  delete s3 ml_models block  -> {t1.describe()} "
+          f"(control on the same copy: {t1_ctl.describe()})")
+    print(f"    {'OK' if verdicts['T1'] else 'FALSIFIED'}: {S3_ML} moved "
+          f"PASS -> FAIL")
+
+    print(f"\nT2a delete scaling logs block -> {t2.describe()} "
+          f"(control on the same copy: {t2_ctl.describe()})")
+    print(f"    {'OK' if verdicts['T2a'] else 'FALSIFIED'}: failure set "
+          f"unchanged -> [0] ignores the control")
+    print(f"    {'OK' if verdicts['T2b'] else 'FALSIFIED'}: [0] still blind in "
+          f"the second module")
+
+    # T3 is the load-bearing claim ("the index is the cause"), so it asserts
+    # MOVEMENT rather than absence: removing `count` RENAMES the resource, so
+    # the bucket that failed as `logs[0]` must be PRESENT IN PASSED as `logs`.
+    # Found and passing, not merely no longer failing.
+    print(f"\nT3  remove count from logs pair -> {t3.describe()} "
+          f"(control on the same copy: {t3_ctl.describe()})")
+    print(f"    {'OK' if verdicts['T3'] else 'FALSIFIED'}: {LOGS_INDEXED} moved "
+          f"FAILED -> {LOGS_UNINDEXED} PASSED -> the index is the cause")
+
     print()
     for name in ("T1", "T2a", "T2b", "T3"):
         print(f"  {name}: {'holds' if verdicts[name] else 'FALSIFIED'}")
@@ -416,4 +636,6 @@ def main() -> int:
 
 
 if __name__ == "__main__":
+    if "--self-test" in sys.argv[1:]:
+        raise SystemExit(self_test())
     raise SystemExit(main())
