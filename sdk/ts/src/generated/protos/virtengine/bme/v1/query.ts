@@ -44,9 +44,9 @@ export interface QueryStatusResponse {
   warnThreshold: string;
   /** halt_threshold is the halt threshold */
   haltThreshold: string;
-  /** mints_allowed indicates if new ACT mints are allowed */
+  /** mints_allowed indicates if new VCC mints are allowed */
   mintsAllowed: boolean;
-  /** refunds_allowed indicates if ACT refunds are allowed */
+  /** refunds_allowed indicates if VCC refunds are allowed */
   refundsAllowed: boolean;
 }
 

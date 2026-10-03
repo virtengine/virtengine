@@ -24,6 +24,8 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/failure-analysis.md`
 
 ## Architecture & ADRs
+
+- [Compute credit naming and conversion audit](compute-credit-naming.md)
 - `_docs/architecture/ADR-002-hybrid-decentralized-portal-architecture.md`
 - `_docs/architecture/hybrid-portal-implementation-plan.md`
 - `_docs/architecture/waldur-market-mapping-spec.md`

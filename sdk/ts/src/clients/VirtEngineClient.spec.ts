@@ -26,18 +26,18 @@ describe("VirtEngineClient", () => {
 
       it("should have native currency configured", () => {
         expect(VIRTENGINE_MAINNET.currencies.length).toBeGreaterThanOrEqual(1);
-        expect(VIRTENGINE_MAINNET.currencies[0].coinDenom).toBe("VIRT");
-        expect(VIRTENGINE_MAINNET.currencies[0].coinMinimalDenom).toBe("uvirt");
+        expect(VIRTENGINE_MAINNET.currencies[0].coinDenom).toBe("VE");
+        expect(VIRTENGINE_MAINNET.currencies[0].coinMinimalDenom).toBe("uve");
         expect(VIRTENGINE_MAINNET.currencies[0].coinDecimals).toBe(6);
       });
 
       it("should have fee currency configured", () => {
         expect(VIRTENGINE_MAINNET.feeCurrencies).toHaveLength(1);
-        expect(VIRTENGINE_MAINNET.feeCurrencies[0].coinMinimalDenom).toBe("uvirt");
+        expect(VIRTENGINE_MAINNET.feeCurrencies[0].coinMinimalDenom).toBe("uve");
       });
 
       it("should have stake currency configured", () => {
-        expect(VIRTENGINE_MAINNET.stakeCurrency.coinMinimalDenom).toBe("uvirt");
+        expect(VIRTENGINE_MAINNET.stakeCurrency.coinMinimalDenom).toBe("uve");
       });
     });
 

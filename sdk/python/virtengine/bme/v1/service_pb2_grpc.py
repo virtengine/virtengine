@@ -5,9 +5,9 @@ import grpc
 from virtengine.bme.v1 import msgs_pb2 as virtengine_dot_bme_dot_v1_dot_msgs__pb2
 
 
-class MsgStub(object):
+class MsgStub:
     """Msg defines the BME (Burn/Mint Engine) transaction service.
-    The BME module manages the burn and mint operations for ACT tokens,
+    The BME module manages the burn and mint operations for VCC tokens,
     maintaining collateral ratios and enforcing circuit breaker rules.
     """
 
@@ -27,21 +27,21 @@ class MsgStub(object):
                 request_serializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnMint.SerializeToString,
                 response_deserializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnMintResponse.FromString,
                 _registered_method=True)
-        self.MintACT = channel.unary_unary(
-                '/virtengine.bme.v1.Msg/MintACT',
-                request_serializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintACT.SerializeToString,
-                response_deserializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintACTResponse.FromString,
+        self.MintVCC = channel.unary_unary(
+                '/virtengine.bme.v1.Msg/MintVCC',
+                request_serializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintVCC.SerializeToString,
+                response_deserializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintVCCResponse.FromString,
                 _registered_method=True)
-        self.BurnACT = channel.unary_unary(
-                '/virtengine.bme.v1.Msg/BurnACT',
-                request_serializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnACT.SerializeToString,
-                response_deserializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnACTResponse.FromString,
+        self.BurnVCC = channel.unary_unary(
+                '/virtengine.bme.v1.Msg/BurnVCC',
+                request_serializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnVCC.SerializeToString,
+                response_deserializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnVCCResponse.FromString,
                 _registered_method=True)
 
 
-class MsgServicer(object):
+class MsgServicer:
     """Msg defines the BME (Burn/Mint Engine) transaction service.
-    The BME module manages the burn and mint operations for ACT tokens,
+    The BME module manages the burn and mint operations for VCC tokens,
     maintaining collateral ratios and enforcing circuit breaker rules.
     """
 
@@ -55,15 +55,15 @@ class MsgServicer(object):
 
     def BurnMint(self, request, context):
         """BurnMint allows users to burn one token and mint another at current oracle prices.
-        Typically used to burn unused ACT tokens back to AKT.
+        Typically used to burn unused VCC tokens back to VE.
         The operation may be delayed or rejected based on circuit breaker status.
         """
         context.set_code(grpc.StatusCode.UNIMPLEMENTED)
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def MintACT(self, request, context):
-        """MintACT mints ACT tokens by burning the specified source token.
+    def MintVCC(self, request, context):
+        """MintVCC mints VCC tokens by burning the specified source token.
         The mint amount is calculated based on current oracle prices and
         the collateral ratio. May be halted if circuit breaker is triggered.
         """
@@ -71,8 +71,8 @@ class MsgServicer(object):
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
-    def BurnACT(self, request, context):
-        """BurnACT burns ACT tokens and mints the specified destination token.
+    def BurnVCC(self, request, context):
+        """BurnVCC burns VCC tokens and mints the specified destination token.
         The burn operation uses remint credits when available, otherwise
         requires adequate collateral backing based on oracle prices.
         """
@@ -93,15 +93,15 @@ def add_MsgServicer_to_server(servicer, server):
                     request_deserializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnMint.FromString,
                     response_serializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnMintResponse.SerializeToString,
             ),
-            'MintACT': grpc.unary_unary_rpc_method_handler(
-                    servicer.MintACT,
-                    request_deserializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintACT.FromString,
-                    response_serializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintACTResponse.SerializeToString,
+            'MintVCC': grpc.unary_unary_rpc_method_handler(
+                    servicer.MintVCC,
+                    request_deserializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintVCC.FromString,
+                    response_serializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintVCCResponse.SerializeToString,
             ),
-            'BurnACT': grpc.unary_unary_rpc_method_handler(
-                    servicer.BurnACT,
-                    request_deserializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnACT.FromString,
-                    response_serializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnACTResponse.SerializeToString,
+            'BurnVCC': grpc.unary_unary_rpc_method_handler(
+                    servicer.BurnVCC,
+                    request_deserializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnVCC.FromString,
+                    response_serializer=virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnVCCResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -111,9 +111,9 @@ def add_MsgServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Msg(object):
+class Msg:
     """Msg defines the BME (Burn/Mint Engine) transaction service.
-    The BME module manages the burn and mint operations for ACT tokens,
+    The BME module manages the burn and mint operations for VCC tokens,
     maintaining collateral ratios and enforcing circuit breaker rules.
     """
 
@@ -172,7 +172,7 @@ class Msg(object):
             _registered_method=True)
 
     @staticmethod
-    def MintACT(request,
+    def MintVCC(request,
             target,
             options=(),
             channel_credentials=None,
@@ -185,9 +185,9 @@ class Msg(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/virtengine.bme.v1.Msg/MintACT',
-            virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintACT.SerializeToString,
-            virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintACTResponse.FromString,
+            '/virtengine.bme.v1.Msg/MintVCC',
+            virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintVCC.SerializeToString,
+            virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgMintVCCResponse.FromString,
             options,
             channel_credentials,
             insecure,
@@ -199,7 +199,7 @@ class Msg(object):
             _registered_method=True)
 
     @staticmethod
-    def BurnACT(request,
+    def BurnVCC(request,
             target,
             options=(),
             channel_credentials=None,
@@ -212,9 +212,9 @@ class Msg(object):
         return grpc.experimental.unary_unary(
             request,
             target,
-            '/virtengine.bme.v1.Msg/BurnACT',
-            virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnACT.SerializeToString,
-            virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnACTResponse.FromString,
+            '/virtengine.bme.v1.Msg/BurnVCC',
+            virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnVCC.SerializeToString,
+            virtengine_dot_bme_dot_v1_dot_msgs__pb2.MsgBurnVCCResponse.FromString,
             options,
             channel_credentials,
             insecure,

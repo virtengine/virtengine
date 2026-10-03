@@ -13,8 +13,9 @@ message PythContractParams {
   option (gogoproto.equal) = true;
   option (cosmos_proto.implements_interface) = "FeedContractConfig";
 
-  // akt_price_feed_id is the Pyth price feed identifier for AKT/USD
-  string akt_price_feed_id = 1;
+  // native_price_feed_id identifies an explicitly configured VE/USD feed.
+  // No default market feed is asserted for the proposed native asset.
+  string native_price_feed_id = 1;
 }
 
 // Params defines the parameters for the oracle module
