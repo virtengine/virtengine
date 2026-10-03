@@ -54,7 +54,6 @@
     "react-i18next": "^14.1.0",
     "redis": "^5.10.0",
     "tailwind-merge": "^2.2.1",
-    "tailwindcss-animate": "^1.0.7",
     "tweetnacl": "^1.0.3",
     "virtengine-portal-lib": "workspace:*",
     "vibe-kanban-web-companion": "^0.0.5",
@@ -96,6 +95,7 @@
     "prettier-plugin-tailwindcss": "^0.5.12",
     "storybook": "10.2.4",
     "tailwindcss": "^3.4.1",
+    "tailwindcss-animate": "^1.0.7",
     "typescript": "^5.4.2",
     "vitest": "^4.0.18"
   },
