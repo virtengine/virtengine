@@ -18,8 +18,8 @@ The tests also assert the floor is a ratchet and not a disabled check: a
 coverage drop below the recorded baseline still fails.
 
 `WorkflowWiringTest` additionally pins *this suite's own* wiring, and pins it
-against the *parsed workflow step* rather than the file text. Two review rounds
-found the difference matters:
+against the *parsed workflow step* rather than the file text. Three review
+rounds found the difference matters:
 
 * Round 1: the routing step was gated on a Go-path filter, so a PR editing only
   the gate's own files (0 `.go` files, exactly like #1166) computed `run=false`
@@ -28,18 +28,26 @@ found the difference matters:
   `scripts/ci/coverage_gate.py` against the *whole file*, and that literal also
   lives in two comments -- so deleting the gate outright left the suite green.
   A guard asserted on file text does not fire when the thing it guards is gone.
+* Round 3/4: locating the step is necessary but not sufficient. Every assertion
+  was still a *substring* match on its `run` string, and a substring cannot
+  tell an invocation from a mention -- `echo "<the whole command>"`, a `#`
+  comment, and `if false; then <invocation>; fi` all satisfy it, as does
+  `continue-on-error` on the step that runs this suite. The gate was still
+  deletable with the suite reporting OK.
 
 So the wiring tests here locate the real step object in
-`doc["jobs"]["test-go"]["steps"]` and assert on its parsed `run`, `env` and
-`if`. Each of those assertions is falsified by a mutation in this file's
-docstring; `test_coverage_step_*` is what makes the INFRA-003 gate
-undeletable from CI without this suite going red.
+`doc["jobs"]["test-go"]["steps"]` and assert it is *structurally* an execution
+of its command: exactly one command, and that command BE the invocation,
+whole-line (see `step_problems`). Matching the shape rather than a substring is
+what makes the INFRA-003 gate, and this suite's own verdict, undeletable and
+un-discardable without these tests going red.
 """
 
 from __future__ import annotations
 
 import importlib.util
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -59,6 +67,124 @@ GATE_OWN_FILES = (
     "scripts/ci/check_pr_diff_coverage.py",
     ".github/tests/test_coverage_gate.py",
 )
+
+# --------------------------------------------------------------------------
+# What a gate step is allowed to be.
+#
+# The load-bearing rule (round-4 review defect 5): a gate step must be EXACTLY
+# ONE command, and that command must BE the invocation. Substring assertions
+# over `run` cannot tell an invocation from a mention, so these match the whole
+# command line. The reviewer's four mutations all carried the literal
+# `scripts/ci/coverage_gate.py coverage.out` and all left the suite green
+# while the gate stopped running:
+#
+#   echo "python3 scripts/ci/coverage_gate.py coverage.out"   -> first word echo
+#   if false; then <invocation>; fi                            -> first word if
+#   # <invocation>                                             -> no command at all
+#   continue-on-error: true (on the suite's own runner)        -> verdict discarded
+#
+# An allow-list is the only shape that closes that: there is nothing left for a
+# bypass to hide in. The cost is deliberate -- any future change to either
+# step's body must edit this file in the same PR, where it is visible in the
+# diff instead of being a silent, unreviewed weakening of the gate.
+# --------------------------------------------------------------------------
+
+# The gate step: interpreter, then the script, then the measured profile.
+GATE_COMMAND_RE = re.compile(
+    r"^python3?\s+\S*scripts/ci/coverage_gate\.py\s+\S*coverage\.out$"
+)
+# The routing step: interpreter, then unittest, then this suite as an argument
+# anywhere in the tail. The suite name sits behind `-p` in the real command
+# (`unittest discover -s .github/tests -p "test_coverage_gate.py" -v`), so
+# requiring it adjacent to `unittest` would reject the workflow as it stands --
+# which is exactly how the first draft of this regex failed on its own control.
+ROUTING_COMMAND_RE = re.compile(
+    r"^python3?\s+-m\s+unittest\b.*test_coverage_gate\.py.*$"
+)
+
+# Shell constructs that throw away a command's exit status. Anchored at the end
+# of the command so a legitimate continuation is not mistaken for a bypass.
+_EXIT_OVERRIDE_TAIL_RE = re.compile(r"(?:;|&&|\|\|)\s*(?:exit\s+0\b|true\b|:)\s*$")
+_BARE_EXIT_RE = re.compile(r"^exit\s+[01]$")
+
+
+def step_commands(run: str) -> list[str]:
+    """`run` reduced to the shell commands it actually executes, in order.
+
+    A line whose first non-whitespace character is `#` is a shell comment and a
+    blank line is not a command; everything else counts as a command. Line
+    continuations are deliberately NOT joined: a command split across several
+    lines is exactly the extra surface this function exists to refuse.
+    """
+    commands = []
+    for raw in run.splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        commands.append(line)
+    return commands
+
+
+def step_problems(step: dict, command_re: re.Pattern[str]) -> list[str]:
+    """Every reason `step` does not actually run its command. Empty means it does.
+
+    Three structural properties, in order of how much they have caught:
+
+    1. the step is exactly ONE command once comments are stripped;
+    2. that one command matches `command_re` whole-line, so the script is
+       executed rather than printed, quoted, commented, or parked in an
+       unreachable branch;
+    3. nothing discards the command's exit status and the step does not set
+       `continue-on-error`, so the command's verdict decides the job's.
+
+    Property 3 is defence in depth: with exactly one command, `; exit 0` on the
+    same line is the only way to keep (2) and lose the verdict, and it is
+    caught. Property 1 is what closed round-4 defect 5.
+    """
+    run = step.get("run")
+    if not isinstance(run, str):
+        return [f"the step has no `run:` body ({run!r}); it cannot execute anything"]
+
+    commands = step_commands(run)
+    if len(commands) != 1:
+        return [
+            f"the step must be exactly ONE command, but it has {len(commands)} "
+            f"({commands!r}). Every additional line is surface a bypass can "
+            "hide in, and an invocation inside a comment or an unreachable "
+            "branch enforces nothing (round-4 review defect 5)."
+        ]
+
+    command = commands[0]
+    problems = []
+    if not command_re.match(command):
+        problems.append(
+            f"the command must BE the invocation, whole-line. Got {command!r}. "
+            "A command that merely mentions the gate -- `echo \"...\"`, a quoted "
+            "string, `if false; then ...; fi`, or a shell comment -- leaves the "
+            "gate unenforced while every substring assertion still passes "
+            "(round-4 review defect 5, mutations A/B/C)."
+        )
+    if _EXIT_OVERRIDE_TAIL_RE.search(command):
+        problems.append(
+            f"{command!r} forces a successful exit after the gate, discarding "
+            "its verdict"
+        )
+    if "|| true" in run or "set +e" in run:
+        problems.append(
+            f"{run!r} tolerates or ignores a failing gate (`|| true` / `set +e`)"
+        )
+    for line in commands:
+        if _BARE_EXIT_RE.match(line.strip()):
+            problems.append(
+                f"a bare `exit` in a gate step overrides the gate's own non-zero "
+                f"verdict: {line.strip()!r}"
+            )
+    if step.get("continue-on-error"):
+        problems.append(
+            "the step sets continue-on-error, so the command's verdict is "
+            "recorded but does not decide the job"
+        )
+    return problems
 
 
 def load_module():
@@ -314,37 +440,100 @@ class WorkflowWiringTest(unittest.TestCase):
         )
         return matches[0]
 
-    def test_coverage_step_invokes_the_gate_script(self):
-        """DEFECT 3: the gate must be invoked by the step, not just mentioned.
-
-        Asserted on `step["run"]`, not on the file text. Catches:
-          * step body replaced by `echo ...; exit 0`
-          * invocation deleted, comment retained
-          * the routing re-inlined as shell (any floor re-implemented inline)
-        """
-        step = self.find_coverage_step()
-        run = step.get("run", "")
-        self.assertIn(
-            "scripts/ci/coverage_gate.py", run,
-            "the coverage step's run must invoke scripts/ci/coverage_gate.py: a "
-            "comment mentioning the script does not enforce anything (round-2 "
-            "review defect 3 -- this assertion used to match the whole file)",
+    def assert_step_runs_its_command(self, step, command_re, what):
+        problems = step_problems(step, command_re)
+        self.assertEqual(
+            problems, [],
+            f"{what} must be a single command that executes it:\n  - "
+            + "\n  - ".join(problems),
         )
 
-    def test_coverage_step_passes_the_measured_coverprofile(self):
-        """The gate must be handed the profile the test run just produced.
+    def test_coverage_step_actually_executes_the_gate(self):
+        """DEFECT 5, the load-bearing assertion.
 
-        A `run` that invokes the script with some other argument, or with none,
-        would score a stale or absent file. Fails closed in the script but that
-        is a runtime failure, not a wiring guarantee.
+        Round-3 review proved the parsed-step assertions real, then round-4
+        review showed the residual: every one of them was a substring match on
+        `run`, so an invocation that was *visible but dead* satisfied them all.
+        Reproduced on this tree at e9439fc0a7 -- all four left the suite green
+        with the gate no longer running:
+
+            echo "python3 scripts/ci/coverage_gate.py coverage.out"
+            if false; then python3 scripts/ci/coverage_gate.py ...; fi
+            # python3 scripts/ci/coverage_gate.py coverage.out
+            continue-on-error: true   # on the routing (suite) step
+
+        The fix is an allow-list rather than a longer denylist: the step must be
+        exactly one command, and that command must BE the invocation, matched
+        whole-line. There is no surface left for a mention to hide in.
         """
         step = self.find_coverage_step()
-        run = step.get("run", "")
-        self.assertRegex(
-            run, r"scripts/ci/coverage_gate\.py\s+\S*coverage\.out",
-            "the coverage step must pass the measured coverprofile "
-            "(coverage.out) to the gate script",
+        self.assert_step_runs_its_command(
+            step, GATE_COMMAND_RE,
+            "the coverage gate step (it decides whether the job passes)",
         )
+
+    def test_routing_step_actually_executes_the_suite_and_is_fatal(self):
+        """DEFECT 5's mutation E: the suite's own verdict must reach CI.
+
+        `test_coverage_step_cannot_bypass_the_gate` (round 3) checked
+        `continue-on-error` on the *coverage* step only. Adding it to the
+        *routing* step makes the 19 tests' verdict non-fatal: CI records the
+        failure and carries on, and nothing in the repo fails while the gate it
+        was written to protect is disabled. Same allow-list shape, applied to
+        the step that runs this file.
+        """
+        routing = [
+            s for s in self.steps
+            if isinstance(s, dict) and "test_coverage_gate.py" in str(s.get("run", ""))
+        ]
+        self.assertEqual(
+            len(routing), 1,
+            f"expected exactly one routing-test step, found {len(routing)}",
+        )
+        self.assert_step_runs_its_command(
+            routing[0], ROUTING_COMMAND_RE,
+            "the coverage gate routing step (it runs this suite)",
+        )
+
+    def test_the_allow_list_itself_rejects_the_round_4_mutations(self):
+        """Pins defect 5's regression *in the suite*, not only in my sweep.
+
+        Without this, `step_problems` could be weakened the same way the old
+        assertions were -- one relaxed regex at a time, each still green on the
+        real workflow -- and the mutation sweep would only catch it on the next
+        review round. Here each bypass shape is fed to the checker directly, so
+        the checker's own contract is under test.
+        """
+        real_gate = self.find_coverage_step()
+        real_routing = next(
+            s for s in self.steps
+            if isinstance(s, dict) and "test_coverage_gate.py" in str(s.get("run", ""))
+        )
+        # The control: the real steps are clean, so the checks below cannot pass
+        # vacuously by flagging everything.
+        self.assertEqual(step_problems(real_gate, GATE_COMMAND_RE), [])
+        self.assertEqual(step_problems(real_routing, ROUTING_COMMAND_RE), [])
+
+        invocation = "python3 scripts/ci/coverage_gate.py coverage.out"
+        bypasses = {
+            "echoed": {"run": f'echo "{invocation}"'},
+            "commented": {"run": f"# {invocation}"},
+            "false branch": {"run": f"if false; then {invocation}; fi"},
+            "quoted": {"run": f'echo "{invocation}" > /dev/null; true'},
+            "trailing exit": {"run": f"{invocation}; exit 0"},
+            "or true": {"run": f"{invocation} || true"},
+            "errexit off": {"run": f"set +e\n{invocation}"},
+            "bare exit": {"run": f"{invocation}\nexit 0"},
+            "preceded by setup": {"run": f"echo setting up\n{invocation}"},
+            "no run body": {},
+            "continue-on-error": {"run": invocation, "continue-on-error": True},
+        }
+        for label, step in bypasses.items():
+            with self.subTest(bypass=label):
+                self.assertNotEqual(
+                    step_problems(step, GATE_COMMAND_RE), [],
+                    f"the allow-list must reject the {label} bypass",
+                )
 
     def test_coverage_step_env_carries_the_real_event_and_base(self):
         """The routing inputs must come from the event, on the step itself.
@@ -380,41 +569,6 @@ class WorkflowWiringTest(unittest.TestCase):
         """
         self.assertNotIn("MIN_COVERAGE=80", self.text)
         self.assertNotIn("below minimum ${MIN_COVERAGE}%", self.text)
-
-    def test_coverage_step_cannot_bypass_the_gate(self):
-        """DEFECT 3 falsifier, in the suite itself.
-
-        A `run` body that ends the step successfully without ever consulting the
-        gate is the exact mutation round-2 review used. Reject `exit 0` / `|| true`
-        / `set +e` / `continue-on-error` in the coverage step, so the gate cannot
-        be invoked *and then* overridden. The first version of this assertion
-        used `re.search(r"^\\s*exit\\s+[01]\\s*$", run)` without re.MULTILINE,
-        which only anchors at the start of the whole body -- so a trailing
-        `exit 0` after a genuine invocation passed. Caught by the round-3
-        falsification sweep and rewritten to check each line.
-        """
-        step = self.find_coverage_step()
-        run = step.get("run", "")
-        for line in run.splitlines():
-            self.assertNotRegex(
-                line.strip(), r"^exit\s+[01]$",
-                "the coverage step must not contain a bare `exit`: a trailing "
-                "`exit 0` overrides the gate's own non-zero verdict "
-                "(round-2 review defect 3)",
-            )
-        self.assertNotIn(
-            "|| true", run,
-            "the coverage step must not tolerate a failing gate via `|| true`",
-        )
-        self.assertNotIn(
-            "set +e", run,
-            "the coverage step must not disable errexit",
-        )
-        self.assertFalse(
-            step.get("continue-on-error"),
-            "the coverage step must not set continue-on-error: the gate must be "
-            "able to fail the job",
-        )
 
     def test_gate_routing_test_is_not_behind_a_go_path_filter(self):
         """Defect 1: the gate's own test must not skip on gate-only PRs.
