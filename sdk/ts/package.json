@@ -35,6 +35,7 @@
     "build": "npm run compile:validators && node ./script/clean-dist.mjs && tsc -p tsconfig.build.json && node esbuild.config.mjs && node --experimental-strip-types --no-warnings ./script/validate-package-exports.ts",
     "compile:validators": "node --experimental-strip-types --no-warnings ./script/compile-json-schema-to-ts.ts",
     "lint": "eslint src",
+    "test:validators": "node --test script/compile-json-schema-to-ts.test.mjs",
     "lint:fix": "npm run lint -- --fix",
     "release": "npm run build && npm test && npm publish --tag alpha",
     "test": "jest --selectProjects unit functional",
