@@ -9,6 +9,10 @@
  * Measured against the real chain encoder (go1.26.8, `hrpprobe`):
  *   `sdk.AccAddress(20 bytes).String()` == `ve1qqqq...07mtg4` (41 chars),
  *   and `AccAddressFromBech32("virtengine1...")` fails the bech32 checksum.
+ *
+ * The account-address prefix is shared with the JWT module, which introduced
+ * its own constant for the same fix (`auth/jwt/chain-prefix.ts`). Re-exported
+ * below under its original name so there is exactly ONE value in the SDK.
  */
 export const BECH32_PREFIX_ACC_ADDR = "ve";
 export const BECH32_PREFIX_ACC_PUB = "vepub";
@@ -16,6 +20,9 @@ export const BECH32_PREFIX_VAL_ADDR = "vevaloper";
 export const BECH32_PREFIX_VAL_PUB = "vevaloperpub";
 export const BECH32_PREFIX_CONS_ADDR = "vevalcons";
 export const BECH32_PREFIX_CONS_PUB = "vevalconspub";
+
+/** Number of data characters in a VirtEngine account address. */
+export const ACCOUNT_ADDRESS_LENGTH = 38;
 
 /**
  * The full bech32 config block, shaped like the `bech32Config` field of
