@@ -724,7 +724,7 @@ func (i *IPFSBackend) PutChunked(ctx context.Context, data []byte, chunkSize uin
 		// Add to manifest
 		chunkInfo := ChunkInfo{
 			//nolint:gosec // G115: offset/chunkSize bounded by chunk count
-			Index:      uint32(offset / chunkSize),
+			Index:      uint32(offset / chunkSize), // #nosec G115 -- the chunk index is bounded by the manifest chunk count (< 2^32)
 			Hash:       chunkHash[:],
 			Size:       uint64(len(chunkData)),
 			Offset:     offset,
@@ -886,8 +886,8 @@ var _ ChunkedArtifactStore = (*IPFSBackend)(nil)
 // uintToString converts uint64 to string
 func uintToString(n uint64) string {
 	return hex.EncodeToString([]byte{
-		byte(n >> 56), byte(n >> 48), byte(n >> 40), byte(n >> 32),
-		byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n),
+		byte(n >> 56), byte(n >> 48), byte(n >> 40), byte(n >> 32), // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
+		byte(n >> 24), byte(n >> 16), byte(n >> 8), byte(n), // #nosec G115 -- fixed-width big-endian encoding: only the low 8 bits are written by design and the truncated value is never used arithmetically
 	})
 }
 

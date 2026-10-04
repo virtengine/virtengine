@@ -104,7 +104,7 @@ func auditLogActorIndexKey(actor string, height int64, id string) []byte {
 	prefix := auditLogActorPrefix(actor)
 	heightBytes := make([]byte, 8)
 	// Safe conversion: height is always positive in SDK context
-	binary.BigEndian.PutUint64(heightBytes, uint64(height)) //nolint:gosec
+	binary.BigEndian.PutUint64(heightBytes, uint64(height)) /* #nosec G115 -- uint64(height) is a non-negative counter/height bounded well below 2^63 */ //nolint:gosec
 
 	key := make([]byte, len(prefix)+8+len(id))
 	copy(key, prefix)
@@ -126,7 +126,7 @@ func auditLogModuleIndexKey(module string, height int64, id string) []byte {
 	prefix := auditLogModulePrefix(module)
 	heightBytes := make([]byte, 8)
 	// Safe conversion: height is always positive in SDK context
-	binary.BigEndian.PutUint64(heightBytes, uint64(height)) //nolint:gosec
+	binary.BigEndian.PutUint64(heightBytes, uint64(height)) /* #nosec G115 -- uint64(height) is a non-negative counter/height bounded well below 2^63 */ //nolint:gosec
 
 	key := make([]byte, len(prefix)+8+len(id))
 	copy(key, prefix)

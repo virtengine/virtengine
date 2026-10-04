@@ -63,6 +63,37 @@ func InitGenesis(ctx sdk.Context, k keeper.Keeper, data *types.GenesisState) {
 			panic(err)
 		}
 	}
+
+	// Restore the sanction sequence first, so the records below cannot collide
+	// with IDs that the exported set already uses.
+	k.SetNextSanctionSequence(ctx, data.SanctionSequence)
+
+	// Initialize sanction records.
+	//
+	// This runs after the account-state loop above on purpose. Account state is
+	// a projection of the in-force sanctions, so replaying the exported states
+	// first and then re-deriving the projection from the restored sanctions
+	// leaves the two consistent. Restoring the sanctions first would let the
+	// loop below overwrite a projection with a bare enum value.
+	for _, sanction := range data.Sanctions {
+		if err := k.SetSanction(ctx, sanction); err != nil {
+			panic(err)
+		}
+	}
+
+	// Re-derive every sanctioned subject's state from its in-force sanctions.
+	// A subject whose sanctions have all lapsed projects to Active, which is
+	// the correct post-import answer even though the exported account state
+	// recorded the sanction as still in force at the moment of export.
+	for _, sanction := range data.Sanctions {
+		subject, err := sdk.AccAddressFromBech32(sanction.Subject)
+		if err != nil {
+			panic(err)
+		}
+		if _, err := k.ProjectAccountState(ctx, subject); err != nil {
+			panic(err)
+		}
+	}
 }
 
 // ExportGenesis exports the roles module's state to a genesis state.
@@ -101,10 +132,12 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 	}
 
 	return &types.GenesisState{
-		GenesisAccounts: genesisAccountStrs,
-		RoleAssignments: roleAssignments,
-		AccountStates:   accountStates,
-		Params:          params,
+		GenesisAccounts:  genesisAccountStrs,
+		RoleAssignments:  roleAssignments,
+		AccountStates:    accountStates,
+		Sanctions:        k.GetAllSanctions(ctx),
+		SanctionSequence: k.GetNextSanctionSequence(ctx),
+		Params:           params,
 	}
 }
 

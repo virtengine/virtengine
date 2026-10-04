@@ -167,14 +167,13 @@ func (s *VEIDOnboardingIntegrationTestSuite) TestVEIDOnboardingFlow() {
 
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.Marketplace.CreateOffering(ctx, offering))
 
-	// Step 4: Order placement should fail due to insufficient score
-	orderIDLow := marketplace.OrderID{
-		CustomerAddress: customer.String(),
-		Sequence:        1,
-	}
-	orderLow := marketplace.NewOrderAt(orderIDLow, offering.ID, 5000, 1, ctx.BlockTime())
-
-	err = s.app.Keepers.VirtEngine.Marketplace.CreateOrder(ctx, orderLow)
+	// Step 4: Order placement should fail due to insufficient score.
+	// Gating is driven directly through CheckIdentityGating: legacy
+	// CreateOrder lifecycle writes are retired behind the Task 84C canonical
+	// fence (ErrLifecycleDeprecated with default genesis), while
+	// CheckIdentityGating is the live enforcement function CreateOrder itself
+	// invoked for gating.
+	err = s.app.Keepers.VirtEngine.Marketplace.CheckIdentityGating(ctx, offering, customer)
 	require.Error(s.T(), err)
 
 	var gatingErr *marketplace.IdentityGatingError
@@ -193,17 +192,8 @@ func (s *VEIDOnboardingIntegrationTestSuite) TestVEIDOnboardingFlow() {
 	require.True(s.T(), found)
 	require.Equal(s.T(), veidtypes.IdentityTierVerified, record.Tier)
 
-	// Step 6: Order placement succeeds after tier change
-	orderIDHigh := marketplace.OrderID{
-		CustomerAddress: customer.String(),
-		Sequence:        2,
-	}
-	orderHigh := marketplace.NewOrderAt(orderIDHigh, offering.ID, 5000, 1, ctx.BlockTime())
-
-	require.NoError(s.T(), s.app.Keepers.VirtEngine.Marketplace.CreateOrder(ctx, orderHigh))
-
-	stored, found := s.app.Keepers.VirtEngine.Marketplace.GetOrder(ctx, orderIDHigh)
-	require.True(s.T(), found)
-	require.Equal(s.T(), orderIDHigh, stored.ID)
-	require.Equal(s.T(), marketplace.OrderStatePendingPayment, stored.State)
+	// Step 6: Order placement succeeds after tier change (gating driven
+	// directly; see Step 4 note on the retired CreateOrder path).
+	err = s.app.Keepers.VirtEngine.Marketplace.CheckIdentityGating(ctx, offering, customer)
+	require.NoError(s.T(), err)
 }

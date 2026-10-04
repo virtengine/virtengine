@@ -42,7 +42,7 @@ type Depositor struct {
 	Source v1.Source `protobuf:"varint,3,opt,name=source,proto3,enum=virtengine.base.deposit.v1.Source" json:"source" yaml:"source"`
 	// Balance amount of funds available to spend in this deposit.
 	Balance types.DecCoin `protobuf:"bytes,4,opt,name=balance,proto3" json:"balance" yaml:"balance"`
-	// direct indicates if deposited currency should be swapped to ACT (false) at time of the deposit
+	// direct indicates if deposited currency should be swapped to VCC (false) at time of the deposit
 	Direct bool `protobuf:"varint,5,opt,name=direct,proto3" json:"direct" yaml:"direct"`
 }
 

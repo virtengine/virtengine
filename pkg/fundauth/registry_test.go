@@ -13,7 +13,7 @@ func TestDefaultRegistryPinned(t *testing.T) {
 		msgMultiSendTypeURL, "/cosmos.bank.v1beta1.MsgSend",
 		"/cosmos.distribution.v1beta1.MsgCommunityPoolSpend", "/cosmos.distribution.v1beta1.MsgFundCommunityPool",
 		"/cosmos.distribution.v1beta1.MsgWithdrawDelegatorReward", "/cosmos.distribution.v1beta1.MsgWithdrawValidatorCommission",
-		"/virtengine.bme.v1.MsgBurnACT", "/virtengine.bme.v1.MsgBurnMint", "/virtengine.bme.v1.MsgMintACT",
+		"/virtengine.bme.v1.MsgBurnMint", "/virtengine.bme.v1.MsgBurnVCC", "/virtengine.bme.v1.MsgMintVCC",
 		"/virtengine.delegation.v1.MsgClaimAllRewards", "/virtengine.delegation.v1.MsgClaimRewards", "/virtengine.delegation.v1.MsgDelegate",
 		"/virtengine.delegation.v1.MsgRedelegate", "/virtengine.delegation.v1.MsgUndelegate",
 		"/virtengine.deployment.v1beta4.MsgCloseDeployment", "/virtengine.deployment.v1beta4.MsgCreateDeployment", "/virtengine.deployment.v1beta4.MsgUpdateDeployment",
@@ -43,7 +43,7 @@ func TestDefaultRegistryPinned(t *testing.T) {
 		t.Fatalf("descriptor count = %d, want 40", len(descriptors))
 	}
 	digest := DefaultRegistry().Digest()
-	if gotDigest := hex.EncodeToString(digest[:]); gotDigest != "0bec64f7208bda97b411c4f109eddfc6ff4dd8b392791f980426c87189069702" {
+	if gotDigest := hex.EncodeToString(digest[:]); gotDigest != "4e74d1f79aaddf0ba45b02da0824dd360fe3b634a0c48d09af6f87c725ad693d" {
 		t.Fatalf("registry digest = %s", gotDigest)
 	}
 	exclusions := ExcludedSources()
@@ -91,7 +91,7 @@ func TestRegistryRejectsInvalidAndUnknownSources(t *testing.T) {
 	if err != nil || createBid.Status != SourceStatusActive || !createBid.CurrentMutation || createBid.Effect != EffectEscrowLock {
 		t.Fatalf("MsgCreateBid descriptor is not active escrow funding: %+v, %v", createBid, err)
 	}
-	for _, typeURL := range []string{"/virtengine.bme.v1.MsgBurnACT", "/virtengine.bme.v1.MsgBurnMint", "/virtengine.bme.v1.MsgMintACT"} {
+	for _, typeURL := range []string{"/virtengine.bme.v1.MsgBurnMint", "/virtengine.bme.v1.MsgBurnVCC", "/virtengine.bme.v1.MsgMintVCC"} {
 		descriptor, lookupErr := DefaultRegistry().Lookup(typeURL, typeURL)
 		if lookupErr != nil || descriptor.Status != SourceStatusPlanned || descriptor.CurrentMutation || !descriptor.RequireAuthorization {
 			t.Fatalf("BME source must remain explicit planned intent: %+v, %v", descriptor, lookupErr)

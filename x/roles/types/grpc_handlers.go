@@ -25,6 +25,11 @@ type MsgServer interface {
 	SetAccountState(ctx context.Context, msg *MsgSetAccountState) (*MsgSetAccountStateResponse, error)
 	NominateAdmin(ctx context.Context, msg *MsgNominateAdmin) (*MsgNominateAdminResponse, error)
 	UpdateParams(ctx context.Context, msg *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
+	ImposeSanction(ctx context.Context, msg *MsgImposeSanction) (*MsgImposeSanctionResponse, error)
+	ConfirmSanction(ctx context.Context, msg *MsgConfirmSanction) (*MsgConfirmSanctionResponse, error)
+	RevokeSanction(ctx context.Context, msg *MsgRevokeSanction) (*MsgRevokeSanctionResponse, error)
+	OpenSanctionAppeal(ctx context.Context, msg *MsgOpenSanctionAppeal) (*MsgOpenSanctionAppealResponse, error)
+	ResolveSanctionAppeal(ctx context.Context, msg *MsgResolveSanctionAppeal) (*MsgResolveSanctionAppealResponse, error)
 }
 
 // msgServerAdapter adapts the local MsgServer interface to the generated proto MsgServer
@@ -107,6 +112,78 @@ func (a *msgServerAdapter) UpdateParams(ctx context.Context, req *rolesv1.MsgUpd
 		return nil, err
 	}
 	return &rolesv1.MsgUpdateParamsResponse{}, nil
+}
+
+// ImposeSanction adapts the local type to the proto type
+func (a *msgServerAdapter) ImposeSanction(ctx context.Context, req *rolesv1.MsgImposeSanction) (*rolesv1.MsgImposeSanctionResponse, error) {
+	resp, err := a.srv.ImposeSanction(ctx, &MsgImposeSanction{
+		Sender:          req.Sender,
+		Subject:         req.Subject,
+		Scope:           req.Scope,
+		ScopeRef:        req.ScopeRef,
+		Kind:            req.Kind,
+		ReasonCode:      req.ReasonCode,
+		Justification:   req.Justification,
+		Notice:          req.Notice,
+		DurationSeconds: req.DurationSeconds,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &rolesv1.MsgImposeSanctionResponse{
+		SanctionId: resp.SanctionID,
+		Status:     resp.Status,
+	}, nil
+}
+
+// ConfirmSanction adapts the local type to the proto type
+func (a *msgServerAdapter) ConfirmSanction(ctx context.Context, req *rolesv1.MsgConfirmSanction) (*rolesv1.MsgConfirmSanctionResponse, error) {
+	if _, err := a.srv.ConfirmSanction(ctx, &MsgConfirmSanction{
+		Reviewer:      req.Reviewer,
+		SanctionID:    req.SanctionId,
+		ReviewedUntil: req.ReviewedUntil,
+	}); err != nil {
+		return nil, err
+	}
+	return &rolesv1.MsgConfirmSanctionResponse{}, nil
+}
+
+// RevokeSanction adapts the local type to the proto type
+func (a *msgServerAdapter) RevokeSanction(ctx context.Context, req *rolesv1.MsgRevokeSanction) (*rolesv1.MsgRevokeSanctionResponse, error) {
+	if _, err := a.srv.RevokeSanction(ctx, &MsgRevokeSanction{
+		Sender:     req.Sender,
+		SanctionID: req.SanctionId,
+		Reason:     req.Reason,
+	}); err != nil {
+		return nil, err
+	}
+	return &rolesv1.MsgRevokeSanctionResponse{}, nil
+}
+
+// OpenSanctionAppeal adapts the local type to the proto type
+func (a *msgServerAdapter) OpenSanctionAppeal(ctx context.Context, req *rolesv1.MsgOpenSanctionAppeal) (*rolesv1.MsgOpenSanctionAppealResponse, error) {
+	resp, err := a.srv.OpenSanctionAppeal(ctx, &MsgOpenSanctionAppeal{
+		Subject:       req.Subject,
+		SanctionID:    req.SanctionId,
+		Justification: req.Justification,
+	})
+	if err != nil {
+		return nil, err
+	}
+	return &rolesv1.MsgOpenSanctionAppealResponse{AppealId: resp.AppealID}, nil
+}
+
+// ResolveSanctionAppeal adapts the local type to the proto type
+func (a *msgServerAdapter) ResolveSanctionAppeal(ctx context.Context, req *rolesv1.MsgResolveSanctionAppeal) (*rolesv1.MsgResolveSanctionAppealResponse, error) {
+	if _, err := a.srv.ResolveSanctionAppeal(ctx, &MsgResolveSanctionAppeal{
+		Reviewer: req.Reviewer,
+		AppealID: req.AppealId,
+		Grant:    req.Grant,
+		Notes:    req.Notes,
+	}); err != nil {
+		return nil, err
+	}
+	return &rolesv1.MsgResolveSanctionAppealResponse{}, nil
 }
 
 // RegisterMsgServer registers the MsgServer implementation with the grpc.Server.

@@ -193,14 +193,14 @@ func metricsKey(blockHeight int64, requestID string) []byte {
 	key := make([]byte, 0, len(prefix)+8+1+len(requestID))
 	key = append(key, prefix...)
 	key = append(key, []byte{
-		byte(blockHeight >> 56),
-		byte(blockHeight >> 48),
-		byte(blockHeight >> 40),
-		byte(blockHeight >> 32),
-		byte(blockHeight >> 24),
-		byte(blockHeight >> 16),
-		byte(blockHeight >> 8),
-		byte(blockHeight),
+		byte(blockHeight >> 56), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 48), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 40), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 32), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 24), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 16), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 8),  // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight),       // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	}...)
 	key = append(key, byte('/'))
 	key = append(key, []byte(requestID)...)
@@ -213,14 +213,14 @@ func metricsPrefixKey(blockHeight int64) []byte {
 	key := make([]byte, 0, len(prefix)+8+1)
 	key = append(key, prefix...)
 	key = append(key, []byte{
-		byte(blockHeight >> 56),
-		byte(blockHeight >> 48),
-		byte(blockHeight >> 40),
-		byte(blockHeight >> 32),
-		byte(blockHeight >> 24),
-		byte(blockHeight >> 16),
-		byte(blockHeight >> 8),
-		byte(blockHeight),
+		byte(blockHeight >> 56), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 48), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 40), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 32), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 24), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 16), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight >> 8),  // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight),       // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	}...)
 	key = append(key, byte('/'))
 	return key

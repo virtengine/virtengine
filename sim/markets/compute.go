@@ -62,7 +62,23 @@ func UpdateGas(state MarketState, params MarketParams) MarketState {
 		if adjustment < -float64(params.GasMaxChangeBPS)/10000 {
 			adjustment = -float64(params.GasMaxChangeBPS) / 10000
 		}
-		minGas = state.GasMinPrice * (1 + adjustment)
+		// Base the adaptive floor on params.MinGasPrice, NOT on the previous
+		// step's state.GasMinPrice.
+		//
+		// Every other term in this function is derived from params, so deriving
+		// this one from params too is what keeps it bounded: the result is
+		// MinGasPrice * (1 +/- GasMaxChangeBPS/10000) * (1 + congestion), i.e.
+		// inside [0.0004, 0.00069] for the defaults, which is what the
+		// avg_min_gas_price economics bound (0.0004..0.008) expects.
+		//
+		// Using state.GasMinPrice made this term recursive. At a sustained
+		// utilisation above the target the adjustment stays positive, so the
+		// level compounds by (1 + adjustment) every step with nothing ever
+		// pulling it back: at the baseline run's 0.993 utilisation the
+		// adjustment pins at +0.0857, which is 1.0857^step -- 114143 by step
+		// 100 and 9.5e33 by step 400. That is what surfaced as
+		// avg_gas_price = avg_min_gas_price = 5.52e28 against a 0.01 bound.
+		minGas = params.MinGasPrice * (1 + adjustment)
 		if minGas < params.MinGasPrice {
 			minGas = params.MinGasPrice
 		}

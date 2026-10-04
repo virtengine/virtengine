@@ -134,12 +134,12 @@
      - [GenesisVaultState](#virtengine.bme.v1.GenesisVaultState)
    
  - [virtengine/bme/v1/msgs.proto](#virtengine/bme/v1/msgs.proto)
-     - [MsgBurnACT](#virtengine.bme.v1.MsgBurnACT)
-     - [MsgBurnACTResponse](#virtengine.bme.v1.MsgBurnACTResponse)
+     - [MsgBurnVCC](#virtengine.bme.v1.MsgBurnVCC)
+     - [MsgBurnVCCResponse](#virtengine.bme.v1.MsgBurnVCCResponse)
      - [MsgBurnMint](#virtengine.bme.v1.MsgBurnMint)
      - [MsgBurnMintResponse](#virtengine.bme.v1.MsgBurnMintResponse)
-     - [MsgMintACT](#virtengine.bme.v1.MsgMintACT)
-     - [MsgMintACTResponse](#virtengine.bme.v1.MsgMintACTResponse)
+     - [MsgMintVCC](#virtengine.bme.v1.MsgMintVCC)
+     - [MsgMintVCCResponse](#virtengine.bme.v1.MsgMintVCCResponse)
      - [MsgSeedVault](#virtengine.bme.v1.MsgSeedVault)
      - [MsgSeedVaultResponse](#virtengine.bme.v1.MsgSeedVaultResponse)
      - [MsgUpdateParams](#virtengine.bme.v1.MsgUpdateParams)
@@ -2663,7 +2663,7 @@ if field is nil resource is not present in the given data-structure
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
- | `ratio` | [string](#string) |  | ratio is CR = (VaultAKT * Price) / OutstandingACT |
+ | `ratio` | [string](#string) |  | ratio is CR = (VaultNative * Price) / OutstandingVCC |
  | `status` | [MintStatus](#virtengine.bme.v1.MintStatus) |  | status indicates the current circuit breaker status |
  | `reference_price` | [string](#string) |  | reference_price is the price used to calculate CR |
  
@@ -2697,7 +2697,7 @@ if field is nil resource is not present in the given data-structure
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
  | `owner` | [string](#string) |  | owner source of the coins to be burned |
- | `to` | [string](#string) |  | to destination of the minted coins. if minted coin is ACT, "to" must be same as signer |
+ | `to` | [string](#string) |  | to destination of the minted coins. if minted coin is VCC, "to" must be same as signer |
  | `coins_to_burn` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | coins_to_burn |
  | `denom_to_mint` | [string](#string) |  | denom_to_mint |
  
@@ -2876,12 +2876,12 @@ if field is nil resource is not present in the given data-structure
  <a name="virtengine.bme.v1.EventVaultSeeded"></a>
 
  ### EventVaultSeeded
- EventVaultSeeded is emitted when the vault is seeded with AKT
+ EventVaultSeeded is emitted when the vault is seeded with VE
 
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
- | `amount` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | amount is the AKT amount added to vault |
+ | `amount` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | amount is the VE amount added to vault |
  | `source` | [string](#string) |  | source is where the funds came from |
  | `new_vault_balance` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | new_vault_balance is the new vault balance |
  
@@ -2916,11 +2916,11 @@ if field is nil resource is not present in the given data-structure
  | ----- | ---- | ----- | ----------- |
  | `circuit_breaker_warn_threshold` | [uint32](#uint32) |  | circuit_breaker_warn_threshold is the CR below which warning is triggered Stored as basis points * 100 (e.g., 9500 = 0.95) |
  | `circuit_breaker_halt_threshold` | [uint32](#uint32) |  | circuit_breaker_halt_threshold is the CR below which mints are halted Stored as basis points * 100 (e.g., 9000 = 0.90) |
- | `min_epoch_blocks` | [int64](#int64) |  | min_epoch_blocks is the minimum amount of blocks required for ACT mints |
+ | `min_epoch_blocks` | [int64](#int64) |  | min_epoch_blocks is the minimum amount of blocks required for VCC mints |
  | `epoch_blocks_backoff` | [uint32](#uint32) |  | epoch_blocks_backoff increase of runway_blocks in % during warn threshold for drop in 1 basis point of circuit_breaker_warn_threshold Stored as basis points * 100 (e.g., 9500 = 0.95) e.g: runway_blocks = 100 min_runway_blocks_backoff = 1000 circuit_breaker_warn_threshold drops from 0.95 to 0.94 then runway_blocks = (100*0.1 + 100) = 110
 
  circuit_breaker_warn_threshold drops from 0.94 to 0.92 then runway_blocks = (110*(0.1*2) + 110) = 132 |
- | `mint_spread_bps` | [uint32](#uint32) |  | mint_spread_bps is the spread in basis points applied during ACT mint (default: 25 bps = 0.25%) |
+ | `mint_spread_bps` | [uint32](#uint32) |  | mint_spread_bps is the spread in basis points applied during VCC mint (default: 25 bps = 0.25%) |
  | `settle_spread_bps` | [uint32](#uint32) |  | settle_spread_bps is the spread in basis points applied during settlement (default: 0 for no provider tax) |
  
  
@@ -3042,51 +3042,17 @@ if field is nil resource is not present in the given data-structure
  
 
  
- <a name="virtengine.bme.v1.MsgBurnACT"></a>
-
- ### MsgBurnACT
- MsgMintACT defines the message for burning one token to mint another
-Allows burning AKT to mint ACT, or burning unused ACT back to AKT
-
- 
- | Field | Type | Label | Description |
- | ----- | ---- | ----- | ----------- |
- | `owner` | [string](#string) |  | owner source of the coins to be burned |
- | `to` | [string](#string) |  | to destination of the minted coins. if minted coin is ACT, "to" must be same as signer |
- | `coins_to_burn` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | coins_to_burn |
- 
- 
-
- 
-
- 
- <a name="virtengine.bme.v1.MsgBurnACTResponse"></a>
-
- ### MsgBurnACTResponse
- MsgBurnMintResponse is the response type for MsgBurnMint
-
- 
- | Field | Type | Label | Description |
- | ----- | ---- | ----- | ----------- |
- | `id` | [LedgerRecordID](#virtengine.bme.v1.LedgerRecordID) |  |  |
- | `status` | [LedgerRecordStatus](#virtengine.bme.v1.LedgerRecordStatus) |  |  |
- 
- 
-
- 
-
- 
  <a name="virtengine.bme.v1.MsgBurnMint"></a>
 
  ### MsgBurnMint
  MsgBurnMint defines the message for burning one token to mint another
-Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+Allows burning VE to mint VCC, or burning unused VCC back to VE
 
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
  | `owner` | [string](#string) |  | owner source of the coins to be burned |
- | `to` | [string](#string) |  | to destination of the minted coins. if minted coin is ACT, "to" must be same as signer |
+ | `to` | [string](#string) |  | to destination of the minted coins. if minted coin is VCC, "to" must be same as signer |
  | `coins_to_burn` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | coins_to_burn |
  | `denom_to_mint` | [string](#string) |  | denom_to_mint |
  
@@ -3111,17 +3077,17 @@ Allows burning AKT to mint ACT, or burning unused ACT back to AKT
  
 
  
- <a name="virtengine.bme.v1.MsgMintACT"></a>
+ <a name="virtengine.bme.v1.MsgBurnVCC"></a>
 
- ### MsgMintACT
- MsgMintACT defines the message for burning one token to mint another
-Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+ ### MsgBurnVCC
+ MsgMintVCC defines the message for burning one token to mint another
+Allows burning VE to mint VCC, or burning unused VCC back to VE
 
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
  | `owner` | [string](#string) |  | owner source of the coins to be burned |
- | `to` | [string](#string) |  | to destination of the minted coins. if minted coin is ACT, "to" must be same as signer |
+ | `to` | [string](#string) |  | to destination of the minted coins. if minted coin is VCC, "to" must be same as signer |
  | `coins_to_burn` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | coins_to_burn |
  
  
@@ -3129,9 +3095,43 @@ Allows burning AKT to mint ACT, or burning unused ACT back to AKT
  
 
  
- <a name="virtengine.bme.v1.MsgMintACTResponse"></a>
+ <a name="virtengine.bme.v1.MsgBurnVCCResponse"></a>
 
- ### MsgMintACTResponse
+ ### MsgBurnVCCResponse
+ MsgBurnMintResponse is the response type for MsgBurnMint
+
+ 
+ | Field | Type | Label | Description |
+ | ----- | ---- | ----- | ----------- |
+ | `id` | [LedgerRecordID](#virtengine.bme.v1.LedgerRecordID) |  |  |
+ | `status` | [LedgerRecordStatus](#virtengine.bme.v1.LedgerRecordStatus) |  |  |
+ 
+ 
+
+ 
+
+ 
+ <a name="virtengine.bme.v1.MsgMintVCC"></a>
+
+ ### MsgMintVCC
+ MsgMintVCC defines the message for burning one token to mint another
+Allows burning VE to mint VCC, or burning unused VCC back to VE
+
+ 
+ | Field | Type | Label | Description |
+ | ----- | ---- | ----- | ----------- |
+ | `owner` | [string](#string) |  | owner source of the coins to be burned |
+ | `to` | [string](#string) |  | to destination of the minted coins. if minted coin is VCC, "to" must be same as signer |
+ | `coins_to_burn` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | coins_to_burn |
+ 
+ 
+
+ 
+
+ 
+ <a name="virtengine.bme.v1.MsgMintVCCResponse"></a>
+
+ ### MsgMintVCCResponse
  MsgBurnMintResponse is the response type for MsgBurnMint
 
  
@@ -3148,14 +3148,14 @@ Allows burning AKT to mint ACT, or burning unused ACT back to AKT
  <a name="virtengine.bme.v1.MsgSeedVault"></a>
 
  ### MsgSeedVault
- MsgSeedVault defines the message for seeding the BME vault with AKT
+ MsgSeedVault defines the message for seeding the BME vault with VE
 This is used to provide an initial volatility buffer
 
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
  | `authority` | [string](#string) |  | authority is the address that controls the module (governance) |
- | `amount` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | amount is the AKT amount to seed the vault with |
+ | `amount` | [cosmos.base.v1beta1.Coin](#cosmos.base.v1beta1.Coin) |  | amount is the VE amount to seed the vault with |
  | `source` | [string](#string) |  | source is the source of funds (e.g., community pool) |
  
  
@@ -3171,7 +3171,7 @@ This is used to provide an initial volatility buffer
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
- | `vault_akt` | [string](#string) |  | vault_akt is the new vault AKT balance |
+ | `vault_native` | [string](#string) |  | vault_native is the new vault VE balance |
  
  
 
@@ -3267,8 +3267,8 @@ This is used to provide an initial volatility buffer
  | `collateral_ratio` | [string](#string) |  | collateral_ratio is the current CR |
  | `warn_threshold` | [string](#string) |  | warn_threshold is the warning threshold |
  | `halt_threshold` | [string](#string) |  | halt_threshold is the halt threshold |
- | `mints_allowed` | [bool](#bool) |  | mints_allowed indicates if new ACT mints are allowed |
- | `refunds_allowed` | [bool](#bool) |  | refunds_allowed indicates if ACT refunds are allowed |
+ | `mints_allowed` | [bool](#bool) |  | mints_allowed indicates if new VCC mints are allowed |
+ | `refunds_allowed` | [bool](#bool) |  | refunds_allowed indicates if VCC refunds are allowed |
  
  
 
@@ -3338,15 +3338,15 @@ This is used to provide an initial volatility buffer
 
  ### Msg
  Msg defines the BME (Burn/Mint Engine) transaction service.
-The BME module manages the burn and mint operations for ACT tokens,
+The BME module manages the burn and mint operations for VCC tokens,
 maintaining collateral ratios and enforcing circuit breaker rules.
 
  | Method Name | Request Type | Response Type | Description | HTTP Verb | Endpoint |
  | ----------- | ------------ | ------------- | ------------| ------- | -------- |
  | `UpdateParams` | [MsgUpdateParams](#virtengine.bme.v1.MsgUpdateParams) | [MsgUpdateParamsResponse](#virtengine.bme.v1.MsgUpdateParamsResponse) | UpdateParams updates the module parameters. This operation can only be performed through governance proposals. | |
- | `BurnMint` | [MsgBurnMint](#virtengine.bme.v1.MsgBurnMint) | [MsgBurnMintResponse](#virtengine.bme.v1.MsgBurnMintResponse) | BurnMint allows users to burn one token and mint another at current oracle prices. Typically used to burn unused ACT tokens back to AKT. The operation may be delayed or rejected based on circuit breaker status. | |
- | `MintACT` | [MsgMintACT](#virtengine.bme.v1.MsgMintACT) | [MsgMintACTResponse](#virtengine.bme.v1.MsgMintACTResponse) | MintACT mints ACT tokens by burning the specified source token. The mint amount is calculated based on current oracle prices and the collateral ratio. May be halted if circuit breaker is triggered. | |
- | `BurnACT` | [MsgBurnACT](#virtengine.bme.v1.MsgBurnACT) | [MsgBurnACTResponse](#virtengine.bme.v1.MsgBurnACTResponse) | BurnACT burns ACT tokens and mints the specified destination token. The burn operation uses remint credits when available, otherwise requires adequate collateral backing based on oracle prices. | |
+ | `BurnMint` | [MsgBurnMint](#virtengine.bme.v1.MsgBurnMint) | [MsgBurnMintResponse](#virtengine.bme.v1.MsgBurnMintResponse) | BurnMint allows users to burn one token and mint another at current oracle prices. Typically used to burn unused VCC tokens back to VE. The operation may be delayed or rejected based on circuit breaker status. | |
+ | `MintVCC` | [MsgMintVCC](#virtengine.bme.v1.MsgMintVCC) | [MsgMintVCCResponse](#virtengine.bme.v1.MsgMintVCCResponse) | MintVCC mints VCC tokens by burning the specified source token. The mint amount is calculated based on current oracle prices and the collateral ratio. May be halted if circuit breaker is triggered. | |
+ | `BurnVCC` | [MsgBurnVCC](#virtengine.bme.v1.MsgBurnVCC) | [MsgBurnVCCResponse](#virtengine.bme.v1.MsgBurnVCCResponse) | BurnVCC burns VCC tokens and mints the specified destination token. The burn operation uses remint credits when available, otherwise requires adequate collateral backing based on oracle prices. | |
  
   <!-- end services -->
 
@@ -5662,7 +5662,7 @@ Example: "ve1..." If depositor is same as the owner, then any incoming coins are
  | `height` | [int64](#int64) |  | Height blockchain height at which deposit was created |
  | `source` | [virtengine.base.deposit.v1.Source](#virtengine.base.deposit.v1.Source) |  | Source indicated origination of the funds |
  | `balance` | [cosmos.base.v1beta1.DecCoin](#cosmos.base.v1beta1.DecCoin) |  | Balance amount of funds available to spend in this deposit. |
- | `direct` | [bool](#bool) |  | direct indicates if deposited currency should be swapped to ACT (false) at time of the deposit |
+ | `direct` | [bool](#bool) |  | direct indicates if deposited currency should be swapped to VCC (false) at time of the deposit |
  
  
 
@@ -13959,7 +13959,7 @@ It also represents a single data point in TWAP history
  
  | Field | Type | Label | Description |
  | ----- | ---- | ----- | ----------- |
- | `akt_price_feed_id` | [string](#string) |  | akt_price_feed_id is the Pyth price feed identifier for AKT/USD |
+ | `native_price_feed_id` | [string](#string) |  | native_price_feed_id identifies an explicitly configured VE/USD feed. No default market feed is asserted for the proposed native asset. |
  
  
 

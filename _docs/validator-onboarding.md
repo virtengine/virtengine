@@ -41,7 +41,7 @@ This guide covers setup, operation, and ongoing maintenance for validator nodes.
 ### Software Requirements
 
 - Ubuntu 22.04 LTS or equivalent
-- Go 1.25.5+
+- Go 1.26.8+
 - TensorFlow 2.x runtime (for identity scoring)
 - Docker (optional, for containerized deployment)
 

@@ -2396,12 +2396,12 @@ impl serde::Serialize for PythContractParams {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if !self.akt_price_feed_id.is_empty() {
+        if !self.native_price_feed_id.is_empty() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("virtengine.oracle.v1.PythContractParams", len)?;
-        if !self.akt_price_feed_id.is_empty() {
-            struct_ser.serialize_field("aktPriceFeedId", &self.akt_price_feed_id)?;
+        if !self.native_price_feed_id.is_empty() {
+            struct_ser.serialize_field("nativePriceFeedId", &self.native_price_feed_id)?;
         }
         struct_ser.end()
     }
@@ -2413,13 +2413,13 @@ impl<'de> serde::Deserialize<'de> for PythContractParams {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "akt_price_feed_id",
-            "aktPriceFeedId",
+            "native_price_feed_id",
+            "nativePriceFeedId",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
-            AktPriceFeedId,
+            NativePriceFeedId,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -2441,7 +2441,7 @@ impl<'de> serde::Deserialize<'de> for PythContractParams {
                         E: serde::de::Error,
                     {
                         match value {
-                            "aktPriceFeedId" | "akt_price_feed_id" => Ok(GeneratedField::AktPriceFeedId),
+                            "nativePriceFeedId" | "native_price_feed_id" => Ok(GeneratedField::NativePriceFeedId),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -2461,19 +2461,19 @@ impl<'de> serde::Deserialize<'de> for PythContractParams {
                 where
                     V: serde::de::MapAccess<'de>,
             {
-                let mut akt_price_feed_id__ = None;
+                let mut native_price_feed_id__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
-                        GeneratedField::AktPriceFeedId => {
-                            if akt_price_feed_id__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("aktPriceFeedId"));
+                        GeneratedField::NativePriceFeedId => {
+                            if native_price_feed_id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("nativePriceFeedId"));
                             }
-                            akt_price_feed_id__ = Some(map_.next_value()?);
+                            native_price_feed_id__ = Some(map_.next_value()?);
                         }
                     }
                 }
                 Ok(PythContractParams {
-                    akt_price_feed_id: akt_price_feed_id__.unwrap_or_default(),
+                    native_price_feed_id: native_price_feed_id__.unwrap_or_default(),
                 })
             }
         }

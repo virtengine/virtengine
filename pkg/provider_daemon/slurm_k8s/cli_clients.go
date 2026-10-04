@@ -163,7 +163,7 @@ func (h *HelmCLIClient) run(ctx context.Context, args []string) ([]byte, error) 
 	}
 
 	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
-	cmd := exec.CommandContext(ctx, h.config.Binary, args...)
+	cmd := exec.CommandContext(ctx, h.config.Binary, args...) // #nosec G204 -- the executable is h.config.Binary, resolved from daemon configuration / a validated path, and the arguments are built in code rather than from remote input
 	if h.config.Kubeconfig != "" {
 		cmd.Env = append(os.Environ(), "KUBECONFIG="+h.config.Kubeconfig)
 	}
@@ -287,7 +287,7 @@ func (k *KubeCLIStatusChecker) run(ctx context.Context, args []string) ([]byte, 
 	}
 
 	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
-	cmd := exec.CommandContext(ctx, k.config.Binary, args...)
+	cmd := exec.CommandContext(ctx, k.config.Binary, args...) // #nosec G204 -- the executable is k.config.Binary, resolved from daemon configuration / a validated path, and the arguments are built in code rather than from remote input
 	if k.config.Kubeconfig != "" {
 		cmd.Env = append(os.Environ(), "KUBECONFIG="+k.config.Kubeconfig)
 	}

@@ -904,7 +904,7 @@ func (n *NitroEnclaveServiceImpl) deriveEnclaveKeys() error {
 	seed := make([]byte, 0, 128)
 	seed = append(seed, n.pcrSet.PCRs[NitroPCR0EIF][:]...)
 	seed = append(seed, n.pcrSet.PCRs[NitroPCR2App][:]...)
-	seed = append(seed, byte(n.currentEpoch))
+	seed = append(seed, byte(n.currentEpoch)) // #nosec G115 -- the epoch counter is small and only its low byte is used
 
 	// Derive key using HKDF
 	hkdfReader := hkdf.New(sha256.New, seed, []byte("nitro_enclave_salt"), []byte("nitro_key_derivation"))
@@ -1007,7 +1007,7 @@ func (n *NitroEnclaveServiceImpl) simulateEnclaveScoring(request *ScoringRequest
 func (n *NitroEnclaveServiceImpl) computeSigningPayload(requestID string, score uint32, status string, inputHash []byte) []byte {
 	h := sha256.New()
 	h.Write([]byte(requestID))
-	h.Write([]byte{byte(score >> 24), byte(score >> 16), byte(score >> 8), byte(score)})
+	h.Write([]byte{byte(score >> 24), byte(score >> 16), byte(score >> 8), byte(score)}) // #nosec G115 -- each shift extracts one byte of a uint32 score written in big-endian order
 	h.Write([]byte(status))
 	h.Write(inputHash)
 	h.Write(n.pcrSet.PCRs[NitroPCR0EIF][:])

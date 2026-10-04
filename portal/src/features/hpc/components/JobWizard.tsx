@@ -181,7 +181,7 @@ function WizardProgress({ currentStep }: { currentStep: string }) {
 
 function TemplateStep() {
   const { selectedTemplate, selectTemplate } = useWizardStore();
-  const { templates, isLoading } = useWorkloadTemplates();
+  const { templates, isLoading, error } = useWorkloadTemplates();
 
   if (isLoading) {
     return <div className="text-center text-muted-foreground">Loading templates...</div>;
@@ -193,6 +193,20 @@ function TemplateStep() {
       <p className="mt-1 text-sm text-muted-foreground">
         Choose a workload template or create a custom job
       </p>
+
+      {/* Surface the missing-capability reason instead of silently degrading to
+          a list containing only "Custom Workload", which reads as though that
+          were the entire catalogue. TemplateBrowser already reports this; the
+          wizard was discarding `error`. */}
+      {error && (
+        <div
+          role="alert"
+          className="mt-4 rounded-md border border-destructive/40 bg-destructive/10 p-3 text-sm text-destructive"
+        >
+          <p className="font-medium">Template catalogue unavailable</p>
+          <p className="mt-1">Error loading templates: {error.message}</p>
+        </div>
+      )}
 
       <div className="mt-6 space-y-3">
         {templates.map((template) => (

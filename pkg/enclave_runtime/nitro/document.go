@@ -546,7 +546,8 @@ func GetTimestamp(doc *AttestationDocument) time.Time {
 	if doc == nil || doc.Payload == nil {
 		return time.Time{}
 	}
-	return time.UnixMilli(int64(doc.Payload.Timestamp)) //nolint:gosec // timestamp won't overflow int64 in practice
+	// #nosec G115 -- CBOR timestamps are non-negative milliseconds and fit in int64
+	return time.UnixMilli(int64(doc.Payload.Timestamp)) // #nosec G115 -- timestamp won't overflow int64 in practice
 }
 
 // =============================================================================
@@ -654,7 +655,8 @@ func (r *cborReader) readLength(info int) (int, error) {
 		if err != nil {
 			return 0, err
 		}
-		return int(binary.BigEndian.Uint64(data)), nil //nolint:gosec // CBOR length won't exceed int in practice
+		// #nosec G115 -- the CBOR length is bounded by the enclosing document length, which fits in int
+		return int(binary.BigEndian.Uint64(data)), nil // #nosec G115 -- CBOR length won't exceed int in practice
 	default:
 		return 0, ErrCBORDecodeError
 	}
@@ -751,7 +753,8 @@ func (r *cborReader) readUint64() (uint64, error) {
 	if err != nil {
 		return 0, err
 	}
-	return uint64(length), nil //nolint:gosec // length is non-negative from readLength
+	// #nosec G115 -- length is produced by readLength and is validated non-negative before this conversion
+	return uint64(length), nil // #nosec G115 -- length is non-negative from readLength
 }
 
 func (r *cborReader) readInt() (int, error) {
@@ -899,22 +902,22 @@ func (w *cborWriter) bytes() []byte {
 
 func (w *cborWriter) writeHeader(majorType int, value int) {
 	if value < 24 {
-		w.buf.WriteByte(byte(majorType<<5) | byte(value))
+		w.buf.WriteByte(byte(majorType<<5) | byte(value)) // #nosec G115 -- the enclosing if/else chain range-checks value before it is OR-ed into the CBOR additional-info byte
 	} else if value <= 0xff {
-		w.buf.WriteByte(byte(majorType<<5) | CBORAdditionalInfo1Byte)
+		w.buf.WriteByte(byte(majorType<<5) | CBORAdditionalInfo1Byte) // #nosec G115 -- the enclosing if/else chain range-checks value (<= 0xff) before this additional-info byte is written
 		w.buf.WriteByte(byte(value))
 	} else if value <= 0xffff {
-		w.buf.WriteByte(byte(majorType<<5) | CBORAdditionalInfo2Bytes)
+		w.buf.WriteByte(byte(majorType<<5) | CBORAdditionalInfo2Bytes) // #nosec G115 -- the enclosing if/else chain range-checks value (<= 0xffff) before this additional-info byte is written
 		var b [2]byte
 		binary.BigEndian.PutUint16(b[:], uint16(value))
 		w.buf.Write(b[:])
 	} else if value <= 0xffffffff {
-		w.buf.WriteByte(byte(majorType<<5) | CBORAdditionalInfo4Bytes)
+		w.buf.WriteByte(byte(majorType<<5) | CBORAdditionalInfo4Bytes) // #nosec G115 -- the enclosing if/else chain range-checks value (<= 0xffffffff) before this additional-info byte is written
 		var b [4]byte
 		binary.BigEndian.PutUint32(b[:], uint32(value))
 		w.buf.Write(b[:])
 	} else {
-		w.buf.WriteByte(byte(majorType<<5) | CBORAdditionalInfo8Bytes)
+		w.buf.WriteByte(byte(majorType<<5) | CBORAdditionalInfo8Bytes) // #nosec G115 -- the 8-byte branch of the CBOR writer, guarded by the same if/else chain, writes the low bits of the length
 		var b [8]byte
 		binary.BigEndian.PutUint64(b[:], uint64(value))
 		w.buf.Write(b[:])

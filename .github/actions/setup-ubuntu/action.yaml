@@ -19,7 +19,7 @@ runs:
         sudo apt-get update
         sudo apt-get install -y make direnv unzip lz4 wget curl npm jq pv coreutils libudev-dev build-essential gcc
     - name: Setup npm
-      uses: actions/setup-node@v4
+      uses: actions/setup-node@v6
       with:
         node-version: 18
     - name: Detect required Go version
@@ -31,7 +31,7 @@ runs:
             exit 1
         fi
         echo "GOVERSION=${toolchain}" >> $GITHUB_ENV
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v6
       with:
         go-version: "${{ env.GOVERSION }}"
         check-latest: true

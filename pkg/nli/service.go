@@ -161,7 +161,7 @@ func NewServiceWithRedis(ctx context.Context, config Config, logger zerolog.Logg
 	if config.DistributedRateLimiter.Enabled {
 		rateLimiter, err = NewDistributedRateLimiter(ctx, config.DistributedRateLimiter, logger)
 		if err != nil {
-			sessionStore.Close()
+			_ = sessionStore.Close()
 			return nil, err
 		}
 	}

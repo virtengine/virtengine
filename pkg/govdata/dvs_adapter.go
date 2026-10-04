@@ -643,7 +643,7 @@ func loadDVSConfigFromEnv(_ AdapterConfig) (DVSConfig, bool, error) {
 
 	if dvsConfig.AuditEnabled {
 		log.Printf("[DVS] Loaded configuration for organisation %s in %s environment",
-			dvsConfig.OrganisationID, dvsConfig.Environment)
+			sanitizeLogValue(dvsConfig.OrganisationID), sanitizeLogValue(dvsConfig.Environment))
 	}
 
 	return dvsConfig, true, nil

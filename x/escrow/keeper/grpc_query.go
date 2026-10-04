@@ -61,7 +61,7 @@ func (k Querier) Accounts(c context.Context, req *v1.QueryAccountsRequest) (*v1.
 			return nil, status.Error(codes.InvalidArgument, "invalid state value")
 		}
 
-		states = append(states, byte(stateVal))
+		states = append(states, byte(stateVal)) // #nosec G115 -- fixed-width big-endian encoding: byte(stateVal) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	} else {
 		// request does not have a pagination set. Start from active store
 		states = append(states, []byte{byte(types.StateOpen), byte(types.StateClosed), byte(types.StateOverdrawn)}...)
@@ -173,7 +173,7 @@ func (k Querier) Payments(c context.Context, req *v1.QueryPaymentsRequest) (*v1.
 			return nil, status.Error(codes.InvalidArgument, "invalid state value")
 		}
 
-		states = append(states, byte(stateVal))
+		states = append(states, byte(stateVal)) // #nosec G115 -- fixed-width big-endian encoding: byte(stateVal) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	} else {
 		// request does not have a pagination set. Start from active store
 		states = append(states, []byte{byte(types.StateOpen), byte(types.StateClosed), byte(types.StateOverdrawn)}...)

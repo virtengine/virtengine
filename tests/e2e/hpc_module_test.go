@@ -228,9 +228,9 @@ func (m *MockHPCAuditLog) GetEntriesForEntity(entityType, entityID string) []hpc
 // =============================================================================
 
 func TestHPCModuleE2E(t *testing.T) {
-	suite.Run(t, &HPCModuleE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &HPCModuleE2ETestSuite{}),
-	})
+	s := &HPCModuleE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 func (s *HPCModuleE2ETestSuite) SetupSuite() {

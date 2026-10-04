@@ -60,9 +60,9 @@ type LifecycleEvent struct {
 }
 
 func TestHPCFlowE2E(t *testing.T) {
-	suite.Run(t, &HPCFlowE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &HPCFlowE2ETestSuite{}),
-	})
+	s := &HPCFlowE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 func (s *HPCFlowE2ETestSuite) SetupSuite() {

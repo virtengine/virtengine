@@ -71,7 +71,7 @@ func (sdl *v2_1) buildGroups() error {
 				res.Endpoints = expose.GetEndpoints()
 
 				var resID uint32
-				if ln := uint32(len(group.dgroup.Resources)); ln > 0 { // nolint: gosec
+				if ln := uint32(len(group.dgroup.Resources)); ln > 0 { /* #nosec G115 -- len(group.dgroup.Resources) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate */ //nolint:gosec
 					resID = ln + 1
 				} else {
 					resID = 1

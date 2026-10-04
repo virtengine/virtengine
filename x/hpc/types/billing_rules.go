@@ -321,7 +321,17 @@ func NewHPCBillingCalculator(rules HPCBillingRules) *HPCBillingCalculator {
 	return &HPCBillingCalculator{Rules: rules}
 }
 
-// CalculateBillableAmount calculates the billable amount for given metrics
+// CalculateBillableAmount calculates the billable amount for given metrics.
+//
+// Reachability: as of develop tip 33efa91e this function is only reached from
+// the keeper billing/settlement entry points (CalculateJobBilling,
+// calculateBillingFromJobTiming, CalculateInterimBilling, CreateCorrectionRecord),
+// none of which are wired to a Msg handler or to Begin/EndBlock. It is therefore
+// unreachable from consensus today and no live state depends on its output. The
+// EndBlocker/msg wiring is deliberately out of scope here: wire it only after
+// this function is panic-free (it used to panic whenever two or more cost
+// components were non-zero), which is what the
+// TestCalculateBillableAmountSubtotalDoesNotPanicOnSharedDenom regression pins.
 func (c *HPCBillingCalculator) CalculateBillableAmount(
 	metrics *HPCDetailedMetrics,
 	appliedDiscounts []AppliedDiscount,
@@ -375,22 +385,32 @@ func (c *HPCBillingCalculator) CalculateBillableAmount(
 	networkCost := networkGB.Mul(c.Rules.ResourceRates.NetworkGBRate.Amount)
 	breakdown.NetworkCost = sdk.NewCoin(denom, networkCost.TruncateInt())
 
-	// Calculate subtotal
-	subtotal := sdk.NewCoins(
+	// Calculate subtotal by summing the positive cost components.
+	//
+	// All six components share the billing denom, so they must NOT be handed to
+	// sdk.NewCoins as a set: it panics with "duplicate denomination" as soon as
+	// two of them are non-zero. Sum the amounts directly and materialise the
+	// single consolidated coin instead. An all-zero subtotal stays an empty
+	// Coin set, matching the previous behaviour.
+	components := [...]sdk.Coin{
 		breakdown.CPUCost,
 		breakdown.MemoryCost,
 		breakdown.GPUCost,
 		breakdown.NodeCost,
 		breakdown.StorageCost,
 		breakdown.NetworkCost,
-	)
+	}
+	subtotalAmount := sdkmath.ZeroInt()
+	for _, component := range components {
+		if component.IsPositive() {
+			subtotalAmount = subtotalAmount.Add(component.Amount)
+		}
+	}
 
 	// Consolidate coins with same denom
 	consolidatedSubtotal := sdk.NewCoins()
-	for _, coin := range subtotal {
-		if coin.IsPositive() {
-			consolidatedSubtotal = consolidatedSubtotal.Add(coin)
-		}
+	if subtotalAmount.IsPositive() {
+		consolidatedSubtotal = sdk.NewCoins(sdk.NewCoin(denom, subtotalAmount))
 	}
 	breakdown.Subtotal = consolidatedSubtotal
 

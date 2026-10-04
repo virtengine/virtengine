@@ -6,7 +6,7 @@ from virtengine.oracle.v1 import prices_pb2 as virtengine_dot_oracle_dot_v1_dot_
 from virtengine.oracle.v1 import query_pb2 as virtengine_dot_oracle_dot_v1_dot_query__pb2
 
 
-class QueryStub(object):
+class QueryStub:
     """Query defines the gRPC querier service of the oracle package.
     """
 
@@ -38,7 +38,7 @@ class QueryStub(object):
                 _registered_method=True)
 
 
-class QueryServicer(object):
+class QueryServicer:
     """Query defines the gRPC querier service of the oracle package.
     """
 
@@ -101,7 +101,7 @@ def add_QueryServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Query(object):
+class Query:
     """Query defines the gRPC querier service of the oracle package.
     """
 

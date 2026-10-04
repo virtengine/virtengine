@@ -106,7 +106,7 @@ describe("SDL", () => {
         endpoints: { $set: endpoint },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(new SdlValidationError(
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(new SdlValidationError(
         `Field "${endpointName}" at "/endpoints" doesn't satisfy any of the allowed patterns: ^[a-z]+[-_0-9a-z]+$.`,
       ));
     });
@@ -120,7 +120,7 @@ describe("SDL", () => {
         endpoints: { $set: endpoint },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(new SdlValidationError(`Missing required field: "kind" at "/endpoints/${endpointName}".`));
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(new SdlValidationError(`Missing required field: "kind" at "/endpoints/${endpointName}".`));
     });
 
     it("should throw provided invalid endpoint kind", () => {
@@ -135,7 +135,7 @@ describe("SDL", () => {
         endpoints: { $set: endpoint },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(
         new SdlValidationError(`"kind" at "/endpoints/${endpointName}" should be one of: ip.`),
       );
     });
@@ -151,7 +151,7 @@ describe("SDL", () => {
         endpoints: { $set: endpoint },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(new SdlValidationError(`Endpoint "${endpointName}" declared but never used.`));
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(new SdlValidationError(`Endpoint "${endpointName}" declared but never used.`));
     });
   });
 
@@ -213,7 +213,7 @@ describe("SDL", () => {
 
         expect(() => {
           SDL.fromString(yml, "beta3", "sandbox");
-        }).toThrowError(new SdlValidationError(`Missing required field: "${field}" at "/services/web/credentials".`));
+        }).toThrow(new SdlValidationError(`Missing required field: "${field}" at "/services/web/credentials".`));
       });
 
       it.each(fields)("should throw an error when credentials \"%s\" is empty", (field) => {
@@ -224,7 +224,7 @@ describe("SDL", () => {
 
         expect(() => {
           SDL.fromString(yml, "beta3", "sandbox");
-        }).toThrowError(new RegExp(`"${field}" at "/services/web/credentials" must be at least \\d+ characters long`));
+        }).toThrow(new RegExp(`"${field}" at "/services/web/credentials" must be at least \\d+ characters long`));
       });
     });
   });
@@ -235,7 +235,7 @@ describe("SDL", () => {
         deployment: { $unset: ["web"] },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(new SdlValidationError("Service \"web\" is not defined at \"/deployment\" section."));
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(new SdlValidationError("Service \"web\" is not defined at \"/deployment\" section."));
     });
 
     it("should throw an error when deployment is not defined in profile placement", () => {
@@ -243,7 +243,7 @@ describe("SDL", () => {
         "profiles.placement": { $unset: ["dcloud"] },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(
         new SdlValidationError("The placement \"dcloud\" is not defined in the \"placement\" section."),
       );
     });
@@ -253,7 +253,7 @@ describe("SDL", () => {
         "profiles.compute": { $unset: ["web"] },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(
         new SdlValidationError("The compute requirements for the \"web\" profile are not defined in the \"compute\" section."),
       );
     });
@@ -265,7 +265,7 @@ describe("SDL", () => {
         "services.web.params": { $set: { storage: { data: { mount: "/mnt/data", readOnly: false } } } },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(
         new SdlValidationError("Service \"web\" references non-existing compute volume \"data\"."),
       );
     });
@@ -276,7 +276,7 @@ describe("SDL", () => {
         "profiles.compute.web.resources.storage": { $set: { name: "data", size: "1Gi" } },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(
         new SdlValidationError(`Invalid format: "mount" at "/services/web/params/storage/data" does not match pattern "^/"`),
       );
     });
@@ -299,7 +299,7 @@ describe("SDL", () => {
         },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(new SdlValidationError("Multiple root ephemeral storages are not allowed."));
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(new SdlValidationError("Multiple root ephemeral storages are not allowed."));
     });
 
     it("should throw an error when mount is used by multiple volumes", () => {
@@ -313,7 +313,7 @@ describe("SDL", () => {
         },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(new SdlValidationError("Mount \"/\" already in use by volume \"data\"."));
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(new SdlValidationError("Mount \"/\" already in use by volume \"data\"."));
     });
 
     it("should require a service storage mount if volume is persistent", () => {
@@ -324,7 +324,7 @@ describe("SDL", () => {
         "profiles.compute.web.resources.storage": { $set: { name: "data", size: "1Gi", attributes: { persistent: true } } },
       });
 
-      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrowError(
+      expect(() => SDL.fromString(yml, "beta3", "sandbox")).toThrow(
         new SdlValidationError("Persistent storage \"data\" requires a mount path in /services/web/params/storage/data/mount."),
       );
     });
@@ -333,7 +333,7 @@ describe("SDL", () => {
       const yml = createSdlJson({
         "profiles.compute.web.resources.storage": { $set: { name: "data", size: "1Gi", attributes: { class: "ram", persistent: true } } },
       });
-      expect(() => new SDL(yml, "beta3", "sandbox")).toThrowError(
+      expect(() => new SDL(yml, "beta3", "sandbox")).toThrow(
         new SdlValidationError("\"ram\" storage at \"/profiles/compute/web/resources/storage\" cannot be persistent"),
       );
     });
@@ -342,7 +342,7 @@ describe("SDL", () => {
       const yml = createSdlJson({
         "profiles.compute.web.resources.storage": { $set: { name: "data" } },
       });
-      expect(() => new SDL(yml, "beta3", "sandbox")).toThrowError(new SdlValidationError("Missing required field: \"size\" at \"/profiles/compute/web/resources/storage\"."));
+      expect(() => new SDL(yml, "beta3", "sandbox")).toThrow(new SdlValidationError("Missing required field: \"size\" at \"/profiles/compute/web/resources/storage\"."));
     });
   });
 
@@ -352,7 +352,7 @@ describe("SDL", () => {
         "profiles.compute.web.resources.gpu": { $set: {} },
       });
 
-      expect(() => new SDL(sdlJson, "beta3", "sandbox")).toThrowError(new SdlValidationError("Missing required field: \"units\" at \"/profiles/compute/web/resources/gpu\"."));
+      expect(() => new SDL(sdlJson, "beta3", "sandbox")).toThrow(new SdlValidationError("Missing required field: \"units\" at \"/profiles/compute/web/resources/gpu\"."));
     });
 
     it("should throw an error when gpu units > 0 and attributes is not defined", () => {
@@ -360,7 +360,7 @@ describe("SDL", () => {
         "profiles.compute.web.resources.gpu": { $set: { units: 1 } },
       });
 
-      expect(() => new SDL(sdlJson, "beta3", "sandbox")).toThrowError(new SdlValidationError("GPU must have attributes if units is not 0."));
+      expect(() => new SDL(sdlJson, "beta3", "sandbox")).toThrow(new SdlValidationError("GPU must have attributes if units is not 0."));
     });
 
     it("should throw an error when gpu units is 0 and attributes is defined", () => {
@@ -368,7 +368,7 @@ describe("SDL", () => {
         "profiles.compute.web.resources.gpu": { $set: { units: 0, attributes: {} } },
       });
 
-      expect(() => new SDL(sdlJson, "beta3", "sandbox")).toThrowError(new SdlValidationError("GPU must not have attributes if units is 0."));
+      expect(() => new SDL(sdlJson, "beta3", "sandbox")).toThrow(new SdlValidationError("GPU must not have attributes if units is 0."));
     });
 
     it("should throw an error when gpu units > 0 and attributes vendor is not supported", () => {
@@ -385,7 +385,7 @@ describe("SDL", () => {
         },
       });
 
-      expect(() => new SDL(sdlJson, "beta3", "sandbox")).toThrowError(
+      expect(() => new SDL(sdlJson, "beta3", "sandbox")).toThrow(
         new SdlValidationError("\"nvidia\" at \"/profiles/compute/web/resources/gpu/attributes/vendor\" should be array."),
       );
     });
@@ -404,7 +404,7 @@ describe("SDL", () => {
         },
       });
 
-      expect(() => new SDL(sdlJson, "beta3", "sandbox")).toThrowError(
+      expect(() => new SDL(sdlJson, "beta3", "sandbox")).toThrow(
         new SdlValidationError("\"interface\" at \"/profiles/compute/web/resources/gpu/attributes/vendor/nvidia/0\" should be one of: pcie, sxm."),
       );
     });

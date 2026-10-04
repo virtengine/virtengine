@@ -210,6 +210,13 @@ type WaldurIngestWorkerConfig struct {
 
 	// OnlyActiveOfferings only ingests Active state offerings.
 	OnlyActiveOfferings bool
+
+	// WaldurInstanceID identifies the source Waldur instance for snapshots.
+	WaldurInstanceID string
+
+	// UseSnapshotIngest routes creates and updates through the canonical
+	// signed-snapshot path when the submitter supports it.
+	UseSnapshotIngest bool
 }
 
 // DefaultWaldurIngestWorkerConfig returns sensible defaults.
@@ -252,9 +259,12 @@ type WaldurIngestWorker struct {
 	cfg         WaldurIngestWorkerConfig
 	marketplace *waldur.MarketplaceClient
 	submitter   OfferingSubmitter
-	stateStore  *WaldurIngestStateStore
-	state       *WaldurIngestState
-	rateLimiter *rate.Limiter
+	// snapshotSubmitter optionally routes creates and updates through the
+	// canonical signed-snapshot path (ADR-010).
+	snapshotSubmitter SnapshotIngestSubmitter
+	stateStore        *WaldurIngestStateStore
+	state             *WaldurIngestState
+	rateLimiter       *rate.Limiter
 
 	mu          sync.RWMutex
 	running     bool
@@ -315,7 +325,9 @@ func NewWaldurIngestWorkerWithLogger(
 	if marketplaceClient == nil {
 		return nil, fmt.Errorf("marketplace client is required")
 	}
-	if submitter == nil {
+	// The legacy submitter may be omitted when snapshot ingestion is used;
+	// legacy create/update/deprecate paths require it.
+	if submitter == nil && !cfg.UseSnapshotIngest {
 		return nil, fmt.Errorf("offering submitter is required")
 	}
 
@@ -343,6 +355,15 @@ func NewWaldurIngestWorkerWithLogger(
 		auditLogger: auditLogger,
 		promMetrics: &WaldurIngestPrometheusMetrics{},
 	}, nil
+}
+
+// SetSnapshotSubmitter installs the canonical snapshot submitter. When set
+// together with UseSnapshotIngest, creates and updates route through signed
+// snapshots instead of the legacy offering messages.
+func (w *WaldurIngestWorker) SetSnapshotSubmitter(submitter SnapshotIngestSubmitter) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	w.snapshotSubmitter = submitter
 }
 
 // Start starts the ingestion worker.
@@ -571,7 +592,7 @@ func (w *WaldurIngestWorker) shouldSkipOffering(o *waldur.Offering) bool {
 
 // convertToImport converts a Waldur offering to the import format.
 func (w *WaldurIngestWorker) convertToImport(o *waldur.Offering) *marketplace.WaldurOfferingImport {
-	return &marketplace.WaldurOfferingImport{
+	imp := &marketplace.WaldurOfferingImport{
 		UUID:         o.UUID,
 		Name:         o.Name,
 		Description:  o.Description,
@@ -583,6 +604,13 @@ func (w *WaldurIngestWorker) convertToImport(o *waldur.Offering) *marketplace.Wa
 		Created:      o.CreatedAt,
 		Modified:     o.CreatedAt, // Use created as modified if not available
 	}
+	if imp.InstanceID == "" {
+		imp.InstanceID = w.cfg.WaldurInstanceID
+	}
+	if imp.CustomerUUID == "" {
+		imp.CustomerUUID = w.cfg.WaldurCustomerUUID
+	}
+	return imp
 }
 
 // determineAction determines the ingestion action based on current state.
@@ -770,7 +798,19 @@ func (w *WaldurIngestWorker) ingestCreate(ctx context.Context, task *WaldurInges
 		return "", fmt.Errorf("offering data required for create")
 	}
 
+	// Canonical path: signed snapshot ingestion, idempotent by Waldur UUID.
+	if w.cfg.UseSnapshotIngest && w.snapshotSubmitter != nil {
+		offeringID, _, err := w.snapshotSubmitter.IngestSnapshot(ctx, task.Offering)
+		if err != nil {
+			return "", fmt.Errorf("snapshot ingest: %w", err)
+		}
+		return offeringID, nil
+	}
+
 	// Validate provider VEID if required
+	if w.submitter == nil {
+		return "", fmt.Errorf("offering submitter is required for legacy ingest")
+	}
 	if w.cfg.IngestConfig.MinIdentityScore > 0 {
 		if err := w.submitter.ValidateProviderVEID(ctx, w.cfg.ProviderAddress, w.cfg.IngestConfig.MinIdentityScore); err != nil {
 			return "", fmt.Errorf("provider VEID validation failed: %w", err)
@@ -812,6 +852,18 @@ func (w *WaldurIngestWorker) ingestUpdate(ctx context.Context, task *WaldurInges
 		return "", fmt.Errorf("offering data required for update")
 	}
 
+	// Canonical path: the chain upserts by Waldur UUID.
+	if w.cfg.UseSnapshotIngest && w.snapshotSubmitter != nil {
+		offeringID, _, err := w.snapshotSubmitter.IngestSnapshot(ctx, task.Offering)
+		if err != nil {
+			return "", fmt.Errorf("snapshot ingest: %w", err)
+		}
+		if offeringID == "" {
+			offeringID = record.ChainOfferingID
+		}
+		return offeringID, nil
+	}
+
 	// Convert to on-chain offering
 	offering := task.Offering.ToOffering(w.cfg.ProviderAddress, record.ChainVersion, w.cfg.IngestConfig)
 
@@ -828,6 +880,22 @@ func (w *WaldurIngestWorker) ingestDeprecate(ctx context.Context, task *WaldurIn
 	record := w.state.GetRecord(task.WaldurUUID)
 	if record == nil || record.ChainOfferingID == "" {
 		return nil // Nothing to deprecate
+	}
+
+	// Canonical path: an Archived snapshot transitions the listing to
+	// terminated on-chain.
+	if w.cfg.UseSnapshotIngest && w.snapshotSubmitter != nil && task.Offering != nil {
+		archived := *task.Offering
+		archived.State = "Archived"
+		if _, _, err := w.snapshotSubmitter.IngestSnapshot(ctx, &archived); err != nil {
+			return fmt.Errorf("snapshot deprecate: %w", err)
+		}
+		w.state.MarkDeprecated(task.WaldurUUID)
+		return nil
+	}
+
+	if w.submitter == nil {
+		return fmt.Errorf("offering submitter is required for legacy deprecate")
 	}
 
 	if err := w.submitter.DeprecateOffering(ctx, record.ChainOfferingID); err != nil {

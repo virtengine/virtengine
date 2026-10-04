@@ -35,15 +35,32 @@ type VEIDGatingRequirements struct {
 }
 
 // DefaultVEIDGatingRequirements returns default VEID gating requirements.
-// By default, no gating is enforced (all values set to minimum).
+// By default, no gating is enforced: every field is at its minimum, so
+// isZeroRequirements reports true and the order path skips the check entirely.
+//
+// RequireUnlockedIdentity is deliberately false here. A non-zero default would
+// make every order on the chain depend on identity state, which is the blanket
+// identity gating the protocol forbids; a listing must opt in explicitly.
 func DefaultVEIDGatingRequirements() VEIDGatingRequirements {
 	return VEIDGatingRequirements{
 		MinCustomerScore:        0,
 		MinCustomerTier:         veidtypes.TierUnverified,
 		RequiredScopes:          nil,
 		RequireVerifiedStatus:   false,
-		RequireUnlockedIdentity: true,
+		RequireUnlockedIdentity: false,
 	}
+}
+
+// IsZero reports whether the requirements impose no identity obligation at all.
+// RequireUnlockedIdentity is part of the answer: a requirement that only demands
+// an unlocked identity still constrains the buyer, and must never be treated as
+// "no requirements".
+func (r VEIDGatingRequirements) IsZero() bool {
+	return r.MinCustomerScore == 0 &&
+		r.MinCustomerTier <= veidtypes.TierUnverified &&
+		len(r.RequiredScopes) == 0 &&
+		!r.RequireVerifiedStatus &&
+		!r.RequireUnlockedIdentity
 }
 
 // VEIDGatingResult represents the result of a VEID gating check.

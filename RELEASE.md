@@ -175,6 +175,7 @@ Those claims must be backed by checked-in evidence, not inherited from older pro
 ## Related Documentation
 
 - [README.md](README.md)
+- [docs/RELEASE_PLAN.md](docs/RELEASE_PLAN.md) — first-release readiness assessment, defect list and gated checklist (a plan, not policy; nothing in it authorizes a tag)
 - [docs/COMPATIBILITY.md](docs/COMPATIBILITY.md)
 - [VERIFICATION.md](VERIFICATION.md)
 - [_docs/version-control.md](_docs/version-control.md)

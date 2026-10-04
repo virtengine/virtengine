@@ -206,6 +206,7 @@ module "iam" {
 
 # WAF for API Gateway protection
 resource "aws_wafv2_web_acl" "api" {
+  #checkov:skip=CKV2_AWS_31:KNOWN GAP, real defect carried deliberately: WAF has no logging configuration, so blocked requests are not visible for incident response. Real fix is a logging_config block | review-by 2026-11-01
   name        = "${local.name_prefix}-api-waf-${local.environment}"
   description = "WAF for VirtEngine API endpoints"
   scope       = "REGIONAL"

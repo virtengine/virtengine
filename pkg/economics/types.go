@@ -46,10 +46,17 @@ type TokenomicsParams struct {
 
 // DefaultTokenomicsParams returns sensible default parameters.
 func DefaultTokenomicsParams() TokenomicsParams {
+	const (
+		// initialSupply is 1B tokens at 6 decimals, in the smallest unit.
+		initialSupply = 1_000_000_000_000_000
+		// targetStakingRatioBPS is the ratio the defaults below are meant to
+		// express: 67% of the supply staked.
+		targetStakingRatioBPS = 6700
+	)
 	return TokenomicsParams{
-		InitialSupply:         big.NewInt(1_000_000_000_000_000),  // 1B tokens with 6 decimals
+		InitialSupply:         big.NewInt(initialSupply),          // 1B tokens with 6 decimals
 		MaxSupply:             big.NewInt(10_000_000_000_000_000), // 10B max
-		CurrentSupply:         big.NewInt(1_000_000_000_000_000),
+		CurrentSupply:         big.NewInt(initialSupply),
 		CirculatingSupply:     big.NewInt(500_000_000_000_000),
 		LockedSupply:          big.NewInt(500_000_000_000_000),
 		BurnedSupply:          big.NewInt(0),
@@ -57,20 +64,39 @@ func DefaultTokenomicsParams() TokenomicsParams {
 		TargetInflationBPS:    700,
 		MinInflationBPS:       100,  // 1%
 		MaxInflationBPS:       2000, // 20%
-		StakingRatioBPS:       6700, // 67%
-		TargetStakingRatioBPS: 6700,
-		TotalStaked:           big.NewInt(335_000_000_000_000),
-		UnbondingPeriodDays:   21,
-		BaseRewardPerBlock:    1000000,     // 1 token per block
-		VEIDRewardPool:        10000000000, // 10k tokens
-		IdentityNetworkPool:   5000000000,  // 5k tokens
-		BlocksPerYear:         6_311_520,   // ~5s blocks
-		DefaultTakeRateBPS:    400,         // 4%
-		DenomTakeRates:        map[string]int64{"uvirt": 400},
-		MinGasPrice:           100,
-		ProposalDepositMin:    big.NewInt(10_000_000_000), // 10k tokens
-		VotingPeriodDays:      14,
-		QuorumBPS:             3340, // 33.4%
+		StakingRatioBPS:       targetStakingRatioBPS,
+		TargetStakingRatioBPS: targetStakingRatioBPS,
+		// TotalStaked must be consistent with StakingRatioBPS and the supply.
+		//
+		// These were two independent literals that disagreed: StakingRatioBPS
+		// and TargetStakingRatioBPS both said 6700 (67%), while TotalStaked
+		// encoded 33.5%. Consumers that read the ratio off the supply rather
+		// than off StakingRatioBPS -- which is what the simulation engine does,
+		// via Engine.calculateStakingRatio's Staked*10000/TokenSupply -- saw
+		// 33.5% no matter what StakingRatioBPS declared. That surfaced as
+		// avg_staking_bps 3453 against the economics gate's 3500 floor.
+		//
+		// StakingRatioBPS was dead: nothing outside pkg/economics/analysis and
+		// pkg/economics/simulation reads it, so nothing caught the
+		// disagreement. Deriving the seed from the declared ratio makes the two
+		// incapable of drifting apart again.
+		//
+		// This is the SMALLEST consistent value. Raising it toward the
+		// economics gate's 3500 floor, or toward the 6700 target, changes the
+		// simulated network's staking participation and so is a tokenomics
+		// decision for an owner -- see issue #1143.
+		TotalStaked:         big.NewInt(initialSupply * targetStakingRatioBPS / 10_000),
+		UnbondingPeriodDays: 21,
+		BaseRewardPerBlock:  1000000,     // 1 token per block
+		VEIDRewardPool:      10000000000, // 10k tokens
+		IdentityNetworkPool: 5000000000,  // 5k tokens
+		BlocksPerYear:       6_311_520,   // ~5s blocks
+		DefaultTakeRateBPS:  400,         // 4%
+		DenomTakeRates:      map[string]int64{"uvirt": 400},
+		MinGasPrice:         100,
+		ProposalDepositMin:  big.NewInt(10_000_000_000), // 10k tokens
+		VotingPeriodDays:    14,
+		QuorumBPS:           3340, // 33.4%
 	}
 }
 

@@ -1,5 +1,5 @@
 ---
-project_name: node
+project_name: virtengine
 version: 2
 dist: ./.cache/goreleaser/test-bins
 before:

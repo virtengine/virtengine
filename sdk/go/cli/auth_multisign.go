@@ -389,14 +389,14 @@ func makeBatchMultisignCmd() func(cmd *cobra.Command, args []string) error {
 
 func unmarshalSignatureJSON(clientCtx client.Context, filename string) (sigs []signingtypes.SignatureV2, err error) {
 	var bytes []byte
-	if bytes, err = os.ReadFile(filename); err != nil { //nolint: gosec
+	if bytes, err = os.ReadFile(filename); err != nil { /* #nosec G304 -- filename is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call */ //nolint:gosec
 		return
 	}
 	return clientCtx.TxConfig.UnmarshalSignatureJSON(bytes)
 }
 
 func readSignaturesFromFile(ctx client.Context, filename string) (sigs []signingtypes.SignatureV2, err error) {
-	bz, err := os.ReadFile(filename) //nolint: gosec
+	bz, err := os.ReadFile(filename) /* #nosec G304 -- filename is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call */ //nolint:gosec
 	if err != nil {
 		return nil, err
 	}

@@ -459,7 +459,7 @@ func (r *SNPDerivedKeyRequester) requestSimulatedKey(rootKey int, guestFieldSele
 	h := sha256.New()
 	h.Write([]byte("virtengine-sev-snp-derived-key"))
 	//nolint:gosec // rootKey is 0 or 1 enum value
-	_ = binary.Write(h, binary.LittleEndian, uint32(rootKey))
+	_ = binary.Write(h, binary.LittleEndian, uint32(rootKey)) // #nosec G115 -- RootKeySelect is a small enum (0-3)
 	_ = binary.Write(h, binary.LittleEndian, guestFieldSelect)
 	_ = binary.Write(h, binary.LittleEndian, vmpl)
 

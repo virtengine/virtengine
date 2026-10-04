@@ -1,4 +1,4 @@
-import { QueryAllocationHistoryRequest, QueryAllocationHistoryResponse, QueryAllocationRequest, QueryAllocationResponse, QueryAllocationsByProviderRequest, QueryAllocationsByProviderResponse, QueryAvailableResourcesRequest, QueryAvailableResourcesResponse, QueryParamsRequest, QueryParamsResponse, QueryReservationByBidRequest, QueryReservationByConsumerRequest, QueryReservationByJobRequest, QueryReservationByLeaseRequest, QueryReservationByOrderRequest, QueryReservationLineageRequest, QueryReservationLineageResponse, QueryReservationRequest, QueryReservationResponse, QueryReservationsByProviderRequest, QueryReservationsResponse } from "./query.ts";
+import { QueryAllocationHistoryRequest, QueryAllocationHistoryResponse, QueryAllocationRequest, QueryAllocationResponse, QueryAllocationsByProviderRequest, QueryAllocationsByProviderResponse, QueryAvailableResourcesRequest, QueryAvailableResourcesResponse, QueryParamsRequest, QueryParamsResponse, QueryReservationByBidRequest, QueryReservationByBidResponse, QueryReservationByConsumerRequest, QueryReservationByConsumerResponse, QueryReservationByJobRequest, QueryReservationByJobResponse, QueryReservationByLeaseRequest, QueryReservationByLeaseResponse, QueryReservationByOrderRequest, QueryReservationByOrderResponse, QueryReservationLineageRequest, QueryReservationLineageResponse, QueryReservationRequest, QueryReservationResponse, QueryReservationsByProviderRequest, QueryReservationsByProviderResponse } from "./query.ts";
 
 export const Query = {
   typeName: "virtengine.resources.v1.Query",
@@ -42,42 +42,42 @@ export const Query = {
       name: "ReservationByOrder",
       httpPath: "/virtengine/resources/v1/reservation/order/{order_id}",
       input: QueryReservationByOrderRequest,
-      output: QueryReservationResponse,
+      output: QueryReservationByOrderResponse,
       get parent() { return Query; },
     },
     reservationByBid: {
       name: "ReservationByBid",
       httpPath: "/virtengine/resources/v1/reservation/bid/{bid_id}",
       input: QueryReservationByBidRequest,
-      output: QueryReservationResponse,
+      output: QueryReservationByBidResponse,
       get parent() { return Query; },
     },
     reservationByLease: {
       name: "ReservationByLease",
       httpPath: "/virtengine/resources/v1/reservation/lease/{lease_id}",
       input: QueryReservationByLeaseRequest,
-      output: QueryReservationResponse,
+      output: QueryReservationByLeaseResponse,
       get parent() { return Query; },
     },
     reservationByJob: {
       name: "ReservationByJob",
       httpPath: "/virtengine/resources/v1/reservation/job/{job_id}",
       input: QueryReservationByJobRequest,
-      output: QueryReservationResponse,
+      output: QueryReservationByJobResponse,
       get parent() { return Query; },
     },
     reservationByConsumer: {
       name: "ReservationByConsumer",
       httpPath: "/virtengine/resources/v1/reservation/consumer/{consumer_type}/{consumer_id}",
       input: QueryReservationByConsumerRequest,
-      output: QueryReservationResponse,
+      output: QueryReservationByConsumerResponse,
       get parent() { return Query; },
     },
     reservationsByProvider: {
       name: "ReservationsByProvider",
       httpPath: "/virtengine/resources/v1/reservations/provider/{provider_address}",
       input: QueryReservationsByProviderRequest,
-      output: QueryReservationsResponse,
+      output: QueryReservationsByProviderResponse,
       get parent() { return Query; },
     },
     reservationLineage: {

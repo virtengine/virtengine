@@ -1446,7 +1446,7 @@ paths:
                               type: boolean
                               title: >-
                                 direct indicates if deposited currency should be
-                                swapped to ACT (false) at time of the deposit
+                                swapped to VCC (false) at time of the deposit
                           description: Depositor stores state of a deposit.
                     description: Account stores state for an escrow account.
                 title: Account
@@ -2109,7 +2109,7 @@ paths:
                                     type: boolean
                                     title: >-
                                       direct indicates if deposited currency
-                                      should be swapped to ACT (false) at time
+                                      should be swapped to VCC (false) at time
                                       of the deposit
                                 description: Depositor stores state of a deposit.
                           description: Account stores state for an escrow account.
@@ -3239,7 +3239,7 @@ paths:
                               type: boolean
                               title: >-
                                 direct indicates if deposited currency should be
-                                swapped to ACT (false) at time of the deposit
+                                swapped to VCC (false) at time of the deposit
                           description: Depositor stores state of a deposit.
                     description: Account stores state for an escrow account.
                 title: Account
@@ -3851,7 +3851,7 @@ paths:
                                     type: boolean
                                     title: >-
                                       direct indicates if deposited currency
-                                      should be swapped to ACT (false) at time
+                                      should be swapped to VCC (false) at time
                                       of the deposit
                                 description: Depositor stores state of a deposit.
                           description: Account stores state for an escrow account.
@@ -47450,7 +47450,7 @@ definitions:
                       type: boolean
                       title: >-
                         direct indicates if deposited currency should be swapped
-                        to ACT (false) at time of the deposit
+                        to VCC (false) at time of the deposit
                   description: Depositor stores state of a deposit.
             description: Account stores state for an escrow account.
         title: Account
@@ -48041,7 +48041,7 @@ definitions:
                             type: boolean
                             title: >-
                               direct indicates if deposited currency should be
-                              swapped to ACT (false) at time of the deposit
+                              swapped to VCC (false) at time of the deposit
                         description: Depositor stores state of a deposit.
                   description: Account stores state for an escrow account.
               title: Account
@@ -48857,7 +48857,7 @@ definitions:
                   type: boolean
                   title: >-
                     direct indicates if deposited currency should be swapped to
-                    ACT (false) at time of the deposit
+                    VCC (false) at time of the deposit
               description: Depositor stores state of a deposit.
         description: Account stores state for an escrow account.
     title: Account
@@ -48981,7 +48981,7 @@ definitions:
             direct:
               type: boolean
               title: >-
-                direct indicates if deposited currency should be swapped to ACT
+                direct indicates if deposited currency should be swapped to VCC
                 (false) at time of the deposit
           description: Depositor stores state of a deposit.
     description: Account stores state for an escrow account.
@@ -49047,7 +49047,7 @@ definitions:
       direct:
         type: boolean
         title: >-
-          direct indicates if deposited currency should be swapped to ACT
+          direct indicates if deposited currency should be swapped to VCC
           (false) at time of the deposit
     description: Depositor stores state of a deposit.
   virtengine.escrow.types.v1.State:
@@ -51055,7 +51055,7 @@ definitions:
                       type: boolean
                       title: >-
                         direct indicates if deposited currency should be swapped
-                        to ACT (false) at time of the deposit
+                        to VCC (false) at time of the deposit
                   description: Depositor stores state of a deposit.
             description: Account stores state for an escrow account.
         title: Account
@@ -51548,7 +51548,7 @@ definitions:
                             type: boolean
                             title: >-
                               direct indicates if deposited currency should be
-                              swapped to ACT (false) at time of the deposit
+                              swapped to VCC (false) at time of the deposit
                         description: Depositor stores state of a deposit.
                   description: Account stores state for an escrow account.
               title: Account

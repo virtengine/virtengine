@@ -1,6 +1,6 @@
 ---
 version: 2
-project_name: node
+project_name: virtengine
 dist: ./.cache/goreleaser/main
 env:
   - GO111MODULE=on
@@ -199,7 +199,7 @@ release:
   extra_files:
     - glob: .cache/sbom/*.json
     - glob: .cache/sbom/*.sig
-    - glob: .cache/sbom/*.cert
+    - glob: .cache/sbom/*.pem
 
 # SECURITY-9C: Artifact signing with Sigstore cosign
 # Enables keyless signing using GitHub Actions OIDC tokens

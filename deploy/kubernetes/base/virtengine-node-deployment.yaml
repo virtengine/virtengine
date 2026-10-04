@@ -509,6 +509,36 @@ metadata:
   labels:
     app.kubernetes.io/name: virtengine-validator
     app.kubernetes.io/component: validator
+# ghcr.io/virtengine/virtengine-node returned NO anonymous pull token on
+# 2026-10-03 (an unauthenticated token exchange for it is refused), so the
+# node's kubelet cannot fetch this image on its own. Without the credential
+# below every validator pod sits in ImagePullBackOff from its first schedule
+# onward -- `imagePullPolicy: IfNotPresent` cannot help, the image is simply
+# unfetchable.
+#
+# NOTE this is NOT fixable by re-pinning the digest. The pin is proven correct
+# by an AUTHENTICATED pull in CI, and that proves nothing about pod
+# pullability: the cluster pulls with no credentials of its own.
+#
+# The secret VALUE is deliberately not in this repository. Provision it out of
+# band in namespace `virtengine`, exactly as `dr-tools-ghcr-pull` is provisioned
+# for the DR CronJobs (by name only, never committed), then re-apply:
+#
+#   kubectl -n virtengine create secret docker-registry virtengine-node-ghcr-pull \
+#     --docker-server=ghcr.io \
+#     --docker-username='<principal with read:packages on virtengine-node>' \
+#     --docker-password='<token>'
+#
+# This is the SAME convention as infra/kubernetes/dr/backup-cronjobs.yaml:
+# one read-only pull secret per ghcr.io/virtengine package, named
+# `<package>-ghcr-pull`, referenced by name. Both the validator and the sentry
+# run the same package, so both cite one secret rather than creating a second.
+# If your cluster already names this secret differently, change these references
+# to that name instead of creating a second secret. Use a READ-ONLY credential:
+# this Secret is mounted into unattended pods and the token outlives the
+# manifest.
+imagePullSecrets:
+  - name: virtengine-node-ghcr-pull
 ---
 apiVersion: v1
 kind: ServiceAccount
@@ -518,3 +548,7 @@ metadata:
   labels:
     app.kubernetes.io/name: virtengine-node
     app.kubernetes.io/component: sentry
+# Same package, same credential as virtengine-validator above; see the comment
+# there for the provisioning command and the naming convention.
+imagePullSecrets:
+  - name: virtengine-node-ghcr-pull

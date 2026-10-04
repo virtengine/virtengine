@@ -25,7 +25,7 @@ var (
 //	ErrInvalidRecipient     = errors.Register(ModuleName, 2616, "invalid recipient address")
 //	ErrInvalidAmount        = errors.Register(ModuleName, 2617, "invalid amount")
 //	ErrInvalidDenom         = errors.Register(ModuleName, 2618, "invalid denomination")
-//	ErrInsufficientACT      = errors.Register(ModuleName, 2619, "insufficient ACT balance")
+//	ErrInsufficientVCC      = errors.Register(ModuleName, 2619, "insufficient VCC balance")
 //	ErrInsufficientFunds    = errors.Register(ModuleName, 2620, "insufficient funds")
 //	ErrOracleUnhealthy      = errors.Register(ModuleName, 2621, "oracle is unhealthy or unavailable")
 //	ErrCircuitBreakerActive = errors.Register(ModuleName, 2622, "circuit breaker is active, mints paused")

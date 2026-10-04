@@ -32,7 +32,7 @@ export interface Depositor {
   balance:
     | DecCoin
     | undefined;
-  /** direct indicates if deposited currency should be swapped to ACT (false) at time of the deposit */
+  /** direct indicates if deposited currency should be swapped to VCC (false) at time of the deposit */
   direct: boolean;
 }
 

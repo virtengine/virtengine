@@ -47,10 +47,10 @@ jobs:
       economics_changed: ${{ steps.changes.outputs.economics }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Analyze file changes
-        uses: dorny/paths-filter@v3
+        uses: dorny/paths-filter@v4
         id: changes
         with:
           filters: |
@@ -84,30 +84,40 @@ jobs:
     name: lint
     runs-on: ubuntu-latest
     needs: analyze-changes
+    # Bound the job itself so a genuinely hung linter fails visibly and fast
+    # instead of sitting on GitHub's 360-minute default. This is a backstop,
+    # not the working budget: the linter's own --timeout below is what governs
+    # a normal run.
+    timeout-minutes: 45
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Fetch base ref for lint diff
         run: git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Enforce consensus determinism policy
         run: go run ./scripts/consensusdeterminism -root .
 
       - name: Run golangci-lint (PR diff)
-        uses: golangci/golangci-lint-action@v8
+        uses: golangci/golangci-lint-action@v9
         with:
           version: v2.13.2
-          args: --timeout=10m --new-from-rev=origin/${{ github.base_ref || 'main' }}
+          args: --timeout=30m --new-from-rev=origin/${{ github.base_ref || 'main' }}
 
   vet:
     name: vet
@@ -116,21 +126,81 @@ jobs:
     timeout-minutes: 20
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Run go vet
         env:
           GOFLAGS: "-mod=readonly"
         run: go vet ./...
+
+  # The retry wrapper is exactly the shape of thing that can rot into a vacuous
+  # pass, so its own self-test runs on every gate run - and deliberately in its
+  # OWN job rather than inside `vet`.
+  #
+  # If it lived in `vet`, a broken wrapper would fail that job at "Download
+  # dependencies" and the self-tests would never execute, so the one job whose
+  # purpose is to diagnose the wrapper could not run whenever the wrapper was
+  # actually broken. A wrapper that is only self-tested after it has already
+  # worked is not a self-test. This job has no `needs:` and needs no Go
+  # toolchain at all (the tests plant a `go` stub on PATH), so it stays cheap and
+  # always reports.
+  go-mod-download-selftest:
+    name: go-mod-download selftest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: go-mod-download self-tests
+        run: |
+          rc=0
+          node --test scripts/ci/go-mod-download.test.mjs > go-mod-download-tests.log 2>&1 || rc=$?
+          # Always print the log, pass or fail: `set -e` would otherwise abort
+          # here and throw away the only evidence of why a self-test failed.
+          cat go-mod-download-tests.log
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::go-mod-download self-tests failed (exit $rc)"
+            exit "$rc"
+          fi
+          # A test run that discovers no tests also exits 0, so assert a positive
+          # count rather than trusting the exit status alone.
+          count=$(grep -oE 'tests[[:space:]]+[0-9]+' go-mod-download-tests.log | head -1 | grep -oE '[0-9]+')
+          if [ -z "${count:-}" ] || [ "$count" -eq 0 ]; then
+            echo "::error::go-mod-download self-tests did not run"
+            exit 1
+          fi
+          echo "go-mod-download self-tests: ${count} test(s) passed"
+
+      # The wrapper this job protects is executed with `bash` on every runner, so
+      # its line endings must survive the checkout intact. A CRLF blob parses as
+      # a syntax error on ubuntu (`case ... in $'\r'`) and turns this whole gate
+      # red; fail loudly here instead of as a mystery failure in five other jobs.
+      - name: The wrapper must be LF-only
+        run: |
+          if grep -qU $'\r' scripts/ci/go-mod-download.sh; then
+            echo "::error::scripts/ci/go-mod-download.sh contains CRLF; on ubuntu bash this is a syntax error"
+            exit 1
+          fi
+          echo "go-mod-download.sh is LF-only"
 
   build:
     name: build
@@ -138,16 +208,21 @@ jobs:
     needs: [lint, vet]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Build binaries
         run: go build -mod=readonly -v ./cmd/...
@@ -158,16 +233,21 @@ jobs:
     needs: [lint, vet]
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
+
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Run core tests
         run: |
@@ -185,20 +265,80 @@ jobs:
             ./x/enclave/... \
             ./x/encryption/...
 
+  infra-contracts:
+    name: infra-contracts
+    runs-on: ubuntu-latest
+    needs: analyze-changes
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v5
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: infra/tests/go.sum
+
+      - name: Run offline infra + workflow contract tests
+        # infra/tests is a separate Go module, so the root module's test-go job
+        # (an explicit ./pkg/... + ./x/... allowlist) cannot reach it. Without
+        # this job the workflow/terraform contract tests pass in CI no matter
+        # what they assert. The script fails closed: every contract test it
+        # names must report PASS.
+        run: ./scripts/test-infra-contracts.sh
+
   agents-docs:
     name: agents-docs
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: "20"
 
       - name: Validate AGENTS documentation
         run: node scripts/validate-agents-docs.mjs
+
+  deploy-env-policies:
+    name: deploy-env-policies
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          # The census reads the real remote branch list, so it needs a real
+          # remote-tracking view rather than a depth-1 clone.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Falsify the deploy-environment policy guard
+        # Runs the offline fixture suite first: if the guard's own assertions
+        # are broken the gate must say so rather than reporting a verdict from a
+        # classifier that no longer works.
+        run: node scripts/ci/check-deploy-env-policies.mjs --selftest
+
+      - name: Falsification suite for the deploy-environment policy guard
+        run: node scripts/ci/check-deploy-env-policies.test.mjs
+
+      - name: Check deployment environment branch policies
+        # Fails when a workflow's `environment:` cannot be reached by the refs
+        # that trigger it -- a job rejected before a runner is scheduled, which
+        # GitHub reports as `failure` with zero steps. Exit 2 (unreadable API)
+        # is deliberately NOT a pass, so a token/scope problem cannot read as a
+        # clean estate.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ci/check-deploy-env-policies.mjs
 
   economics-sim:
     name: economics-sim
@@ -207,16 +347,16 @@ jobs:
     if: needs.analyze-changes.outputs.economics_changed == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Run economics simulation suite
         run: |
@@ -230,10 +370,10 @@ jobs:
     if: needs.analyze-changes.outputs.go_changed == 'true'
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -243,6 +383,11 @@ jobs:
           go install github.com/securego/gosec/v2/cmd/gosec@${{ env.GOSEC_VERSION }}
           echo "$(go env GOPATH)/bin" >> "${GITHUB_PATH}"
 
+      - name: Install build dependencies for cgo packages
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
+
       - name: Sync dependencies
         run: |
           go mod tidy
@@ -251,7 +396,20 @@ jobs:
       - name: Run gosec
         run: |
           base_ref="${{ github.base_ref || 'main' }}"
-          git fetch origin "${base_ref}" --depth=1
+          # See supply-chain.yaml "Check dependency diff discipline": a depth-1
+          # fetch of the base ref removes the ancestry `git merge-base` needs and
+          # the three-dot diff dies with `fatal: ... no merge base` (exit 128).
+          # Here that is worse than a false red - the `|| true` on the pipeline
+          # below turns it into an EMPTY changed-file list, so gosec scans nothing
+          # and the step passes green having analysed zero packages.
+          git fetch --unshallow origin 2>/dev/null \
+            || git fetch origin "+refs/heads/*:refs/remotes/origin/*"
+          # Fail closed: never let an uncomputed diff look like "no Go changed".
+          if ! git merge-base "origin/${base_ref}" HEAD >/dev/null 2>&1; then
+            echo "::error::no merge base between origin/${base_ref} and HEAD even after a full fetch."
+            echo "::error::refusing to run gosec on an empty target set - that reports 0 findings, not clean code."
+            exit 1
+          fi
           mapfile -t changed_files < <(
             git diff --name-only "origin/${base_ref}...HEAD" -- '*.go' \
               | grep -v '_test.go' \
@@ -295,7 +453,7 @@ jobs:
     needs: analyze-changes
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -306,11 +464,32 @@ jobs:
           sudo install -m 0755 "$TOOL_DIR/gitleaks" /usr/local/bin/gitleaks
 
       - name: Fetch base ref for diff scanning
-        run: git fetch origin "${{ github.base_ref || 'main' }}" --depth=1
+        # Fetch the full base branch INTO the remote-tracking ref. The old
+        # `git fetch origin "<base>" --depth=1` only updated FETCH_HEAD, left a
+        # shallow boundary, and never moved the origin/<base> ref the next step
+        # reads — so merge-base found no common ancestor and the step died here
+        # under `set -e` with no scan at all.
+        run: git fetch --no-tags origin "+refs/heads/${{ github.base_ref || 'main' }}:refs/remotes/origin/${{ github.base_ref || 'main' }}"
 
       - name: Run gitleaks on PR diff
         run: |
-          base_sha=$(git merge-base origin/${{ github.base_ref || 'main' }} HEAD)
+          # Never let an empty base_sha through silently: fail loudly, or fall
+          # back to the pull-request base SHA (PR events) / base tip (push).
+          base_sha=""
+          if base_sha=$(git merge-base "origin/${{ github.base_ref || 'main' }}" HEAD 2>merge-base.err); then
+            echo "merge-base: ${base_sha}"
+          elif [ -n "${{ github.event.pull_request.base.sha }}" ]; then
+            echo "::warning::git merge-base failed; falling back to the pull-request base SHA"
+            if [ -s merge-base.err ]; then cat merge-base.err; fi
+            base_sha="${{ github.event.pull_request.base.sha }}"
+          else
+            echo "::warning::git merge-base failed; falling back to the base branch tip"
+            if [ -s merge-base.err ]; then cat merge-base.err; fi
+            base_sha=$(git rev-parse "origin/${{ github.base_ref || 'main' }}")
+          fi
+          rm -f merge-base.err
+          [ -n "${base_sha}" ] || { echo "::error::could not determine base SHA for secret scan"; exit 1; }
+          git rev-parse --verify --quiet "${base_sha}^{commit}" >/dev/null || { echo "::error::base SHA ${base_sha} is not present locally"; exit 1; }
           if [ -f .gitleaks.toml ]; then
             gitleaks detect --source . --config .gitleaks.toml --log-opts "${base_sha}..HEAD" --verbose --redact
           else
@@ -342,15 +521,15 @@ jobs:
     if: needs.analyze-changes.outputs.portal_changed == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -371,15 +550,15 @@ jobs:
     if: needs.analyze-changes.outputs.portal_changed == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -398,15 +577,15 @@ jobs:
     if: needs.analyze-changes.outputs.portal_changed == 'true'
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -425,6 +604,7 @@ jobs:
       - analyze-changes
       - lint
       - vet
+      - go-mod-download-selftest
       - build
       - test-go
       - agents-docs
@@ -450,6 +630,14 @@ jobs:
 
           if [ "${{ needs.vet.result }}" != "success" ]; then
             echo "::error::vet failed"
+            failed=1
+          fi
+
+          # Unconditional, unlike the change-gated checks below: the wrapper this
+          # guards protects EVERY job in this workflow, so a red here is not
+          # conditional on what the PR touched.
+          if [ "${{ needs.go-mod-download-selftest.result }}" != "success" ]; then
+            echo "::error::go-mod-download selftest failed"
             failed=1
           fi
 

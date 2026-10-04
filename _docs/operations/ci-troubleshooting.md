@@ -8,7 +8,7 @@ This guide covers common issues with GitHub Actions workflows and how to resolve
 |----------|--------------|------------|
 | standardize-yaml | `.yml` files detected | Rename to `.yaml` extension |
 | Security (CodeQL) | Default setup conflict | Disable default setup in GitHub UI |
-| Bosun: Publish | npm authentication | Configure OIDC trusted publisher |
+| npm publisher (see note) | npm authentication | Configure OIDC trusted publisher |
 
 ## Detailed Solutions
 
@@ -103,7 +103,17 @@ If using default setup, these additional scans would need separate workflows.
 
 ---
 
-### 3. Bosun: Publish Workflow Failures
+### 3. `bosun` npm Publish Workflow Failures
+
+> **SCOPE: this workflow is NOT in this repository.** The `bosun` npm package is
+> published by `virtengine/bosun/.github/workflows/publish.yaml` (`name: "Publish to npm"`).
+> This repository has no npm publisher at all — `gh workflow list` returns
+> `Publish SDKs (DISABLED - source-only)` and `Bosun: Attach PR Marker` for anything
+> publish- or bosun-shaped, and the only *executable* `npm publish` in the tree is the manual
+> `sdk/ts/package.json:39` script (`sdk/README.md:192-214` reaches the same conclusion for the
+> npm SDK). Every command below therefore carries `-R virtengine/bosun`.
+> A bare `gh workflow run bosun-publish.yaml` names a workflow that has never existed
+> in any repository (`git log --all -- .github/workflows/bosun-publish.yaml` is empty).
 
 **Symptom:**
 ```
@@ -128,9 +138,11 @@ The workflow uses npm's OIDC Trusted Publishing, which requires:
 npm view bosun
 ```
 
-If package doesn't exist, create it first:
-1. Manually publish initial version (v0.1.0) using npm token
-2. Or create package placeholder on npmjs.com
+The package already exists. `npm view bosun dist-tags` returns `{"latest": "0.43.2"}`
+across 119 versions. **Do not publish an initial version manually** — every
+registered version already exists, and a manual `v0.1.0` publish would publish a
+version *lower* than all 119 of them. If `npm view bosun` fails, that is a registry
+or auth problem on your side, not a missing package.
 
 #### Step 2: Configure Trusted Publisher on npmjs.com
 
@@ -142,15 +154,17 @@ If package doesn't exist, create it first:
 6. Configure:
    ```
    Organization: virtengine
-   Repository: virtengine
-   Workflow filename: bosun-publish.yaml
+   Repository: bosun
+   Workflow filename: publish.yaml
    Environment: npm-publish
    ```
 7. Save configuration
 
 #### Step 3: Configure GitHub Environment
 
-1. Navigate to: `https://github.com/virtengine/virtengine/settings/environments`
+1. Navigate to: `https://github.com/virtengine/bosun/settings/environments`
+   (the **bosun** repository — the environment belongs to the repo that owns the
+   workflow, not to `virtengine/virtengine`)
 2. Create environment: `npm-publish`
 3. Configure protection rules (optional but recommended):
    - Required reviewers: Add maintainers
@@ -161,15 +175,23 @@ If package doesn't exist, create it first:
 
 Trigger workflow manually:
 ```bash
-gh workflow run bosun-publish.yaml
+gh workflow run publish.yaml -R virtengine/bosun
 ```
 
 Check workflow logs for successful OIDC authentication.
 
+Both prerequisites already hold on the live repository: the `npm-publish`
+environment exists in `virtengine/bosun` (`gh api repos/virtengine/bosun/environments`
+lists `copilot`, `github-pages`, `npm-publish`) and publishing is demonstrably working —
+`bosun/package.json` declares `"version": "0.43.2"` and `npm view bosun dist-tags`
+returns the same `0.43.2`, modified 2026-09-28. So a publish failure is a regression
+from a working state, not a first-time setup task.
+
 **Debugging:**
 
 If still failing, check:
-1. **Workflow file name matches** - Must be exactly `bosun-publish.yaml`
+1. **Workflow file name matches** - Must be exactly `publish.yaml` in `virtengine/bosun`
+   (`bosun/.github/workflows/publish.yaml:22`)
 2. **Environment name matches** - Must be exactly `npm-publish`
 3. **npm package ownership** - GitHub org must be authorized
 4. **Node version** - Trusted publishing requires npm 11.5.1+ (Node 24+ includes this)
@@ -183,11 +205,14 @@ If OIDC trusted publishing is not feasible:
 3. Update workflow to use token:
    ```yaml
    - name: Publish
-     working-directory: scripts/bosun
+     working-directory: .
      run: npm publish --access public
      env:
        NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
    ```
+   Run this from the `bosun` repository. `working-directory: scripts/bosun` is wrong:
+   `scripts/bosun` is a git submodule pointing at `virtengine/bosun` (tree mode `160000`),
+   not a package directory, and the real workflow publishes from the repository root.
 4. Remove `environment: npm-publish` line
 5. Remove OIDC permission: `id-token: write`
 
@@ -224,9 +249,11 @@ actionlint
 
 ### Dry Run npm Publish
 
-Test publishing without actually publishing:
+Test publishing without actually publishing. `dry-run` is an input of
+`bosun/.github/workflows/publish.yaml:39-40`; no workflow in this repository declares
+any `dry-run` input, so the `-R` flag is load-bearing:
 ```bash
-gh workflow run bosun-publish.yaml -f dry-run=true
+gh workflow run publish.yaml -R virtengine/bosun -f dry-run=true
 ```
 
 ---
@@ -294,6 +321,49 @@ on:
 - Cache dependencies
 - Use `continue-on-error: true` for non-critical steps
 - Increase timeouts
+
+### Go Module-Proxy Transport Errors (false red, no code defect)
+
+**Symptom:** a `quality-gate` job (`vet`, `build`, `test-go`, `lint`, `economics-sim`)
+fails at the **Download dependencies** step with no vet/build/test
+diagnostic anywhere in the log:
+
+```
+go: github.com/cockroachdb/pebble@v1.1.5: read
+"https://proxy.golang.org/github.com/cockroachdb/pebble/@v/v1.1.5.zip":
+stream error: stream ID 7079; INTERNAL_ERROR; received from peer
+```
+
+**Cause:** on a cold module cache (`go mod download` must actually reach
+the network) the proxy serves zips over HTTP/2 and occasionally resets the
+stream. The failure is emitted by the HTTP/2 transport, not by the Go
+toolchain, so the tool under test never ran and the red says nothing about
+the code.
+
+**This is already handled.** Every `go mod download` in `quality-gate.yaml`
+runs through `scripts/ci/go-mod-download.sh`, which retries **only** when the
+log matches a transport signature, up to `VE_GO_MOD_DOWNLOAD_ATTEMPTS`
+(default 3, backoff `VE_GO_MOD_DOWNLOAD_BACKOFF_SECONDS` x attempt, default 5).
+
+Two properties make this safe rather than a `|| true`:
+
+- Checksum mismatches, missing `go.sum` entries, 404s and unknown revisions
+  match **no** transport signature, so they fail on the first attempt with the
+  diagnostic intact.
+- After the final attempt the script exits with `go`'s own non-zero code. It
+  cannot exit 0 for a failed download.
+
+**Do not "fix" this by** disabling vet, or adding `|| true` to the job, or
+removing the wrapper. That is precisely the vacuous-pass bug fixed in PR #1137.
+
+**Verifying the wrapper still behaves:**
+```bash
+node --test scripts/ci/go-mod-download.test.mjs   # 13 cases, no Go/network needed
+node scripts/ci/go-mod-download.e2e.mjs           # real go + fault-injecting loopback proxy
+```
+Both run in the gate: the unit tests in the dedicated `go-mod-download-selftest`
+job, which is deliberately a separate job with no `needs:` so the wrapper's
+self-test still reports when the wrapper is broken.
 
 ### Permission Errors
 

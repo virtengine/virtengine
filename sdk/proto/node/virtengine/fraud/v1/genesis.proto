@@ -48,4 +48,17 @@ message GenesisState {
     (gogoproto.jsontag) = "next_audit_log_sequence",
     (gogoproto.moretags) = "yaml:\"next_audit_log_sequence\""
   ];
+
+  // Responses contains all report responses/rebuttals
+  repeated FraudResponse responses = 7 [
+    (gogoproto.nullable) = false,
+    (gogoproto.jsontag) = "responses",
+    (gogoproto.moretags) = "yaml:\"responses\""
+  ];
+
+  // NextFraudResponseSequence is the next response sequence number
+  uint64 next_fraud_response_sequence = 8 [
+    (gogoproto.jsontag) = "next_fraud_response_sequence",
+    (gogoproto.moretags) = "yaml:\"next_fraud_response_sequence\""
+  ];
 }

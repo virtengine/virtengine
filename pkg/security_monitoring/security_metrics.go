@@ -419,7 +419,14 @@ func newSecurityMetrics() *SecurityMetrics {
 	}
 }
 
-// SecurityEventSeverity represents the severity of a security event
+// SecurityEventSeverity represents the severity of a security event.
+//
+// It is a `string` so that JSON, log output and audit-log fields keep the
+// lowercase wire values ("info"/"low"/"medium"/"high"/"critical"). That means
+// the operators <, <=, > and >= on this type are LEXICOGRAPHIC and do NOT
+// express severity ordering -- "critical" < "high" and "high" < "medium" are
+// both true. Always use the ordering helpers below (Rank/AtLeast/Above), and
+// never compare two severities directly.
 type SecurityEventSeverity string
 
 const (
@@ -429,6 +436,38 @@ const (
 	SeverityHigh     SecurityEventSeverity = "high"
 	SeverityCritical SecurityEventSeverity = "critical"
 )
+
+// severityRanks is the total order over severities, from least to most severe.
+// Rank returns -1 for an unrecognised value so that unknown severities never
+// silently compare as "more severe than" a known one.
+var severityRanks = map[SecurityEventSeverity]int{
+	SeverityInfo:     0,
+	SeverityLow:      1,
+	SeverityMedium:   2,
+	SeverityHigh:     3,
+	SeverityCritical: 4,
+}
+
+// Rank returns the ordinal severity: higher is more severe. Unknown values
+// return -1 so they rank below every known severity.
+func (s SecurityEventSeverity) Rank() int {
+	if r, ok := severityRanks[s]; ok {
+		return r
+	}
+	return -1
+}
+
+// AtLeast reports whether s is at least as severe as other. This is the
+// intended replacement for `s >= other`.
+func (s SecurityEventSeverity) AtLeast(other SecurityEventSeverity) bool {
+	return s.Rank() >= other.Rank()
+}
+
+// Above reports whether s is strictly more severe than other. This is the
+// intended replacement for `s > other`.
+func (s SecurityEventSeverity) Above(other SecurityEventSeverity) bool {
+	return s.Rank() > other.Rank()
+}
 
 // ThreatLevelValue maps threat level to numeric value
 func ThreatLevelValue(severity SecurityEventSeverity) float64 {

@@ -95,7 +95,7 @@ func readJobScript(cmd *cobra.Command) (string, error) {
 		return "", err
 	}
 	if scriptFile != "" {
-		data, err := os.ReadFile(scriptFile)
+		data, err := os.ReadFile(scriptFile) // #nosec G304 -- scriptFile is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 		if err != nil {
 			return "", fmt.Errorf("read job script file: %w", err)
 		}
@@ -154,7 +154,7 @@ func readConfigFlag(cmd *cobra.Command) (string, error) {
 }
 
 func unmarshalConfigFile(path string, out interface{}) error {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err != nil {
 		return fmt.Errorf("read config file: %w", err)
 	}

@@ -72,7 +72,7 @@ func DefaultChainIntegrationConfig() ChainIntegrationConfig {
 		Enabled:            false,
 		BroadcastMode:      "sync",
 		GasLimit:           200000,
-		GasPrice:           "0.025uakt",
+		GasPrice:           "0.025uve",
 		MaxRetries:         3,
 		RetryDelay:         time.Second * 5,
 		BatchSize:          10,

@@ -1,5 +1,5 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
-exports[`JWT Claims Validation ES256KADR36 - Valid Signature / short: ES256KADR36 - Valid Signature / short 1`] = `"rXm9UZlmWMtOblCxPQ23mo6JfdwsFgniy39r5wP6dTpBzjEFWjMy0CPDjZdRKm6iTLDXZy0HeiQLN3_d7CgWqg"`;
+exports[`JWT Claims Validation ES256KADR36 - Valid Signature / short: ES256KADR36 - Valid Signature / short 1`] = `"qzgQaT_VsnA92-ox-rSZGyEj5MFVM0MuELLV-ugGg3lt8gGWsDz0oHU2WLvACJDPElrxo0SVszBePaXxezzgvw"`;
 
-exports[`JWT Claims Validation ES256KADR36 - Valid Signature/with scoped claims: ES256KADR36 - Valid Signature/with scoped claims 1`] = `"PjYzBShTwV0b_hrk3D9IS1ojqE6ypiPyNjEIXABCF28cWW_FFCwI6gtstIqWBKdwNnvZ3p0OQvw3LV43xLSkUw"`;
+exports[`JWT Claims Validation ES256KADR36 - Valid Signature/with scoped claims: ES256KADR36 - Valid Signature/with scoped claims 1`] = `"gm755rzde7OBsBkudJ_q0ha-fzfYwBYXCMyfPcMc2Tp8is__0HwchNFG-ia0UD83BcezUNe72fSQ5MLXpL_WDQ"`;

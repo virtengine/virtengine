@@ -1,5 +1,27 @@
 ---
 version: "2"
+issues:
+  # Record the issue limits EXPLICITLY.
+  #
+  # golangci-lint v2 defaults these to max-issues-per-linter=50 and
+  # max-same-issues=3. Leaving them unset made the reported debt an artifact of
+  # that default rather than a property of the tree: on `develop` at 1cd9af8e3f
+  # the capped CI run reported errcheck=50 and goconst=50 -- both pinned exactly
+  # at the cap -- while the uncapped count on the same tree is errcheck 662 and
+  # goconst 926. ~87% of the errcheck debt was invisible to anyone reading the
+  # CI log, which is how a 662-finding backlog came to be believed as 50.
+  #
+  # 0 disables the cap. This is NOT a scope change and silences nothing: a
+  # capped run still exits 1 on any finding, so uncapping cannot flip the Lint
+  # job between red and green. It only makes the reported count the real count,
+  # so the number stops moving between runs.
+  #
+  # Note this number is GLOBAL, not per-linter (golangci-lint has ONE
+  # max-issues-per-linter covering every enabled linter), so it cannot encode a
+  # per-linter allowance. Per-linter debt is budgeted by
+  # scripts/ci/lint_budget_gate.py -- see that file and the `errcheck` note below.
+  max-issues-per-linter: 0
+  max-same-issues: 0
 linters:
   default: none
   enable:
@@ -19,6 +41,38 @@ linters:
   # Note: gofmt is a formatter, not a linter. Auto-formatting is handled by
   # pre-commit hook. golangci-lint only runs actual linters (not formatters).
   settings:
+    # errcheck budget -- see scripts/ci/lint_budget_gate.py, which enforces it
+    # as a non-regression ratchet. This block records WHY the numbers are what
+    # they are; the gate is the thing that holds them.
+    #
+    # Measured uncapped on `develop` at 1cd9af8e3f (662 findings / 213 files):
+    #
+    #   non-test   438 findings / 168 files   <- the real debt; see below
+    #   test       224 findings /  45 files
+    #
+    # 226 of the 438 non-test findings are a single mechanical cluster --
+    # `iter.Close` (153) and `iterator.Close` (73) on Cosmos SDK collection
+    # iterators, spread over 89 files, heaviest in x/veid (73), x/escrow (22)
+    # and x/settlement (19). Those are closeable mechanically, which is why
+    # this is budgeted as a count and not waived.
+    #
+    # Deliberately NOT configured here: errcheck has no `ignore-tests` setting
+    # (only check-type-assertions / check-blank / exclude-functions), so the
+    # "scope errcheck to non-test code the way goconst already is" option does
+    # not exist. Excluding test files from errcheck is possible only via an
+    # `exclusions.rules` path rule, which is a blanket scope reduction, not a
+    # budget, and would hide the 224 test findings permanently rather than
+    # making them payable. That choice belongs to the owner (issue #1122).
+    #
+    # Ratchet policy: raise nothing. LOWERING these budgets is a lint
+    # regression. Raise the gate's baseline only by fixing findings.
+    errcheck: {}
+    goconst:
+      # Table-driven tests legitimately repeat the same literal across cases
+      # ("test", "true", a fixture account name); hoisting each into a named
+      # constant makes the cases harder to read, not easier. goconst still
+      # applies to non-test code.
+      ignore-tests: true
     gocritic:
       disabled-checks:
         - ifElseChain

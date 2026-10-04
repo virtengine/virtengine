@@ -45,7 +45,7 @@ Registration → Active → Bidding → Allocation → Deployment → Usage Repo
 ```bash
 # System requirements
 - Ubuntu 22.04 LTS (or equivalent)
-- Go 1.21+
+- Go 1.26.8+
 - Access to VirtEngine RPC/gRPC endpoints
 - Kubernetes cluster or SLURM installation
 - Provider wallet with minimum stake (100,000 UVE)

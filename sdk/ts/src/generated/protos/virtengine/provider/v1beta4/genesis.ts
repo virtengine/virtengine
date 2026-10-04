@@ -19,6 +19,7 @@ export interface GenesisState {
   signingKeys: ProviderSigningKeyGenesisRecord[];
 }
 
+/** ProviderSigningKeyGenesisRecord seeds one provider signing key at genesis. */
 export interface ProviderSigningKeyGenesisRecord {
   owner: string;
   key: ProviderSigningKeyRecord | undefined;

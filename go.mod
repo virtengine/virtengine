@@ -17,7 +17,9 @@ require (
 	cosmossdk.io/x/upgrade v0.2.0
 	firebase.google.com/go/v4 v4.19.0
 	github.com/99designs/keyring v1.2.2
-	github.com/aws/aws-sdk-go v1.49.0
+	github.com/aws/aws-sdk-go-v2 v1.41.5
+	github.com/aws/aws-sdk-go-v2/config v1.32.12
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.12
 	github.com/beevik/etree v1.6.0
 	github.com/boz/go-lifecycle v0.1.1
 	github.com/cometbft/cometbft v0.38.21
@@ -113,10 +115,17 @@ replace (
 
 	github.com/cosmos/gogoproto => github.com/virtengine/gogoproto v1.7.0-virtengine.1
 
-	// virtengine/ledger-go is a mono-repo that provides both:
-	// - zondax/ledger-go (root module, tag v0.16.0-virtengine)
-	// - cosmos/ledger-cosmos-go (cosmos/ subdir, tag cosmos/v0.16.0-virtengine)
-	github.com/cosmos/ledger-cosmos-go => github.com/virtengine/ledger-go/cosmos v0.16.0-virtengine
+	// akash-network/ledger-go is the mono-repo these ledger forks were synced from
+	// (see the "VirtEngine forks of Cosmos SDK dependencies" note above); it provides both:
+	// - zondax/ledger-go (root module, tag v0.16.0)
+	// - cosmos/ledger-cosmos-go (cosmos/ subdir, tag cosmos/v0.16.0)
+	//
+	// SECURITY: the previous target, github.com/virtengine/ledger-go, was deleted (404).
+	// Its tag v0.16.0-virtengine was a re-tag of akash-network/ledger-go commit
+	// 367cd2152dc6237b5d6a8d7224697c825e4b352a - verified byte-identical (sha256) across
+	// every file of both modules, with identical go.mod. This is a provenance fix only:
+	// no ledger/signing code changes.
+	github.com/cosmos/ledger-cosmos-go => github.com/akash-network/ledger-go/cosmos v0.16.0
 
 	// Use regen gogoproto fork
 	// To be replaced by cosmos/gogoproto in future versions
@@ -133,8 +142,9 @@ replace (
 
 	github.com/zondax/hid => github.com/troian/hid v0.14.0
 
-	// zondax/ledger-go replacement from virtengine/ledger-go mono-repo
-	github.com/zondax/ledger-go => github.com/virtengine/ledger-go v0.16.0-virtengine
+	// zondax/ledger-go replacement from the akash-network/ledger-go mono-repo
+	// (was virtengine/ledger-go, which was deleted - see the ledger-cosmos-go note above)
+	github.com/zondax/ledger-go => github.com/akash-network/ledger-go v0.16.0
 
 	// stick with compatible version or x/exp in v0.47.x line
 	golang.org/x/exp => golang.org/x/exp v0.0.0-20230711153332-06a737ee72cb
@@ -173,10 +183,7 @@ require (
 	github.com/PuerkitoBio/urlesc v0.0.0-20170810143723-de5bf2ad4578 // indirect
 	github.com/aokoli/goutils v1.0.1 // indirect
 	github.com/apapsch/go-jsonmerge/v2 v2.0.0 // indirect
-	github.com/aws/aws-sdk-go-v2 v1.41.5 // indirect
 	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.8 // indirect
-	github.com/aws/aws-sdk-go-v2/config v1.32.12 // indirect
-	github.com/aws/aws-sdk-go-v2/credentials v1.19.12 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.20 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.21 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.21 // indirect
@@ -296,12 +303,11 @@ require (
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/ingonyama-zk/icicle-gnark/v3 v3.2.2 // indirect
 	github.com/ipfs/boxo v0.12.0 // indirect
-	github.com/jmespath/go-jmespath v0.4.0 // indirect
 	github.com/jmhodges/levigo v1.0.1-0.20191019112844-b572e7f4cdac // indirect
 	github.com/jonboulle/clockwork v0.5.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.18.5 // indirect
+	github.com/klauspost/compress v1.20.1 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/kr/text v0.2.0 // indirect
@@ -353,7 +359,7 @@ require (
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/sagikazarmark/locafero v0.11.0 // indirect
 	github.com/sasha-s/go-deadlock v0.3.5 // indirect
-	github.com/shamaton/msgpack/v2 v2.2.3 // indirect
+	github.com/shamaton/msgpack/v2 v2.4.1 // indirect
 	github.com/sourcegraph/conc v0.3.1-0.20240121214520-5f936abd7ae8 // indirect
 	github.com/spaolacci/murmur3 v1.1.0 // indirect
 	github.com/spf13/afero v1.15.0 // indirect

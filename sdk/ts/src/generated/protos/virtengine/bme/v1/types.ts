@@ -130,7 +130,7 @@ export interface LedgerID {
 
 /** CollateralRatio represents the current collateral ratio */
 export interface CollateralRatio {
-  /** ratio is CR = (VaultAKT * Price) / OutstandingACT */
+  /** ratio is CR = (VaultNative * Price) / OutstandingVCC */
   ratio: string;
   /** status indicates the current circuit breaker status */
   status: MintStatus;
@@ -190,7 +190,7 @@ export interface LedgerPendingRecord {
   owner: string;
   /**
    * to destination of the minted coins.
-   * if minted coin is ACT, "to" must be same as signer
+   * if minted coin is VCC, "to" must be same as signer
    */
   to: string;
   /** coins_to_burn */

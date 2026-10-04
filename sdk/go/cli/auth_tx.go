@@ -298,7 +298,7 @@ func setOutputFile(cmd *cobra.Command) (func(), error) {
 		return func() {}, nil
 	}
 
-	fp, err := os.OpenFile(outputDoc, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644) //nolint: gosec
+	fp, err := os.OpenFile(outputDoc, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0o644) /* #nosec G302,G304 -- outputDoc is a local path the operator passes on the command line, and 0644 is the conventional mode for a transaction document that other tooling must read; gosec prefers 0600 */ //nolint:gosec
 	if err != nil {
 		return func() {}, err
 	}

@@ -91,8 +91,8 @@ func KeyRotationKey(validatorAddr []byte, epoch uint64) []byte {
 	key = append(key, validatorAddr...)
 	// Append epoch as big-endian bytes
 	key = append(key,
-		byte(epoch>>56), byte(epoch>>48), byte(epoch>>40), byte(epoch>>32),
-		byte(epoch>>24), byte(epoch>>16), byte(epoch>>8), byte(epoch),
+		byte(epoch>>56), byte(epoch>>48), byte(epoch>>40), byte(epoch>>32), // #nosec G115 -- fixed-width big-endian encoding: byte(epoch>>56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(epoch>>24), byte(epoch>>16), byte(epoch>>8), byte(epoch), // #nosec G115 -- fixed-width big-endian encoding: byte(epoch>>24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	)
 	return key
 }
@@ -104,8 +104,8 @@ func AttestedResultKey(blockHeight int64, scopeID string) []byte {
 	key = append(key, PrefixAttestedResult...)
 	// Append block height as big-endian bytes
 	key = append(key,
-		byte(blockHeight>>56), byte(blockHeight>>48), byte(blockHeight>>40), byte(blockHeight>>32),
-		byte(blockHeight>>24), byte(blockHeight>>16), byte(blockHeight>>8), byte(blockHeight),
+		byte(blockHeight>>56), byte(blockHeight>>48), byte(blockHeight>>40), byte(blockHeight>>32), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight>>56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(blockHeight>>24), byte(blockHeight>>16), byte(blockHeight>>8), byte(blockHeight), // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight>>24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	)
 	key = append(key, scopeIDBytes...)
 	return key
@@ -143,8 +143,8 @@ func HeartbeatNonceKey(validatorAddr []byte, nonce uint64) []byte {
 	key = append(key, PrefixHeartbeatNonce...)
 	key = append(key, validatorAddr...)
 	key = append(key,
-		byte(nonce>>56), byte(nonce>>48), byte(nonce>>40), byte(nonce>>32),
-		byte(nonce>>24), byte(nonce>>16), byte(nonce>>8), byte(nonce),
+		byte(nonce>>56), byte(nonce>>48), byte(nonce>>40), byte(nonce>>32), // #nosec G115 -- fixed-width big-endian encoding: byte(nonce>>56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(nonce>>24), byte(nonce>>16), byte(nonce>>8), byte(nonce), // #nosec G115 -- fixed-width big-endian encoding: byte(nonce>>24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	)
 	return key
 }

@@ -1,30 +1,57 @@
-name: Publish SDKs
+# DISABLED — the Python and Rust SDKs are SOURCE-ONLY.
+#
+# Operator decision (Slack, 2026-09-29, task t_9d3b0f86): "Keep SDKs source-only".
+# Neither `virtengine` (PyPI) nor `virtengine-sdk` (crates.io) has ever been
+# published, and this workflow is the only thing that would publish them.
+#
+# WHY THIS MATTERS FOR THE FIRST RELEASE: this file used to trigger on
+# `release: types: [published]`. Cutting the first real (non-draft) VirtEngine
+# release would therefore have fired a LIVE `poetry publish` and
+# `cargo publish` — an irreversible, publicly visible action that the source-only
+# decision forbids. Publishing is a human action; it must never be a side effect
+# of tagging.
+#
+# The trigger is `workflow_dispatch` ONLY, so a release event can no longer
+# publish anything. To re-enable publishing (an explicit human decision, after
+# PYPI_TOKEN / CRATES_TOKEN exist and are valid):
+#   1. confirm the owner wants the packages public, and
+#   2. restore the `release: types: [published]` trigger below.
+#
+# The npm SDK is unaffected and remains live: @virtengine/chain-sdk
+# (dist-tags alpha + latest = 1.0.0-alpha.20).
+#
+# IMPORTANT — it is NOT published by a workflow. An earlier revision of this
+# comment credited "bosun-publish.yaml"; no such file has ever existed in this
+# repository (`git log --all -- .github/workflows/bosun-publish.yaml` is empty,
+# and the repo carries 37 root workflows, none of them a publisher). The only
+# `npm publish` anywhere in the tree is the manual script
+# `sdk/ts/package.json:39` ("release": "npm run build && npm test && npm
+# publish --tag alpha"), reached through `make -C sdk release-ts`
+# (sdk/make/release-ts.mk:3). The registry agrees: exactly one version,
+# 1.0.0-alpha.20, first published 2026-02-12 and never touched since — the
+# signature of a manual publish, not of automation.
+#
+# So there is no automated npm publish path today. That is a real gap, but it
+# is also a safety property: no tag or release event can push to the public
+# registry. Any future automation must reuse the existing OIDC trusted-
+# publishing path rather than introduce a long-lived NPM_TOKEN.
+#
+# Install instructions for both SDKs are the verified from-source forms in
+# sdk/python/README.md and sdk/rust/README.md.
+name: Publish SDKs (DISABLED - source-only)
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
 
 jobs:
-  publish-python:
+  # Refuses immediately so a dispatched run can never reach a registry.
+  disabled:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
-        with:
-          python-version: "3.11"
-      - name: Install Poetry
-        run: pip install poetry
-      - name: Build and publish
-        working-directory: sdk/python
+      - name: Refused - Python and Rust SDKs are source-only
         run: |
-          poetry build
-          poetry publish --username __token__ --password ${{ secrets.PYPI_TOKEN }}
-
-  publish-rust:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Publish to crates.io
-        working-directory: sdk/rust
-        run: cargo publish --token ${{ secrets.CRATES_TOKEN }}
+          echo "The Python and Rust SDKs are source-only by operator decision (2026-09-29)."
+          echo "Publishing to PyPI or crates.io is a human action and is not automated."
+          echo "Install from a checkout: pip install ./sdk/python"
+          echo "For Rust, use a path dependency: virtengine-sdk = { path = \"path/to/virtengine/sdk/rust\" }"
+          exit 1

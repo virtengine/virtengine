@@ -19,6 +19,7 @@ import (
 	hpcv1 "github.com/virtengine/virtengine/sdk/go/node/hpc/v1"
 	marketv1 "github.com/virtengine/virtengine/sdk/go/node/market/v1"
 	marketv1beta5 "github.com/virtengine/virtengine/sdk/go/node/market/v1beta5"
+	marketplacev1 "github.com/virtengine/virtengine/sdk/go/node/marketplace/v1"
 	providerv1beta4 "github.com/virtengine/virtengine/sdk/go/node/provider/v1beta4"
 	resourcesv1 "github.com/virtengine/virtengine/sdk/go/node/resources/v1"
 	settlementv1 "github.com/virtengine/virtengine/sdk/go/node/settlement/v1"
@@ -104,6 +105,15 @@ func (c *rpcChainClient) ProviderStoreQueryClient() providerStoreQueryClient {
 		return nil
 	}
 	return c.storeQuery
+}
+
+// MarketplaceQueryClient exposes the marketplace query service for consumers
+// such as the Waldur command poller.
+func (c *rpcChainClient) MarketplaceQueryClient() marketplacev1.QueryClient {
+	if c == nil || c.grpcConn == nil {
+		return nil
+	}
+	return marketplacev1.NewQueryClient(c.grpcConn)
 }
 
 func (c *rpcChainClient) submitMutation(ctx context.Context, kind ProviderMutationKind, msg sdktypes.Msg) error {

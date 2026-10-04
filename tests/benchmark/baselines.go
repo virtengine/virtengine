@@ -346,7 +346,7 @@ func SaveBaselines(baselines BaselineMetrics, filename string) error {
 	}
 
 	dir := filepath.Dir(filename)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
@@ -359,7 +359,7 @@ func SaveBaselines(baselines BaselineMetrics, filename string) error {
 
 // LoadBaselines loads baselines from a JSON file
 func LoadBaselines(filename string) (*BaselineMetrics, error) {
-	data, err := os.ReadFile(filename)
+	data, err := os.ReadFile(filename) // #nosec G304 -- the path is supplied by the operator or test harness on the command line
 	if err != nil {
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
@@ -455,7 +455,7 @@ func SaveReport(report *BenchmarkReport, filename string) error {
 	}
 
 	dir := filepath.Dir(filename)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("failed to create directory: %w", err)
 	}
 

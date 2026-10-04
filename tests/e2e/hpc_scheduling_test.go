@@ -28,9 +28,9 @@ type HPCSchedulingE2ETestSuite struct {
 }
 
 func TestHPCSchedulingE2E(t *testing.T) {
-	suite.Run(t, &HPCSchedulingE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &HPCSchedulingE2ETestSuite{}),
-	})
+	s := &HPCSchedulingE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 func (s *HPCSchedulingE2ETestSuite) SetupSuite() {

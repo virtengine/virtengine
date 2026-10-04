@@ -38,11 +38,11 @@ func VerifyExport(dir string) (*ExportResult, error) {
 		return nil, fmt.Errorf("unsupported artifact manifest schema %q", manifest.SchemaVersion)
 	}
 
-	manifestBytes, err := os.ReadFile(manifestPath)
+	manifestBytes, err := os.ReadFile(manifestPath) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return nil, err
 	}
-	signatureBytes, err := os.ReadFile(signaturePath)
+	signatureBytes, err := os.ReadFile(signaturePath) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return nil, err
 	}
@@ -55,7 +55,7 @@ func VerifyExport(dir string) (*ExportResult, error) {
 		return nil, fmt.Errorf("verify export signature: %w", err)
 	}
 
-	reportData, err := os.ReadFile(reportPath)
+	reportData, err := os.ReadFile(reportPath) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return nil, err
 	}

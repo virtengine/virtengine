@@ -243,6 +243,12 @@ func (ir *IncidentResponder) HandleIncident(ctx context.Context, incident *Secur
 		return
 	}
 
+	// Record the selected playbook synchronously, before any goroutine is
+	// spawned. The incident is owned by the caller, so a background
+	// executePlaybook must not write to it: that write races with any caller
+	// read of incident.PlaybookID after HandleIncident returns.
+	incident.PlaybookID = playbooks[0].ID
+
 	for _, playbook := range playbooks {
 		go ir.executePlaybook(ctx, playbook, incident)
 	}
@@ -257,7 +263,7 @@ func (ir *IncidentResponder) findMatchingPlaybooks(incident *SecurityIncident) [
 			continue
 		}
 
-		if incident.Severity < playbook.MinSeverity {
+		if !incident.Severity.AtLeast(playbook.MinSeverity) {
 			continue
 		}
 
@@ -324,8 +330,8 @@ func (ir *IncidentResponder) executePlaybook(ctx context.Context, playbook *Play
 		Bool("has_failure", hasFailure).
 		Msg("playbook execution completed")
 
-	// Update incident with playbook info
-	incident.PlaybookID = playbook.ID
+	// NOTE: incident.PlaybookID is set synchronously in HandleIncident.
+	// This goroutine must not write to the caller-owned incident.
 }
 
 // executeStep executes a single playbook step
@@ -468,7 +474,7 @@ func (ir *IncidentResponder) actionSuspendProvider(incident *SecurityIncident, _
 }
 
 func (ir *IncidentResponder) actionIncreaseSeverity(incident *SecurityIncident) error {
-	if incident.Severity < SeverityCritical {
+	if incident.Severity.Rank() < SeverityCritical.Rank() {
 		switch incident.Severity {
 		case SeverityLow:
 			incident.Severity = SeverityMedium

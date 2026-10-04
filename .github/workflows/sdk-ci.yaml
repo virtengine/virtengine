@@ -1,0 +1,193 @@
+name: SDK CI
+
+# The SDK used to have no CI at all: its workflows lived in the inert
+# sdk/.github/workflows/ directory, and GitHub Actions only executes
+# .github/workflows/ at the REPOSITORY ROOT. This workflow is the real
+# gate for the SDK.
+#
+# SCOPE — deliberately partial, and each omission is deliberate:
+#   sdk/go      linted + tested here (go test + golangci-lint).
+#   sdk/ts      linted + built here; its 40 test suites are owned by
+#               proto-generation.yaml, which can run them (see the typescript
+#               job for why they cannot run on a bare checkout).
+#   sdk/portal  is gated by portal-ci.yaml (job "SDK Portal"), not here.
+#   sdk/python  is NOT gated here, and the reason is sharper than "it is
+#               broken": sdk/python/google/protobuf/ is a 0-byte __init__.py
+#               plus generated *_pb2 modules and no descriptor.py, so it
+#               SHADOWS the runtime protobuf package whenever sdk/python is
+#               first on sys.path. Measured: `pytest tests/ --collect-only`
+#               -> 3 collection errors, ImportError on
+#               `from google.protobuf import descriptor`. Every other test
+#               module fails the same way. Not fixable by adding a gate.
+#   sdk/rust    is NOT gated here because it is not a supported contract at
+#               all: sdk/generation/generate.sh refuses it by name
+#               (`python|rust)` -> "not a supported release contract; see
+#               sdk/generation/toolchain.json"). Its checked-in
+#               rust/src/proto/mod.rs:123 contains `pub mod mod {` - `mod` is
+#               a Rust keyword, so it cannot compile - which is consistent
+#               with generated-but-never-verified output, not a regression.
+#               Wiring either in red would fail every SDK PR while telling
+#               nobody why. Tracked in sdk/README.md.
+
+on:
+  push:
+    branches: [main, mainnet/main]
+    paths:
+      - "sdk/go/**"
+      - "sdk/specs/**"
+      - "sdk/ts/**"
+      - "sdk/README.md"
+      - ".github/workflows/sdk-ci.yaml"
+  pull_request:
+    paths:
+      - "sdk/go/**"
+      - "sdk/specs/**"
+      - "sdk/ts/**"
+      - "sdk/README.md"
+      - ".github/workflows/sdk-ci.yaml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Keep in step with .github/workflows/portal-ci.yaml. sdk/ts declares
+  # "engines": { "node": ">=22.14.0" } (sdk/ts/package.json).
+  NODE_VERSION: "22"
+
+jobs:
+  go:
+    name: Go SDK (lint and tests)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    defaults:
+      run:
+        working-directory: sdk/go
+    env:
+      # sdk/go is its own module and must be proven in isolation, so the root
+      # go.work (which also pulls in sdk/specs and infra/*) is switched off.
+      # Without it the package set under test is the workspace's, not this
+      # module's.
+      GOWORK: "off"
+      # Same reason as ci.yaml's windows-native job (ci.yaml:224). With cgo on,
+      # cosmos-sdk/crypto/ledger pulls in zondax/hid, whose callbacks_cgo.cgo2.c
+      # defines each callback twice, and GCC 10+ on ubuntu runners rejects the
+      # duplicate symbols at link time ("multiple definition of cNextKey_cgo").
+      # The ledger HID path is unreachable from these tests, so disabling cgo is
+      # the same isolation the rest of the repo already uses.
+      CGO_ENABLED: "0"
+      GOFLAGS: "-mod=readonly"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # Required by the --new-from-rev step below. actions/checkout defaults to
+      # fetch-depth 1, which fetches only the PR merge commit; origin/<base>
+      # is then an unknown revision and golangci-lint aborts on every run.
+      # This mirrors .github/workflows/quality-gate.yaml (the lint job).
+      - name: Fetch base ref for lint diff
+        run: git fetch origin "${{ github.base_ref || 'develop' }}" --depth=1
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: sdk/go/go.mod
+          cache: true
+          cache-dependency-path: sdk/go/go.sum
+
+      - name: Run Go tests
+        run: go test ./...
+
+      - name: Run golangci-lint (new findings only)
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.13.2
+          working-directory: sdk/go
+          # Diff-scoped, matching .github/workflows/quality-gate.yaml. sdk/go
+          # carries ~60 inherited findings (50 goconst, mostly in _test.go)
+          # that predate this workflow; an unscoped run would be red on its
+          # first execution and stay red, which is how gates get ignored.
+          # Un-comment locally to reproduce the full backlog:
+          #   cd sdk/go && GOWORK=off golangci-lint run --timeout=10m ./...
+          args: --timeout=10m --new-from-rev=origin/${{ github.base_ref || 'develop' }}
+
+  typescript:
+    name: TypeScript SDK (lint and build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        working-directory: sdk/ts
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: sdk/ts/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint
+
+      # This job deliberately does NOT run `npm test`. All 40 sdk/ts suites are
+      # owned by proto-generation.yaml's `contracts` job, which runs the whole
+      # suite (lint, `test --runInBand`, build) inside the pinned generator
+      # image on every `sdk/**` change - a path superset of this workflow's
+      # `sdk/ts/**` trigger, on both pull_request and push. Measured green:
+      # run 37148208070 reported "Test Suites: 40 passed, 40 total / Tests:
+      # 1375 passed, 1375 total", i.e. every suite, none skipped.
+      #
+      # It could not be run here even if it were duplicated. 7 suites import
+      # test/helpers/runBufGenerate.ts, which `cp`s proto modules out of
+      # sdk/go/vendor (test/helpers/proto.ts:37). sdk/go/vendor is gitignored,
+      # so a bare runner has no such tree and they die with ENOENT on lstat.
+      # `go mod vendor` does NOT fix that: it vendors Go packages, and
+      # cosmos-sdk/proto is a proto-only tree, so the directory is absent from a
+      # vendored sdk/go (measured - 51 .proto files under gogoproto/ and iavl/,
+      # none under cosmos-sdk/proto). That tree is built by goware/modvendor
+      # plus the per-module dependency staging in sdk/generation/generate.sh,
+      # which needs buf and the pinned image (sdk/generation/Dockerfile).
+      #
+      # So lint and build below are the checks that need no proto toolchain and
+      # genuinely do pass on a bare checkout (both verified exit 0 with
+      # sdk/go/vendor absent). This job is the fast lane; proto-generation.yaml
+      # is the correctness lane.
+      - name: Build
+        run: npm run build
+
+      # `npm run build` above runs `compile:validators`, which esbuild-bundles
+      # ajv into two COMMITTED artifacts:
+      #
+      #   src/sdk/provider/auth/jwt/validateJwtPayload.ts
+      #   src/sdl/SDL/validateSDL/validateSDLInput.ts
+      #
+      # No contracts-gate drift check covers either path -- proto-generation.yaml
+      # step 8 and scripts/verify-proto-generation.sh both scope to
+      # sdk/go/node, sdk/ts/src/generated, sdk/artifacts/proto and api/openapi,
+      # while these live under src/sdk/** and src/sdl/**. So when the bundler
+      # emitted a working-directory-derived module id (it did: one file
+      # committed `node_modules/ajv/...`, its sibling committed
+      # `../../../virtengine/sdk/ts/node_modules/ajv/...` from a dev box at a
+      # different checkout depth), regeneration rewrote a file nothing could
+      # see and this workflow reported green.
+      #
+      # The script now pins esbuild's absWorkingDir to sdk/ts, and this step is
+      # the regression test for that: it runs the real generator from two
+      # different working directories and requires byte-identical output, then
+      # requires the committed bytes to equal what the generator produces.
+      # Run from the repo root as well, which is the case that used to drift.
+      - name: Generated validator determinism
+        run: |
+          set -euo pipefail
+          npm run test:validators
+          (cd ../.. && node --test sdk/ts/script/compile-json-schema-to-ts.test.mjs)

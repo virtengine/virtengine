@@ -4,6 +4,7 @@ import { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { WalletButton, WalletModal, useWalletModal } from '@/components/wallet';
+import { useWalletAutoConnect } from '@/hooks/useWalletAutoConnect';
 import { LanguageSwitcher, ThemeToggle } from '@/components/shared';
 import { NotificationCenter } from '@/components/notifications/NotificationCenter';
 import { useTranslation } from 'react-i18next';
@@ -15,6 +16,11 @@ export function Header() {
   const { isOpen, close } = useWalletModal();
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { t } = useTranslation();
+
+  // Restore a persisted wallet session on load. This hook was written and
+  // exported but never mounted, so nothing ever read the `ve_wallet_session`
+  // key and the wallet silently failed to reconnect across reloads.
+  useWalletAutoConnect();
 
   const navigation = [
     { name: t('Marketplace'), href: '/marketplace' },

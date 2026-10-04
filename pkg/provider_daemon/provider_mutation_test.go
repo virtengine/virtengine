@@ -34,19 +34,25 @@ import (
 const mutationTestChainID = "chain"
 
 type mutationChainFake struct {
-	mu             sync.Mutex
-	accountNumber  uint64
-	sequence       uint64
-	height         int64
-	blockHash      string
-	estimatedGas   uint64
-	broadcastErrs  []error
-	broadcasts     [][]byte
-	confirmed      map[string]ProviderTxConfirmation
-	reconciled     ProviderMutationReconciliation
-	reconcileCalls int
-	confirmMissing bool
-	confirmMutator func(ProviderTxConfirmation) ProviderTxConfirmation
+	mu            sync.Mutex
+	accountNumber uint64
+	sequence      uint64
+	height        int64
+	blockHash     string
+	estimatedGas  uint64
+	broadcastErrs []error
+	// broadcastErrAlways fails every broadcast instead of the first. The
+	// positional broadcastErrs queue is consumed by whichever call arrives
+	// first, so a test that needs "this tx never broadcasts successfully"
+	// cannot use it: any earlier broadcast silently eats the error and the
+	// test passes for the wrong reason, or fails depending on timing.
+	broadcastErrAlways error
+	broadcasts         [][]byte
+	confirmed          map[string]ProviderTxConfirmation
+	reconciled         ProviderMutationReconciliation
+	reconcileCalls     int
+	confirmMissing     bool
+	confirmMutator     func(ProviderTxConfirmation) ProviderTxConfirmation
 }
 
 func newMutationChainFake() *mutationChainFake {
@@ -75,6 +81,9 @@ func (f *mutationChainFake) BroadcastTx(_ context.Context, tx []byte) (string, e
 	defer f.mu.Unlock()
 	f.broadcasts = append(f.broadcasts, append([]byte(nil), tx...))
 	hash := strings.ToUpper(hex.EncodeToString(tmtypes.Tx(tx).Hash()))
+	if f.broadcastErrAlways != nil {
+		return hash, f.broadcastErrAlways
+	}
 	if len(f.broadcastErrs) > 0 {
 		err := f.broadcastErrs[0]
 		f.broadcastErrs = f.broadcastErrs[1:]
@@ -109,7 +118,11 @@ func (f *mutationChainFake) ReconcileMutation(context.Context, *ProviderMutation
 	return f.reconciled, nil
 }
 
-func newMutationSubmitterForTest(t *testing.T, chain *mutationChainFake, queuePath string) (*ProviderMutationSubmitter, *KeyManager) {
+// newMutationSubmitterForTest builds a started submitter over the fake chain.
+// An optional store replaces the default file store so a test can interpose on
+// the durable write; the generated file-store path is still used for every
+// other call site.
+func newMutationSubmitterForTest(t *testing.T, chain *mutationChainFake, queuePath string, store ...ProviderMutationStore) (*ProviderMutationSubmitter, *KeyManager) {
 	t.Helper()
 	address := sdk.AccAddress(make([]byte, 20)).String()
 	keyConfig := DefaultKeyManagerConfig()
@@ -130,11 +143,30 @@ func newMutationSubmitterForTest(t *testing.T, chain *mutationChainFake, queuePa
 	cfg.RetryBackoff = time.Millisecond
 	cfg.MaxRetryBackoff = 2 * time.Millisecond
 	cfg.Production = false
+	if len(store) > 0 && store[0] != nil {
+		cfg.Store = store[0]
+	}
 	submitter, err := NewProviderMutationSubmitter(cfg, keyManager)
 	require.NoError(t, err)
 	require.NoError(t, submitter.Start(context.Background()))
 	t.Cleanup(func() {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		// Generous, because this is a teardown budget and not a behaviour under test.
+		// At 1s the Windows runner failed this helper on a healthy submitter:
+		// CI 36934009110 / 36934015266 both died with
+		//   --- FAIL: TestProviderMutationConfirmationTimeoutRemainsAmbiguous (1.15s)
+		//   provider_mutation_test.go:155: Received unexpected error:
+		//   context deadline exceeded
+		// and the failure MOVED between tests in this same family. Stop() is not at
+		// fault: driven directly with a 30s deadline on an idle machine it returns
+		// err=nil with a 0s drain, and with an expired deadline it returns exactly
+		// context.DeadlineExceeded via the ctx branch of its select. A test that
+		// lowers ConfirmationTimeout to 5ms against a 1ms PollInterval keeps a
+		// non-terminal envelope in flight (MutationStateAmbiguous is not in
+		// providerMutationTerminalState), so the worker keeps re-entering reconcile()
+		// and the drain is pure wall-clock. 1s left ~150ms of headroom on a loaded
+		// Windows runner and none on a busy one. Teardown should not be flaky, so the
+		// budget goes up; the submitter's own timeouts stay at their test values.
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		require.NoError(t, submitter.Stop(ctx))
 	})
@@ -174,6 +206,13 @@ func validRegistryMessages(address string) map[ProviderMutationKind]sdk.Msg {
 		MutationProviderRotateKey:         &providerv1beta4.MsgRotateProviderSigningKey{Owner: address, NewPublicKey: bytesOf(4, 32), NewKeyType: providerv1beta4.PublicKeyTypeEd25519, RotationProof: bytesOf(5, 64), SignatureVersion: providerv1beta4.ProviderKeyRotationSignatureVersionV1},
 		MutationProviderRevokeKey:         &providerv1beta4.MsgRevokeProviderSigningKey{Owner: address, KeyId: "key-1"},
 		MutationMarketplaceCallback:       &marketplacev1.MsgWaldurCallback{Sender: address, CallbackType: "update", ResourceId: "resource-1", Status: "done"},
+		MutationMarketplaceCreateOrder:    &marketplacev1.MsgCreateOrder{Customer: address, AcquisitionMode: "direct", RequestedQuantity: 1, MaxBidPrice: 100},
+		MutationMarketplacePlaceBid:       &marketplacev1.MsgPlaceBid{Provider: address, OrderId: "order-1", Price: 90},
+		MutationMarketplaceWithdrawBid:    &marketplacev1.MsgWithdrawBid{Provider: address, BidId: "bid-1"},
+		MutationMarketplaceRegisterSource: &marketplacev1.MsgRegisterWaldurSource{Authority: address, InstanceId: "waldur-1", PublicKey: "ab"},
+		MutationMarketplaceIngestOffering: &marketplacev1.MsgIngestWaldurOffering{Relayer: address, Snapshot: &marketplacev1.WaldurOfferingSnapshot{Uuid: "uuid-1", InstanceId: "waldur-1", Name: "offering", State: "Active", SnapshotHeight: 1}, Signature: "sig"},
+		MutationMarketplaceSetVisibility:  &marketplacev1.MsgSetOfferingVisibility{Provider: address, OfferingId: "offering-1", Visibility: "public"},
+		MutationMarketplaceAckCommand:     &marketplacev1.MsgAckWaldurCommand{Sender: address, CommandId: "cmd-1"},
 		MutationSupportUpdateRequest:      &supportv1.MsgUpdateSupportRequest{Sender: address, TicketId: "ticket-1", Status: "open"},
 		MutationSupportAddResponse:        &supportv1.MsgAddSupportResponse{Sender: address, TicketId: "ticket-1", Payload: supportv1.EncryptedSupportPayload{EnvelopeRef: "vault://response", EnvelopeHash: bytesOf(6, 32), PayloadSize: 1}},
 		MutationSupportRegisterExternal:   &supportv1.MsgRegisterExternalTicket{Sender: address, ResourceId: "ticket-1", ResourceType: "support_request", ExternalSystem: "waldur", ExternalTicketId: "ext-1"},
@@ -389,7 +428,7 @@ func TestProviderMutationSubmitterRestartRecoversBuiltItem(t *testing.T) {
 	envelope.NextAttemptAt = time.Now().UTC().Add(time.Hour)
 	_, _, err = submitter.store.PutIfAbsent(context.Background(), envelope)
 	require.NoError(t, err)
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	require.NoError(t, submitter.Stop(ctx))
 	cancel()
 
@@ -543,13 +582,74 @@ func TestProviderMutationSubmitterLeaseLossDuringConfirmationFailsClosed(t *test
 
 func TestProviderMutationSubmitterDeadLettersTerminalFailure(t *testing.T) {
 	chain := newMutationChainFake()
-	chain.broadcastErrs = []error{errors.New("unauthorized signature")}
+	chain.broadcastErrAlways = errors.New("unauthorized signature")
 	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
 	result, err := submitter.Submit(context.Background(), MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: submitter.cfg.ProviderAddress})
 	require.Error(t, err)
 	status, statusErr := submitter.Status(context.Background(), result.ID)
 	require.NoError(t, statusErr)
 	require.Equal(t, MutationStateDeadLetter, status.State)
+	require.Equal(t, 1, submitter.Metrics(context.Background()).DeadLetters)
+}
+
+// workerWinsStore makes the "the background worker observed the terminal
+// failure first" interleaving deterministic instead of load-dependent: every
+// fresh PutIfAbsent hands the caller's own envelope to the submitter's worker
+// path (ProcessDue) before Submit() gets the stored copy back, exactly as a
+// poll tick landing between the durable write and Submit's inline process()
+// would.
+type workerWinsStore struct {
+	ProviderMutationStore
+	submitter *ProviderMutationSubmitter
+}
+
+func (w *workerWinsStore) PutIfAbsent(ctx context.Context, envelope *ProviderMutationEnvelope) (*ProviderMutationEnvelope, bool, error) {
+	stored, existed, err := w.ProviderMutationStore.PutIfAbsent(ctx, envelope)
+	if err != nil || existed || w.submitter == nil {
+		return stored, existed, err
+	}
+	// The durable write is what this seam is here to interleave with, so the
+	// hook must not manufacture a store-level failure out of the worker's own
+	// verdict. A real ProviderMutationStore never reports a submitter
+	// outcome, so propagating ProcessDue's non-retryable error out of a
+	// PutIfAbsent that itself succeeded fabricates an error value no
+	// production call site can produce -- and it carries the envelope's own
+	// broadcast failure rather than the dead-letter sentinel, so the caller
+	// cannot errors.Is(..., ErrProviderMutationDeadLetter) it. Swallowing the
+	// worker error keeps this a pure interleaving seam; the dead-letter
+	// signal the assertion checks is read from durable state in Submit().
+	_ = w.submitter.ProcessDue(ctx, 32)
+	return stored, existed, nil
+}
+
+// TestProviderMutationSubmitterReportsDeadLetterRacedByWorker pins the CI red
+// "An error is expected but got nil" on the require.Error in
+// TestProviderMutationSubmitterDeadLettersTerminalFailure.
+//
+// Submit() durably writes the envelope and then processes it inline, but the
+// submitter also runs a worker that polls the same store on PollInterval.
+// Either goroutine can be the one that observes the terminal broadcast
+// failure: when the worker gets there first, process() finds an already
+// dead-lettered envelope, reports a no-op, and Submit() used to hand back a nil
+// error for a mutation that is durably dead-lettered -- dropping the only
+// in-band signal the caller gets that the work will never be submitted.
+//
+// The assertion is unchanged in spirit: a dead-lettered mutation must never be
+// reported as success. Only the interleaving is forced.
+func TestProviderMutationSubmitterReportsDeadLetterRacedByWorker(t *testing.T) {
+	chain := newMutationChainFake()
+	chain.broadcastErrAlways = errors.New("unauthorized signature")
+	queuePath := filepath.Join(t.TempDir(), "queue.json")
+	inner, err := NewFileProviderMutationStore(queuePath)
+	require.NoError(t, err)
+	store := &workerWinsStore{ProviderMutationStore: inner}
+	submitter, _ := newMutationSubmitterForTest(t, chain, queuePath, store)
+	store.submitter = submitter
+
+	result, err := submitter.Submit(context.Background(), MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: submitter.cfg.ProviderAddress})
+	require.ErrorIs(t, err, ErrProviderMutationDeadLetter)
+	require.Equal(t, MutationStateDeadLetter, result.State)
+	require.False(t, result.Final)
 	require.Equal(t, 1, submitter.Metrics(context.Background()).DeadLetters)
 }
 
@@ -596,8 +696,40 @@ func TestProviderMutationConfirmationTimeoutRemainsAmbiguous(t *testing.T) {
 	chain.confirmMissing = true
 	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
 	submitter.cfg.ConfirmationTimeout = 5 * time.Millisecond
+
+	// The background worker in newMutationSubmitterForTest is live and its
+	// PollInterval ticker calls worker -> ProcessDue -> process, and process()
+	// takes processMu itself. With the fake's ConfirmTx never finding the tx,
+	// Submit's confirm() hits its context deadline and parks the envelope in
+	// `ambiguous` (provider_mutation.go:1378 -> scheduleAmbiguous). That state is
+	// deliberately NOT terminal, so the worker is entitled to re-drive it: each
+	// pass re-enters process, and the envelope either advances AttemptCount
+	// toward MaxAttempts (ending in `dead_letter`) or, if a pass classifies the
+	// reconcile failure as retryable-but-not-ambiguous, gets rewritten to
+	// `retry`. Which one lands depends purely on how many worker ticks fit
+	// inside this test's 5ms confirmation window, i.e. on runner load.
+	//
+	// On CI under `go test -race` the worker won and the assertion saw
+	//     expected: "ambiguous"
+	//     actual  : "retry"
+	// while passing locally every time. Measured here by re-driving the envelope:
+	//     pass 1: state="ambiguous" attempts=4
+	//     pass 2: state="ambiguous" attempts=6
+	//     pass 3: state="dead_letter" attempts=6
+	//
+	// This is the same defect class as TestProviderMutationReorgReturnsExplicitRetry
+	// directly below, which #1144 fixed by taking processMu before seeding and
+	// holding it across awaitFinality plus the read-back.
+	//
+	// The lock MUST go AFTER Submit, not before: Submit itself calls
+	// s.process (provider_mutation.go:987) which takes processMu, so holding it
+	// across Submit self-deadlocks.
 	result, err := submitter.Submit(context.Background(), MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: submitter.cfg.ProviderAddress})
 	require.Error(t, err)
+
+	submitter.processMu.Lock()
+	defer submitter.processMu.Unlock()
+
 	status, statusErr := submitter.Status(context.Background(), result.ID)
 	require.NoError(t, statusErr)
 	require.Equal(t, MutationStateAmbiguous, status.State)
@@ -606,6 +738,26 @@ func TestProviderMutationConfirmationTimeoutRemainsAmbiguous(t *testing.T) {
 func TestProviderMutationReorgReturnsExplicitRetry(t *testing.T) {
 	chain := newMutationChainFake()
 	submitter, _ := newMutationSubmitterForTest(t, chain, filepath.Join(t.TempDir(), "queue.json"))
+	// Take processMu BEFORE seeding the envelope, and hold it across the
+	// awaitFinality call and the read-back.
+	//
+	// This test asserts on the exact error awaitFinality returns, and that error
+	// is decided by a race it used to lose. The seeded envelope is already past
+	// finality -- ConfirmationHeight=100 with the fake's LatestHeight()=102 and
+	// FinalityBlocks=2 makes target=102, so `height >= target` holds on entry --
+	// and a reorg leaves it in MutationStateAmbiguous, which is NOT terminal, so
+	// the background worker (1ms ticker) re-picks the same envelope. The FIRST
+	// of {worker's process(), this test's awaitFinality()} performs the reorg
+	// write; the second hits the `item.State != MutationStateIncluded` guard at
+	// provider_mutation.go:1417 and gets ErrProviderMutationStaleState instead.
+	//
+	// Locking after PutIfAbsent is not enough: the worker can already be inside
+	// process() by then, so this test loses on a loaded runner and reports
+	//     expected: "provider mutation confirmation reorged"
+	//     in chain: "provider mutation stale state"
+	// while passing locally. Measured with the worker deliberately given one tick
+	// to go first: err="provider mutation stale state" every time.
+	submitter.processMu.Lock()
 	envelope, err := submitter.registry.Encode(submitter.cfg.ChainID, MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: submitter.cfg.ProviderAddress})
 	require.NoError(t, err)
 	envelope.State = MutationStateIncluded
@@ -615,8 +767,9 @@ func TestProviderMutationReorgReturnsExplicitRetry(t *testing.T) {
 	_, _, err = submitter.store.PutIfAbsent(context.Background(), envelope)
 	require.NoError(t, err)
 	err = submitter.awaitFinality(context.Background(), envelope.ID)
-	require.ErrorIs(t, err, ErrProviderMutationReorg)
 	stored, getErr := submitter.store.Get(context.Background(), envelope.ID)
+	submitter.processMu.Unlock()
+	require.ErrorIs(t, err, ErrProviderMutationReorg)
 	require.NoError(t, getErr)
 	require.Equal(t, MutationStateAmbiguous, stored.State)
 	require.Equal(t, "reorg_detected", stored.ReconciliationState)

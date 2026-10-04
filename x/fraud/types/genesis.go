@@ -18,6 +18,8 @@ func DefaultParams() Params {
 		EscalationThresholdDays: 7,
 		ReportRetentionDays:     365,
 		AuditLogRetentionDays:   730, // 2 years
+		MaxReportsPerWindow:     5,   // spam control: 5 reports per reporter per window
+		ReportWindowBlocks:      1000,
 	}
 }
 
@@ -46,6 +48,15 @@ type Params struct {
 
 	// AuditLogRetentionDays is how long to retain audit logs
 	AuditLogRetentionDays int `json:"audit_log_retention_days"`
+
+	// MaxReportsPerWindow caps how many fraud reports a single reporter may
+	// submit within ReportWindowBlocks (spam control)
+	MaxReportsPerWindow int `json:"max_reports_per_window"`
+
+	// ReportWindowBlocks is the block-height window used for the per-reporter
+	// submission limit. Block height (not wall clock) keeps the check
+	// deterministic across nodes.
+	ReportWindowBlocks int `json:"report_window_blocks"`
 }
 
 // Validate validates the parameters
@@ -71,18 +82,26 @@ func (p Params) Validate() error {
 	if p.AuditLogRetentionDays < p.ReportRetentionDays {
 		return fmt.Errorf("audit_log_retention_days must be at least report_retention_days")
 	}
+	if p.MaxReportsPerWindow < 1 {
+		return fmt.Errorf("max_reports_per_window must be at least 1")
+	}
+	if p.ReportWindowBlocks < 1 {
+		return fmt.Errorf("report_window_blocks must be at least 1")
+	}
 	return nil
 }
 
 // DefaultGenesisState returns default genesis state
 func DefaultGenesisState() *GenesisState {
 	return &GenesisState{
-		Params:                  DefaultParams(),
-		FraudReports:            []FraudReport{},
-		AuditLogs:               []FraudAuditLog{},
-		ModeratorQueue:          []ModeratorQueueEntry{},
-		NextFraudReportSequence: 1,
-		NextAuditLogSequence:    1,
+		Params:                    DefaultParams(),
+		FraudReports:              []FraudReport{},
+		AuditLogs:                 []FraudAuditLog{},
+		ModeratorQueue:            []ModeratorQueueEntry{},
+		FraudResponses:            []FraudResponse{},
+		NextFraudReportSequence:   1,
+		NextAuditLogSequence:      1,
+		NextFraudResponseSequence: 1,
 	}
 }
 
@@ -100,11 +119,17 @@ type GenesisState struct {
 	// ModeratorQueue are the pending queue entries
 	ModeratorQueue []ModeratorQueueEntry `json:"moderator_queue"`
 
+	// FraudResponses are all report responses/rebuttals
+	FraudResponses []FraudResponse `json:"fraud_responses"`
+
 	// NextFraudReportSequence is the next report sequence number
 	NextFraudReportSequence uint64 `json:"next_fraud_report_sequence"`
 
 	// NextAuditLogSequence is the next audit log sequence number
 	NextAuditLogSequence uint64 `json:"next_audit_log_sequence"`
+
+	// NextFraudResponseSequence is the next response sequence number
+	NextFraudResponseSequence uint64 `json:"next_fraud_response_sequence"`
 }
 
 // Validate validates the genesis state
@@ -145,6 +170,20 @@ func (gs *GenesisState) Validate() error {
 		}
 		if !reportIDs[entry.ReportID] {
 			return fmt.Errorf("moderator queue entry %d references non-existent report: %s", i, entry.ReportID)
+		}
+	}
+
+	responseIDs := make(map[string]bool)
+	for i, response := range gs.FraudResponses {
+		if err := response.Validate(); err != nil {
+			return fmt.Errorf("invalid fraud response %d: %w", i, err)
+		}
+		if responseIDs[response.ID] {
+			return fmt.Errorf("duplicate fraud response ID: %s", response.ID)
+		}
+		responseIDs[response.ID] = true
+		if !reportIDs[response.ReportID] {
+			return fmt.Errorf("fraud response %s references non-existent report: %s", response.ID, response.ReportID)
 		}
 	}
 

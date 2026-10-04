@@ -40,7 +40,7 @@ func (writer *canonicalWriter) text(value, field string, required bool) error {
 			return fmt.Errorf("%w: invalid %s", ErrInvalidAuthorization, field)
 		}
 	}
-	_ = binary.Write(&writer.Buffer, binary.BigEndian, uint32(len(value))) //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
+	_ = binary.Write(&writer.Buffer, binary.BigEndian, uint32(len(value))) // #nosec G115 -- value is a slice length or element count: non-negative and bounded far below 2^32
 	_, _ = writer.WriteString(value)
 	return nil
 }
@@ -119,7 +119,7 @@ func CanonicalSignBytes(auth FundAuthorization) ([]byte, Digest, error) {
 	if len(auth.Amounts) != 0 && auth.Phase == PhaseControl && auth.Effect == EffectRecoveryControl {
 		return nil, Digest{}, fmt.Errorf("%w: recovery control amounts", ErrInvalidAuthorization)
 	}
-	_ = binary.Write(&writer.Buffer, binary.BigEndian, uint32(len(auth.Amounts))) //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
+	_ = binary.Write(&writer.Buffer, binary.BigEndian, uint32(len(auth.Amounts))) // #nosec G115 -- value is a slice length or element count: non-negative and bounded far below 2^32
 	previousDenom := ""
 	for _, amount := range auth.Amounts {
 		if !denomPattern.MatchString(amount.Denom) || (previousDenom != "" && amount.Denom <= previousDenom) {
@@ -141,7 +141,7 @@ func CanonicalSignBytes(auth FundAuthorization) ([]byte, Digest, error) {
 	if len(auth.Parties) == 0 || uint64(len(auth.Parties)) > math.MaxUint32 {
 		return nil, Digest{}, fmt.Errorf("%w: party count", ErrInvalidAuthorization)
 	}
-	_ = binary.Write(&writer.Buffer, binary.BigEndian, uint32(len(auth.Parties))) //nolint:gosec // G115: length is non-negative and bounded by explicit validation above
+	_ = binary.Write(&writer.Buffer, binary.BigEndian, uint32(len(auth.Parties))) // #nosec G115 -- value is a slice length or element count: non-negative and bounded far below 2^32
 	var previous PartyBinding
 	for index, party := range auth.Parties {
 		if !party.Role.valid() {

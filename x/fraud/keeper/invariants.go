@@ -149,7 +149,9 @@ func EvidenceHashVerificationInvariant(k IKeeper) sdk.Invariant {
 	}
 }
 
-// ReporterExistsInvariant ensures reporters are valid provider addresses.
+// ReporterExistsInvariant ensures reporters are valid addresses and, when they
+// are not providers, that they hold documented standing: either an order
+// reference or an explicit no-order-available basis.
 //
 //nolint:staticcheck // sdk.Invariant is required by the module interface.
 func ReporterExistsInvariant(k IKeeper) sdk.Invariant {
@@ -162,8 +164,13 @@ func ReporterExistsInvariant(k IKeeper) sdk.Invariant {
 				broken = append(broken, fmt.Sprintf("report=%s invalid-reporter=%s", report.ID, report.Reporter))
 				return false
 			}
-			if !k.IsProvider(ctx, addr) {
-				broken = append(broken, fmt.Sprintf("report=%s reporter-not-provider=%s", report.ID, report.Reporter))
+			if k.IsProvider(ctx, addr) {
+				return false
+			}
+			// Non-provider reporters (tenants/buyers) must carry documented
+			// standing, otherwise the report has no verifiable basis.
+			if len(report.RelatedOrderIDs) == 0 && !report.NoOrderAvailable {
+				broken = append(broken, fmt.Sprintf("report=%s reporter-without-standing=%s", report.ID, report.Reporter))
 			}
 			return false
 		})

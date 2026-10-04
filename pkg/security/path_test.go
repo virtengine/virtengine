@@ -305,6 +305,130 @@ func TestSymlinkEscapeAttempt(t *testing.T) {
 	}
 }
 
+// TestSymlinkEscapeMatrix exercises the shapes a leaf symlink can take. The
+// leaf branch of ValidatePath resolves the link by hand rather than with
+// EvalSymlinks (so a broken link pointing outside is still rejected), which
+// means every hop has to be re-canonicalized. The relative-traversal shapes
+// are the ones that regressed: an absolute-target test alone cannot catch a
+// link whose text stays inside the allowed dir while the path it resolves to
+// does not.
+func TestSymlinkEscapeMatrix(t *testing.T) {
+	const (
+		wantRejected = true
+		secretName   = "secret.txt"
+		okName       = "ok.txt"
+	)
+
+	tests := []struct {
+		name string
+		// build creates the symlink named "link" in dir, relative to dir.
+		build func(t *testing.T, dir, outside string) string
+		want  bool // true => ValidatePath must reject
+	}{
+		{
+			name: "relative target through a symlinked directory",
+			build: func(t *testing.T, dir, outside string) string {
+				mustSymlink(t, outside, filepath.Join(dir, "dirlink"))
+				// Relative and textually inside dir, but resolves outside it.
+				mustSymlink(t, filepath.Join("dirlink", secretName), filepath.Join(dir, "link"))
+				return secretName
+			},
+			want: wantRejected,
+		},
+		{
+			name: "relative target with parent traversal",
+			build: func(t *testing.T, dir, outside string) string {
+				mustSymlink(t, filepath.Join("..", "..", filepath.Base(outside), secretName), filepath.Join(dir, "link"))
+				return secretName
+			},
+			want: wantRejected,
+		},
+		{
+			name: "absolute target",
+			build: func(t *testing.T, dir, outside string) string {
+				mustSymlink(t, filepath.Join(outside, secretName), filepath.Join(dir, "link"))
+				return secretName
+			},
+			want: wantRejected,
+		},
+		{
+			name: "chained: leaf -> link -> escaping directory link",
+			build: func(t *testing.T, dir, outside string) string {
+				mustSymlink(t, outside, filepath.Join(dir, "dirlink"))
+				mustSymlink(t, filepath.Join("dirlink", secretName), filepath.Join(dir, "midlink"))
+				mustSymlink(t, "midlink", filepath.Join(dir, "link"))
+				return secretName
+			},
+			want: wantRejected,
+		},
+		{
+			name: "broken link pointing outside",
+			build: func(t *testing.T, dir, outside string) string {
+				mustSymlink(t, filepath.Join(outside, "does-not-exist.txt"), filepath.Join(dir, "link"))
+				return "does-not-exist.txt"
+			},
+			want: wantRejected,
+		},
+		{
+			name: "relative target staying inside",
+			build: func(t *testing.T, dir, _ string) string {
+				mustSymlink(t, filepath.Join("sub", okName), filepath.Join(dir, "link"))
+				return okName
+			},
+			want: false,
+		},
+		{
+			name: "relative target through a symlinked directory that stays inside",
+			build: func(t *testing.T, dir, _ string) string {
+				// dirlink resolves to an existing in-allowlist directory.
+				mustSymlink(t, filepath.Join(dir, "sub"), filepath.Join(dir, "dirlink"))
+				mustSymlink(t, filepath.Join("dirlink", okName), filepath.Join(dir, "link"))
+				return okName
+			},
+			want: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := filepath.Join(t.TempDir(), "allowed")
+			outside := filepath.Join(t.TempDir(), "restricted")
+			if err := os.MkdirAll(filepath.Join(dir, "sub"), 0750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.MkdirAll(outside, 0750); err != nil {
+				t.Fatal(err)
+			}
+			//nolint:gosec // G306: test fixture, 0644 permissions acceptable
+			if err := os.WriteFile(filepath.Join(outside, "secret.txt"), []byte("secret"), 0644); err != nil {
+				t.Fatal(err)
+			}
+			//nolint:gosec // G306: test fixture, 0644 permissions acceptable
+			if err := os.WriteFile(filepath.Join(dir, "sub", "ok.txt"), []byte("ok"), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			tt.build(t, dir, outside)
+
+			//nolint:gosec // G302: requireAbsolute keeps the input absolute
+			v := NewPathValidator(dir, WithAllowedDirs(dir), WithRequireAbsolute(true))
+			err := v.ValidatePath(filepath.Join(dir, "link"))
+			if (err != nil) != tt.want {
+				t.Errorf("ValidatePath(<dir>/link) error = %v, want rejected = %v", err, tt.want)
+			}
+		})
+	}
+}
+
+// mustSymlink creates target, skipping the test if the platform refuses
+// (Windows needs Developer Mode or elevation for non-file targets).
+func mustSymlink(t *testing.T, target, link string) {
+	t.Helper()
+	if err := os.Symlink(target, link); err != nil {
+		t.Skipf("symlink creation failed (%v), skipping", err)
+	}
+}
+
 func TestDoubleEncodedTraversal(t *testing.T) {
 	tests := []struct {
 		name string

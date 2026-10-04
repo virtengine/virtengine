@@ -30,6 +30,14 @@ spec:
         prometheus.io/path: /metrics
         # Enforced by the ambient/service-mesh control plane in production.
         security.istio.io/tlsMode: istio
+        # The image pin below is an ALL-ZERO placeholder, so it cannot be pulled
+        # by ANY credential -- not anonymously, and not with the pull secret on
+        # the ServiceAccount below. Declaring the pin status here is what keeps
+        # that visible instead of implied:
+        # .github/tests/test_ghcr_image_pull_credential_policy.py asserts this
+        # annotation while the digest is a placeholder and FAILS when a real
+        # digest lands without removing it, so the two cannot drift.
+        virtengine.com/image-pin-status: placeholder-awaiting-release
     spec:
       serviceAccountName: veid-inference
       automountServiceAccountToken: false
@@ -132,6 +140,31 @@ metadata:
     # Production overlays set a workload-identity role limited to the receipt
     # signing key. The private key itself is never mounted in this workload.
     virtengine.com/receipt-signer: kms-or-hsm-required
+# ghcr.io/virtengine/veid-inference returned NO anonymous pull token on
+# 2026-10-03, so the node's kubelet cannot fetch this image unassisted and the
+# pod would sit in ImagePullBackOff. Provision the secret VALUE out of band in
+# namespace `virtengine` (by name only, never committed), following the same
+# convention as infra/kubernetes/dr/backup-cronjobs.yaml -- one read-only pull
+# secret per ghcr.io/virtengine package, named `<package>-ghcr-pull`:
+#
+#   kubectl -n virtengine create secret docker-registry veid-inference-ghcr-pull \
+#     --docker-server=ghcr.io \
+#     --docker-username='<principal with read:packages on veid-inference>' \
+#     --docker-password='<token>'
+#
+# If your cluster already names this secret differently, change this reference
+# to that name rather than creating a second secret.
+#
+# HONEST LIMIT: this workload is NOT pullable yet regardless of the credential.
+# Its image is pinned to the all-zero placeholder digest above, which matches the
+# shape of a real pin while naming no possible image -- no credential can fetch
+# it. This secret is therefore necessary but NOT sufficient: it becomes the thing
+# that makes the pull work the moment release automation substitutes a real
+# digest, and nothing more. That pin substitution is the remaining blocker, and
+# the `virtengine.com/image-pin-status` annotation on the pod template records it
+# in a machine-checked way rather than leaving it to be discovered at runtime.
+imagePullSecrets:
+  - name: veid-inference-ghcr-pull
 ---
 apiVersion: policy/v1
 kind: PodDisruptionBudget

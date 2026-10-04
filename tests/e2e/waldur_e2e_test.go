@@ -50,9 +50,9 @@ type WaldurE2ETestSuite struct {
 
 // TestWaldurE2E runs the Waldur E2E test suite.
 func TestWaldurE2E(t *testing.T) {
-	suite.Run(t, &WaldurE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &WaldurE2ETestSuite{}),
-	})
+	s := &WaldurE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 // SetupSuite runs once before all tests in the suite.

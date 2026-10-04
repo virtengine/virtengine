@@ -44,6 +44,7 @@ export interface QueryProviderResponse {
   provider: Provider | undefined;
 }
 
+/** ProviderSigningKeyRecord is a provider signing key and its lifecycle. */
 export interface ProviderSigningKeyRecord {
   publicKey: Uint8Array;
   keyType: string;
@@ -61,20 +62,24 @@ export interface ProviderSigningKeyRecord {
   rotationCount: number;
 }
 
+/** QueryProviderSigningKeyRequest is the request for the ProviderSigningKey RPC. */
 export interface QueryProviderSigningKeyRequest {
   owner: string;
   keyId: string;
   epoch: Long;
 }
 
+/** QueryProviderSigningKeyResponse is the response for the ProviderSigningKey RPC. */
 export interface QueryProviderSigningKeyResponse {
   key: ProviderSigningKeyRecord | undefined;
 }
 
+/** QueryProviderSigningKeyEpochsRequest is the request for the ProviderSigningKeyEpochs RPC. */
 export interface QueryProviderSigningKeyEpochsRequest {
   owner: string;
 }
 
+/** QueryProviderSigningKeyEpochsResponse is the response for the ProviderSigningKeyEpochs RPC. */
 export interface QueryProviderSigningKeyEpochsResponse {
   keys: ProviderSigningKeyRecord[];
 }

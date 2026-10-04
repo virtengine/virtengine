@@ -2162,242 +2162,6 @@ impl<'de> serde::Deserialize<'de> for MintStatus {
         deserializer.deserialize_any(GeneratedVisitor)
     }
 }
-impl serde::Serialize for MsgBurnAct {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut len = 0;
-        if !self.owner.is_empty() {
-            len += 1;
-        }
-        if !self.to.is_empty() {
-            len += 1;
-        }
-        if self.coins_to_burn.is_some() {
-            len += 1;
-        }
-        let mut struct_ser = serializer.serialize_struct("virtengine.bme.v1.MsgBurnACT", len)?;
-        if !self.owner.is_empty() {
-            struct_ser.serialize_field("owner", &self.owner)?;
-        }
-        if !self.to.is_empty() {
-            struct_ser.serialize_field("to", &self.to)?;
-        }
-        if let Some(v) = self.coins_to_burn.as_ref() {
-            struct_ser.serialize_field("coinsToBurn", v)?;
-        }
-        struct_ser.end()
-    }
-}
-impl<'de> serde::Deserialize<'de> for MsgBurnAct {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "owner",
-            "to",
-            "coins_to_burn",
-            "coinsToBurn",
-        ];
-
-        #[allow(clippy::enum_variant_names)]
-        enum GeneratedField {
-            Owner,
-            To,
-            CoinsToBurn,
-        }
-        impl<'de> serde::Deserialize<'de> for GeneratedField {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct GeneratedVisitor;
-
-                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-                    type Value = GeneratedField;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(formatter, "expected one of: {:?}", &FIELDS)
-                    }
-
-                    #[allow(unused_variables)]
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "owner" => Ok(GeneratedField::Owner),
-                            "to" => Ok(GeneratedField::To),
-                            "coinsToBurn" | "coins_to_burn" => Ok(GeneratedField::CoinsToBurn),
-                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(GeneratedVisitor)
-            }
-        }
-        struct GeneratedVisitor;
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = MsgBurnAct;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct virtengine.bme.v1.MsgBurnACT")
-            }
-
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<MsgBurnAct, V::Error>
-                where
-                    V: serde::de::MapAccess<'de>,
-            {
-                let mut owner__ = None;
-                let mut to__ = None;
-                let mut coins_to_burn__ = None;
-                while let Some(k) = map_.next_key()? {
-                    match k {
-                        GeneratedField::Owner => {
-                            if owner__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("owner"));
-                            }
-                            owner__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::To => {
-                            if to__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("to"));
-                            }
-                            to__ = Some(map_.next_value()?);
-                        }
-                        GeneratedField::CoinsToBurn => {
-                            if coins_to_burn__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("coinsToBurn"));
-                            }
-                            coins_to_burn__ = map_.next_value()?;
-                        }
-                    }
-                }
-                Ok(MsgBurnAct {
-                    owner: owner__.unwrap_or_default(),
-                    to: to__.unwrap_or_default(),
-                    coins_to_burn: coins_to_burn__,
-                })
-            }
-        }
-        deserializer.deserialize_struct("virtengine.bme.v1.MsgBurnACT", FIELDS, GeneratedVisitor)
-    }
-}
-impl serde::Serialize for MsgBurnActResponse {
-    #[allow(deprecated)]
-    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        use serde::ser::SerializeStruct;
-        let mut len = 0;
-        if self.id.is_some() {
-            len += 1;
-        }
-        if self.status != 0 {
-            len += 1;
-        }
-        let mut struct_ser = serializer.serialize_struct("virtengine.bme.v1.MsgBurnACTResponse", len)?;
-        if let Some(v) = self.id.as_ref() {
-            struct_ser.serialize_field("id", v)?;
-        }
-        if self.status != 0 {
-            let v = LedgerRecordStatus::try_from(self.status)
-                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.status)))?;
-            struct_ser.serialize_field("status", &v)?;
-        }
-        struct_ser.end()
-    }
-}
-impl<'de> serde::Deserialize<'de> for MsgBurnActResponse {
-    #[allow(deprecated)]
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        const FIELDS: &[&str] = &[
-            "id",
-            "status",
-        ];
-
-        #[allow(clippy::enum_variant_names)]
-        enum GeneratedField {
-            Id,
-            Status,
-        }
-        impl<'de> serde::Deserialize<'de> for GeneratedField {
-            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
-            where
-                D: serde::Deserializer<'de>,
-            {
-                struct GeneratedVisitor;
-
-                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-                    type Value = GeneratedField;
-
-                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                        write!(formatter, "expected one of: {:?}", &FIELDS)
-                    }
-
-                    #[allow(unused_variables)]
-                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
-                    where
-                        E: serde::de::Error,
-                    {
-                        match value {
-                            "id" => Ok(GeneratedField::Id),
-                            "status" => Ok(GeneratedField::Status),
-                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
-                        }
-                    }
-                }
-                deserializer.deserialize_identifier(GeneratedVisitor)
-            }
-        }
-        struct GeneratedVisitor;
-        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = MsgBurnActResponse;
-
-            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct virtengine.bme.v1.MsgBurnACTResponse")
-            }
-
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<MsgBurnActResponse, V::Error>
-                where
-                    V: serde::de::MapAccess<'de>,
-            {
-                let mut id__ = None;
-                let mut status__ = None;
-                while let Some(k) = map_.next_key()? {
-                    match k {
-                        GeneratedField::Id => {
-                            if id__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("id"));
-                            }
-                            id__ = map_.next_value()?;
-                        }
-                        GeneratedField::Status => {
-                            if status__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("status"));
-                            }
-                            status__ = Some(map_.next_value::<LedgerRecordStatus>()? as i32);
-                        }
-                    }
-                }
-                Ok(MsgBurnActResponse {
-                    id: id__,
-                    status: status__.unwrap_or_default(),
-                })
-            }
-        }
-        deserializer.deserialize_struct("virtengine.bme.v1.MsgBurnACTResponse", FIELDS, GeneratedVisitor)
-    }
-}
 impl serde::Serialize for MsgBurnMint {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
@@ -2652,7 +2416,7 @@ impl<'de> serde::Deserialize<'de> for MsgBurnMintResponse {
         deserializer.deserialize_struct("virtengine.bme.v1.MsgBurnMintResponse", FIELDS, GeneratedVisitor)
     }
 }
-impl serde::Serialize for MsgMintAct {
+impl serde::Serialize for MsgBurnVcc {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -2669,7 +2433,7 @@ impl serde::Serialize for MsgMintAct {
         if self.coins_to_burn.is_some() {
             len += 1;
         }
-        let mut struct_ser = serializer.serialize_struct("virtengine.bme.v1.MsgMintACT", len)?;
+        let mut struct_ser = serializer.serialize_struct("virtengine.bme.v1.MsgBurnVCC", len)?;
         if !self.owner.is_empty() {
             struct_ser.serialize_field("owner", &self.owner)?;
         }
@@ -2682,7 +2446,7 @@ impl serde::Serialize for MsgMintAct {
         struct_ser.end()
     }
 }
-impl<'de> serde::Deserialize<'de> for MsgMintAct {
+impl<'de> serde::Deserialize<'de> for MsgBurnVcc {
     #[allow(deprecated)]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
@@ -2733,13 +2497,13 @@ impl<'de> serde::Deserialize<'de> for MsgMintAct {
         }
         struct GeneratedVisitor;
         impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = MsgMintAct;
+            type Value = MsgBurnVcc;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct virtengine.bme.v1.MsgMintACT")
+                formatter.write_str("struct virtengine.bme.v1.MsgBurnVCC")
             }
 
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<MsgMintAct, V::Error>
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<MsgBurnVcc, V::Error>
                 where
                     V: serde::de::MapAccess<'de>,
             {
@@ -2768,17 +2532,17 @@ impl<'de> serde::Deserialize<'de> for MsgMintAct {
                         }
                     }
                 }
-                Ok(MsgMintAct {
+                Ok(MsgBurnVcc {
                     owner: owner__.unwrap_or_default(),
                     to: to__.unwrap_or_default(),
                     coins_to_burn: coins_to_burn__,
                 })
             }
         }
-        deserializer.deserialize_struct("virtengine.bme.v1.MsgMintACT", FIELDS, GeneratedVisitor)
+        deserializer.deserialize_struct("virtengine.bme.v1.MsgBurnVCC", FIELDS, GeneratedVisitor)
     }
 }
-impl serde::Serialize for MsgMintActResponse {
+impl serde::Serialize for MsgBurnVccResponse {
     #[allow(deprecated)]
     fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
     where
@@ -2792,7 +2556,7 @@ impl serde::Serialize for MsgMintActResponse {
         if self.status != 0 {
             len += 1;
         }
-        let mut struct_ser = serializer.serialize_struct("virtengine.bme.v1.MsgMintACTResponse", len)?;
+        let mut struct_ser = serializer.serialize_struct("virtengine.bme.v1.MsgBurnVCCResponse", len)?;
         if let Some(v) = self.id.as_ref() {
             struct_ser.serialize_field("id", v)?;
         }
@@ -2804,7 +2568,7 @@ impl serde::Serialize for MsgMintActResponse {
         struct_ser.end()
     }
 }
-impl<'de> serde::Deserialize<'de> for MsgMintActResponse {
+impl<'de> serde::Deserialize<'de> for MsgBurnVccResponse {
     #[allow(deprecated)]
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
@@ -2851,13 +2615,13 @@ impl<'de> serde::Deserialize<'de> for MsgMintActResponse {
         }
         struct GeneratedVisitor;
         impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
-            type Value = MsgMintActResponse;
+            type Value = MsgBurnVccResponse;
 
             fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                formatter.write_str("struct virtengine.bme.v1.MsgMintACTResponse")
+                formatter.write_str("struct virtengine.bme.v1.MsgBurnVCCResponse")
             }
 
-            fn visit_map<V>(self, mut map_: V) -> std::result::Result<MsgMintActResponse, V::Error>
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<MsgBurnVccResponse, V::Error>
                 where
                     V: serde::de::MapAccess<'de>,
             {
@@ -2879,13 +2643,249 @@ impl<'de> serde::Deserialize<'de> for MsgMintActResponse {
                         }
                     }
                 }
-                Ok(MsgMintActResponse {
+                Ok(MsgBurnVccResponse {
                     id: id__,
                     status: status__.unwrap_or_default(),
                 })
             }
         }
-        deserializer.deserialize_struct("virtengine.bme.v1.MsgMintACTResponse", FIELDS, GeneratedVisitor)
+        deserializer.deserialize_struct("virtengine.bme.v1.MsgBurnVCCResponse", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for MsgMintVcc {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if !self.owner.is_empty() {
+            len += 1;
+        }
+        if !self.to.is_empty() {
+            len += 1;
+        }
+        if self.coins_to_burn.is_some() {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("virtengine.bme.v1.MsgMintVCC", len)?;
+        if !self.owner.is_empty() {
+            struct_ser.serialize_field("owner", &self.owner)?;
+        }
+        if !self.to.is_empty() {
+            struct_ser.serialize_field("to", &self.to)?;
+        }
+        if let Some(v) = self.coins_to_burn.as_ref() {
+            struct_ser.serialize_field("coinsToBurn", v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for MsgMintVcc {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "owner",
+            "to",
+            "coins_to_burn",
+            "coinsToBurn",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Owner,
+            To,
+            CoinsToBurn,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "owner" => Ok(GeneratedField::Owner),
+                            "to" => Ok(GeneratedField::To),
+                            "coinsToBurn" | "coins_to_burn" => Ok(GeneratedField::CoinsToBurn),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = MsgMintVcc;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct virtengine.bme.v1.MsgMintVCC")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<MsgMintVcc, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut owner__ = None;
+                let mut to__ = None;
+                let mut coins_to_burn__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Owner => {
+                            if owner__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("owner"));
+                            }
+                            owner__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::To => {
+                            if to__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("to"));
+                            }
+                            to__ = Some(map_.next_value()?);
+                        }
+                        GeneratedField::CoinsToBurn => {
+                            if coins_to_burn__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("coinsToBurn"));
+                            }
+                            coins_to_burn__ = map_.next_value()?;
+                        }
+                    }
+                }
+                Ok(MsgMintVcc {
+                    owner: owner__.unwrap_or_default(),
+                    to: to__.unwrap_or_default(),
+                    coins_to_burn: coins_to_burn__,
+                })
+            }
+        }
+        deserializer.deserialize_struct("virtengine.bme.v1.MsgMintVCC", FIELDS, GeneratedVisitor)
+    }
+}
+impl serde::Serialize for MsgMintVccResponse {
+    #[allow(deprecated)]
+    fn serialize<S>(&self, serializer: S) -> std::result::Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        use serde::ser::SerializeStruct;
+        let mut len = 0;
+        if self.id.is_some() {
+            len += 1;
+        }
+        if self.status != 0 {
+            len += 1;
+        }
+        let mut struct_ser = serializer.serialize_struct("virtengine.bme.v1.MsgMintVCCResponse", len)?;
+        if let Some(v) = self.id.as_ref() {
+            struct_ser.serialize_field("id", v)?;
+        }
+        if self.status != 0 {
+            let v = LedgerRecordStatus::try_from(self.status)
+                .map_err(|_| serde::ser::Error::custom(format!("Invalid variant {}", self.status)))?;
+            struct_ser.serialize_field("status", &v)?;
+        }
+        struct_ser.end()
+    }
+}
+impl<'de> serde::Deserialize<'de> for MsgMintVccResponse {
+    #[allow(deprecated)]
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        const FIELDS: &[&str] = &[
+            "id",
+            "status",
+        ];
+
+        #[allow(clippy::enum_variant_names)]
+        enum GeneratedField {
+            Id,
+            Status,
+        }
+        impl<'de> serde::Deserialize<'de> for GeneratedField {
+            fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
+            where
+                D: serde::Deserializer<'de>,
+            {
+                struct GeneratedVisitor;
+
+                impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+                    type Value = GeneratedField;
+
+                    fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                        write!(formatter, "expected one of: {:?}", &FIELDS)
+                    }
+
+                    #[allow(unused_variables)]
+                    fn visit_str<E>(self, value: &str) -> std::result::Result<GeneratedField, E>
+                    where
+                        E: serde::de::Error,
+                    {
+                        match value {
+                            "id" => Ok(GeneratedField::Id),
+                            "status" => Ok(GeneratedField::Status),
+                            _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
+                        }
+                    }
+                }
+                deserializer.deserialize_identifier(GeneratedVisitor)
+            }
+        }
+        struct GeneratedVisitor;
+        impl<'de> serde::de::Visitor<'de> for GeneratedVisitor {
+            type Value = MsgMintVccResponse;
+
+            fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                formatter.write_str("struct virtengine.bme.v1.MsgMintVCCResponse")
+            }
+
+            fn visit_map<V>(self, mut map_: V) -> std::result::Result<MsgMintVccResponse, V::Error>
+                where
+                    V: serde::de::MapAccess<'de>,
+            {
+                let mut id__ = None;
+                let mut status__ = None;
+                while let Some(k) = map_.next_key()? {
+                    match k {
+                        GeneratedField::Id => {
+                            if id__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("id"));
+                            }
+                            id__ = map_.next_value()?;
+                        }
+                        GeneratedField::Status => {
+                            if status__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("status"));
+                            }
+                            status__ = Some(map_.next_value::<LedgerRecordStatus>()? as i32);
+                        }
+                    }
+                }
+                Ok(MsgMintVccResponse {
+                    id: id__,
+                    status: status__.unwrap_or_default(),
+                })
+            }
+        }
+        deserializer.deserialize_struct("virtengine.bme.v1.MsgMintVCCResponse", FIELDS, GeneratedVisitor)
     }
 }
 impl serde::Serialize for MsgSeedVault {
@@ -3021,12 +3021,12 @@ impl serde::Serialize for MsgSeedVaultResponse {
     {
         use serde::ser::SerializeStruct;
         let mut len = 0;
-        if !self.vault_akt.is_empty() {
+        if !self.vault_native.is_empty() {
             len += 1;
         }
         let mut struct_ser = serializer.serialize_struct("virtengine.bme.v1.MsgSeedVaultResponse", len)?;
-        if !self.vault_akt.is_empty() {
-            struct_ser.serialize_field("vaultAkt", &self.vault_akt)?;
+        if !self.vault_native.is_empty() {
+            struct_ser.serialize_field("vaultNative", &self.vault_native)?;
         }
         struct_ser.end()
     }
@@ -3038,13 +3038,13 @@ impl<'de> serde::Deserialize<'de> for MsgSeedVaultResponse {
         D: serde::Deserializer<'de>,
     {
         const FIELDS: &[&str] = &[
-            "vault_akt",
-            "vaultAkt",
+            "vault_native",
+            "vaultNative",
         ];
 
         #[allow(clippy::enum_variant_names)]
         enum GeneratedField {
-            VaultAkt,
+            VaultNative,
         }
         impl<'de> serde::Deserialize<'de> for GeneratedField {
             fn deserialize<D>(deserializer: D) -> std::result::Result<GeneratedField, D::Error>
@@ -3066,7 +3066,7 @@ impl<'de> serde::Deserialize<'de> for MsgSeedVaultResponse {
                         E: serde::de::Error,
                     {
                         match value {
-                            "vaultAkt" | "vault_akt" => Ok(GeneratedField::VaultAkt),
+                            "vaultNative" | "vault_native" => Ok(GeneratedField::VaultNative),
                             _ => Err(serde::de::Error::unknown_field(value, FIELDS)),
                         }
                     }
@@ -3086,19 +3086,19 @@ impl<'de> serde::Deserialize<'de> for MsgSeedVaultResponse {
                 where
                     V: serde::de::MapAccess<'de>,
             {
-                let mut vault_akt__ = None;
+                let mut vault_native__ = None;
                 while let Some(k) = map_.next_key()? {
                     match k {
-                        GeneratedField::VaultAkt => {
-                            if vault_akt__.is_some() {
-                                return Err(serde::de::Error::duplicate_field("vaultAkt"));
+                        GeneratedField::VaultNative => {
+                            if vault_native__.is_some() {
+                                return Err(serde::de::Error::duplicate_field("vaultNative"));
                             }
-                            vault_akt__ = Some(map_.next_value()?);
+                            vault_native__ = Some(map_.next_value()?);
                         }
                     }
                 }
                 Ok(MsgSeedVaultResponse {
-                    vault_akt: vault_akt__.unwrap_or_default(),
+                    vault_native: vault_native__.unwrap_or_default(),
                 })
             }
         }

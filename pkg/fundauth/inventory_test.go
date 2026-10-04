@@ -42,7 +42,7 @@ func TestValueSourceInventoryCoverageAndCanonicalDigest(t *testing.T) {
 	if err != nil || string(canonical) != string(second) || digest != secondDigest {
 		t.Fatal("inventory canonicalization is not deterministic")
 	}
-	const wantDigest = "3fea71122bb16bfffcb88309610c92e08e74aabced5743ac27458c572df64f74"
+	const wantDigest = "626b48315ee0d6966a157c86cecfd732125f8a76bf267ce2c9dd82f6766e4b1d"
 	if got := hex.EncodeToString(digest[:]); got != wantDigest {
 		t.Fatalf("inventory digest = %s", got)
 	}

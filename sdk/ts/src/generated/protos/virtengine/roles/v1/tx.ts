@@ -86,6 +86,110 @@ export interface MsgUpdateParams {
 export interface MsgUpdateParamsResponse {
 }
 
+/**
+ * MsgImposeSanction records a scoped, time-limited sanction against an account.
+ *
+ * A suspension or termination it proposes does not take effect on this message:
+ * it is recorded pending review and a second, distinct moderator-or-above must
+ * confirm it via MsgConfirmSanction. An emergency hold binds immediately but
+ * expires unless confirmed within its window.
+ */
+export interface MsgImposeSanction {
+  /** Sender is the moderator imposing the sanction */
+  sender: string;
+  /** Subject is the account being sanctioned */
+  subject: string;
+  /** Scope is the breadth of the sanction (account, order, listing, provider_offerings) */
+  scope: string;
+  /** ScopeRef is the order/listing ID for ref-bearing scopes */
+  scopeRef: string;
+  /** Kind is the severity class (warning, emergency_hold, suspension, termination) */
+  kind: string;
+  /** ReasonCode is the machine-classifiable reason */
+  reasonCode: string;
+  /** Justification is the free-text basis for the action */
+  justification: string;
+  /** Notice is the text served on the sanctioned party */
+  notice: string;
+  /**
+   * DurationSeconds is the requested duration; zero means the kind's default.
+   * Required for a suspension, and meaningless for a termination.
+   */
+  durationSeconds: Long;
+}
+
+/** MsgImposeSanctionResponse is the response for MsgImposeSanction */
+export interface MsgImposeSanctionResponse {
+  /** SanctionID is the ID of the recorded sanction record */
+  sanctionId: string;
+  /** Status is the recorded status; "pending_review" means no effect yet */
+  status: string;
+}
+
+/** MsgConfirmSanction applies a pending sanction as its second, distinct reviewer */
+export interface MsgConfirmSanction {
+  /** Reviewer is the second, distinct moderator confirming the sanction */
+  reviewer: string;
+  /** SanctionID is the pending sanction being confirmed */
+  sanctionId: string;
+  /**
+   * ReviewedUntil is the Unix time the confirmed sanction should run to.
+   * Required when confirming an emergency hold, which must be converted into a
+   * reviewed time-limited sanction. Ignored for other kinds.
+   */
+  reviewedUntil: Long;
+}
+
+/** MsgConfirmSanctionResponse is the response for MsgConfirmSanction */
+export interface MsgConfirmSanctionResponse {
+}
+
+/** MsgRevokeSanction clears an in-force or pending sanction */
+export interface MsgRevokeSanction {
+  /** Sender is the moderator revoking the sanction */
+  sender: string;
+  /** SanctionID is the sanction to revoke */
+  sanctionId: string;
+  /** Reason is the free-text basis for the revocation */
+  reason: string;
+}
+
+/** MsgRevokeSanctionResponse is the response for MsgRevokeSanction */
+export interface MsgRevokeSanctionResponse {
+}
+
+/** MsgOpenSanctionAppeal opens an appeal against an in-force sanction */
+export interface MsgOpenSanctionAppeal {
+  /** Subject is the sanctioned party opening the appeal */
+  subject: string;
+  /** SanctionID is the sanction being appealed */
+  sanctionId: string;
+  /** Justification is the appellant's free-text basis */
+  justification: string;
+}
+
+/** MsgOpenSanctionAppealResponse is the response for MsgOpenSanctionAppeal */
+export interface MsgOpenSanctionAppealResponse {
+  /** AppealID is the ID of the recorded appeal record */
+  appealId: string;
+}
+
+/** MsgResolveSanctionAppeal resolves an open appeal */
+export interface MsgResolveSanctionAppeal {
+  /** Reviewer is the moderator deciding the appeal */
+  reviewer: string;
+  /** AppealID is the open appeal being resolved */
+  appealId: string;
+  /** Grant reports whether the appeal is allowed, revoking the challenged sanction */
+  grant: boolean;
+  /** Notes are the reviewer's free-text reasoning */
+  notes: string;
+}
+
+/** MsgResolveSanctionAppealResponse is the response for MsgResolveSanctionAppeal */
+export interface MsgResolveSanctionAppealResponse {
+}
+
 function createBaseMsgAssignRole(): MsgAssignRole {
   return { sender: "", address: "", role: "" };
 }
@@ -766,6 +870,853 @@ export const MsgUpdateParamsResponse: MessageFns<
   },
   fromPartial(_: DeepPartial<MsgUpdateParamsResponse>): MsgUpdateParamsResponse {
     const message = createBaseMsgUpdateParamsResponse();
+    return message;
+  },
+};
+
+function createBaseMsgImposeSanction(): MsgImposeSanction {
+  return {
+    sender: "",
+    subject: "",
+    scope: "",
+    scopeRef: "",
+    kind: "",
+    reasonCode: "",
+    justification: "",
+    notice: "",
+    durationSeconds: Long.ZERO,
+  };
+}
+
+export const MsgImposeSanction: MessageFns<MsgImposeSanction, "virtengine.roles.v1.MsgImposeSanction"> = {
+  $type: "virtengine.roles.v1.MsgImposeSanction" as const,
+
+  encode(message: MsgImposeSanction, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.subject !== "") {
+      writer.uint32(18).string(message.subject);
+    }
+    if (message.scope !== "") {
+      writer.uint32(26).string(message.scope);
+    }
+    if (message.scopeRef !== "") {
+      writer.uint32(34).string(message.scopeRef);
+    }
+    if (message.kind !== "") {
+      writer.uint32(42).string(message.kind);
+    }
+    if (message.reasonCode !== "") {
+      writer.uint32(50).string(message.reasonCode);
+    }
+    if (message.justification !== "") {
+      writer.uint32(58).string(message.justification);
+    }
+    if (message.notice !== "") {
+      writer.uint32(66).string(message.notice);
+    }
+    if (!message.durationSeconds.equals(Long.ZERO)) {
+      writer.uint32(72).int64(message.durationSeconds.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgImposeSanction {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgImposeSanction();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.subject = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.scope = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.scopeRef = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.kind = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.reasonCode = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.justification = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.notice = reader.string();
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.durationSeconds = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgImposeSanction {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      subject: isSet(object.subject) ? globalThis.String(object.subject) : "",
+      scope: isSet(object.scope) ? globalThis.String(object.scope) : "",
+      scopeRef: isSet(object.scope_ref) ? globalThis.String(object.scope_ref) : "",
+      kind: isSet(object.kind) ? globalThis.String(object.kind) : "",
+      reasonCode: isSet(object.reason_code) ? globalThis.String(object.reason_code) : "",
+      justification: isSet(object.justification) ? globalThis.String(object.justification) : "",
+      notice: isSet(object.notice) ? globalThis.String(object.notice) : "",
+      durationSeconds: isSet(object.duration_seconds) ? Long.fromValue(object.duration_seconds) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: MsgImposeSanction): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.subject !== "") {
+      obj.subject = message.subject;
+    }
+    if (message.scope !== "") {
+      obj.scope = message.scope;
+    }
+    if (message.scopeRef !== "") {
+      obj.scope_ref = message.scopeRef;
+    }
+    if (message.kind !== "") {
+      obj.kind = message.kind;
+    }
+    if (message.reasonCode !== "") {
+      obj.reason_code = message.reasonCode;
+    }
+    if (message.justification !== "") {
+      obj.justification = message.justification;
+    }
+    if (message.notice !== "") {
+      obj.notice = message.notice;
+    }
+    if (!message.durationSeconds.equals(Long.ZERO)) {
+      obj.duration_seconds = (message.durationSeconds || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgImposeSanction>): MsgImposeSanction {
+    const message = createBaseMsgImposeSanction();
+    message.sender = object.sender ?? "";
+    message.subject = object.subject ?? "";
+    message.scope = object.scope ?? "";
+    message.scopeRef = object.scopeRef ?? "";
+    message.kind = object.kind ?? "";
+    message.reasonCode = object.reasonCode ?? "";
+    message.justification = object.justification ?? "";
+    message.notice = object.notice ?? "";
+    message.durationSeconds = (object.durationSeconds !== undefined && object.durationSeconds !== null)
+      ? Long.fromValue(object.durationSeconds)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseMsgImposeSanctionResponse(): MsgImposeSanctionResponse {
+  return { sanctionId: "", status: "" };
+}
+
+export const MsgImposeSanctionResponse: MessageFns<
+  MsgImposeSanctionResponse,
+  "virtengine.roles.v1.MsgImposeSanctionResponse"
+> = {
+  $type: "virtengine.roles.v1.MsgImposeSanctionResponse" as const,
+
+  encode(message: MsgImposeSanctionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sanctionId !== "") {
+      writer.uint32(10).string(message.sanctionId);
+    }
+    if (message.status !== "") {
+      writer.uint32(18).string(message.status);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgImposeSanctionResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgImposeSanctionResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sanctionId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgImposeSanctionResponse {
+    return {
+      sanctionId: isSet(object.sanction_id) ? globalThis.String(object.sanction_id) : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+    };
+  },
+
+  toJSON(message: MsgImposeSanctionResponse): unknown {
+    const obj: any = {};
+    if (message.sanctionId !== "") {
+      obj.sanction_id = message.sanctionId;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgImposeSanctionResponse>): MsgImposeSanctionResponse {
+    const message = createBaseMsgImposeSanctionResponse();
+    message.sanctionId = object.sanctionId ?? "";
+    message.status = object.status ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgConfirmSanction(): MsgConfirmSanction {
+  return { reviewer: "", sanctionId: "", reviewedUntil: Long.ZERO };
+}
+
+export const MsgConfirmSanction: MessageFns<MsgConfirmSanction, "virtengine.roles.v1.MsgConfirmSanction"> = {
+  $type: "virtengine.roles.v1.MsgConfirmSanction" as const,
+
+  encode(message: MsgConfirmSanction, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.reviewer !== "") {
+      writer.uint32(10).string(message.reviewer);
+    }
+    if (message.sanctionId !== "") {
+      writer.uint32(18).string(message.sanctionId);
+    }
+    if (!message.reviewedUntil.equals(Long.ZERO)) {
+      writer.uint32(24).int64(message.reviewedUntil.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgConfirmSanction {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgConfirmSanction();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.reviewer = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sanctionId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.reviewedUntil = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgConfirmSanction {
+    return {
+      reviewer: isSet(object.reviewer) ? globalThis.String(object.reviewer) : "",
+      sanctionId: isSet(object.sanction_id) ? globalThis.String(object.sanction_id) : "",
+      reviewedUntil: isSet(object.reviewed_until) ? Long.fromValue(object.reviewed_until) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: MsgConfirmSanction): unknown {
+    const obj: any = {};
+    if (message.reviewer !== "") {
+      obj.reviewer = message.reviewer;
+    }
+    if (message.sanctionId !== "") {
+      obj.sanction_id = message.sanctionId;
+    }
+    if (!message.reviewedUntil.equals(Long.ZERO)) {
+      obj.reviewed_until = (message.reviewedUntil || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgConfirmSanction>): MsgConfirmSanction {
+    const message = createBaseMsgConfirmSanction();
+    message.reviewer = object.reviewer ?? "";
+    message.sanctionId = object.sanctionId ?? "";
+    message.reviewedUntil = (object.reviewedUntil !== undefined && object.reviewedUntil !== null)
+      ? Long.fromValue(object.reviewedUntil)
+      : Long.ZERO;
+    return message;
+  },
+};
+
+function createBaseMsgConfirmSanctionResponse(): MsgConfirmSanctionResponse {
+  return {};
+}
+
+export const MsgConfirmSanctionResponse: MessageFns<
+  MsgConfirmSanctionResponse,
+  "virtengine.roles.v1.MsgConfirmSanctionResponse"
+> = {
+  $type: "virtengine.roles.v1.MsgConfirmSanctionResponse" as const,
+
+  encode(_: MsgConfirmSanctionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgConfirmSanctionResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgConfirmSanctionResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): MsgConfirmSanctionResponse {
+    return {};
+  },
+
+  toJSON(_: MsgConfirmSanctionResponse): unknown {
+    const obj: any = {};
+    return obj;
+  },
+  fromPartial(_: DeepPartial<MsgConfirmSanctionResponse>): MsgConfirmSanctionResponse {
+    const message = createBaseMsgConfirmSanctionResponse();
+    return message;
+  },
+};
+
+function createBaseMsgRevokeSanction(): MsgRevokeSanction {
+  return { sender: "", sanctionId: "", reason: "" };
+}
+
+export const MsgRevokeSanction: MessageFns<MsgRevokeSanction, "virtengine.roles.v1.MsgRevokeSanction"> = {
+  $type: "virtengine.roles.v1.MsgRevokeSanction" as const,
+
+  encode(message: MsgRevokeSanction, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.sender !== "") {
+      writer.uint32(10).string(message.sender);
+    }
+    if (message.sanctionId !== "") {
+      writer.uint32(18).string(message.sanctionId);
+    }
+    if (message.reason !== "") {
+      writer.uint32(26).string(message.reason);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgRevokeSanction {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgRevokeSanction();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.sender = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sanctionId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.reason = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgRevokeSanction {
+    return {
+      sender: isSet(object.sender) ? globalThis.String(object.sender) : "",
+      sanctionId: isSet(object.sanction_id) ? globalThis.String(object.sanction_id) : "",
+      reason: isSet(object.reason) ? globalThis.String(object.reason) : "",
+    };
+  },
+
+  toJSON(message: MsgRevokeSanction): unknown {
+    const obj: any = {};
+    if (message.sender !== "") {
+      obj.sender = message.sender;
+    }
+    if (message.sanctionId !== "") {
+      obj.sanction_id = message.sanctionId;
+    }
+    if (message.reason !== "") {
+      obj.reason = message.reason;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgRevokeSanction>): MsgRevokeSanction {
+    const message = createBaseMsgRevokeSanction();
+    message.sender = object.sender ?? "";
+    message.sanctionId = object.sanctionId ?? "";
+    message.reason = object.reason ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgRevokeSanctionResponse(): MsgRevokeSanctionResponse {
+  return {};
+}
+
+export const MsgRevokeSanctionResponse: MessageFns<
+  MsgRevokeSanctionResponse,
+  "virtengine.roles.v1.MsgRevokeSanctionResponse"
+> = {
+  $type: "virtengine.roles.v1.MsgRevokeSanctionResponse" as const,
+
+  encode(_: MsgRevokeSanctionResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgRevokeSanctionResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgRevokeSanctionResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): MsgRevokeSanctionResponse {
+    return {};
+  },
+
+  toJSON(_: MsgRevokeSanctionResponse): unknown {
+    const obj: any = {};
+    return obj;
+  },
+  fromPartial(_: DeepPartial<MsgRevokeSanctionResponse>): MsgRevokeSanctionResponse {
+    const message = createBaseMsgRevokeSanctionResponse();
+    return message;
+  },
+};
+
+function createBaseMsgOpenSanctionAppeal(): MsgOpenSanctionAppeal {
+  return { subject: "", sanctionId: "", justification: "" };
+}
+
+export const MsgOpenSanctionAppeal: MessageFns<MsgOpenSanctionAppeal, "virtengine.roles.v1.MsgOpenSanctionAppeal"> = {
+  $type: "virtengine.roles.v1.MsgOpenSanctionAppeal" as const,
+
+  encode(message: MsgOpenSanctionAppeal, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.subject !== "") {
+      writer.uint32(10).string(message.subject);
+    }
+    if (message.sanctionId !== "") {
+      writer.uint32(18).string(message.sanctionId);
+    }
+    if (message.justification !== "") {
+      writer.uint32(26).string(message.justification);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgOpenSanctionAppeal {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgOpenSanctionAppeal();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.subject = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.sanctionId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.justification = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgOpenSanctionAppeal {
+    return {
+      subject: isSet(object.subject) ? globalThis.String(object.subject) : "",
+      sanctionId: isSet(object.sanction_id) ? globalThis.String(object.sanction_id) : "",
+      justification: isSet(object.justification) ? globalThis.String(object.justification) : "",
+    };
+  },
+
+  toJSON(message: MsgOpenSanctionAppeal): unknown {
+    const obj: any = {};
+    if (message.subject !== "") {
+      obj.subject = message.subject;
+    }
+    if (message.sanctionId !== "") {
+      obj.sanction_id = message.sanctionId;
+    }
+    if (message.justification !== "") {
+      obj.justification = message.justification;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgOpenSanctionAppeal>): MsgOpenSanctionAppeal {
+    const message = createBaseMsgOpenSanctionAppeal();
+    message.subject = object.subject ?? "";
+    message.sanctionId = object.sanctionId ?? "";
+    message.justification = object.justification ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgOpenSanctionAppealResponse(): MsgOpenSanctionAppealResponse {
+  return { appealId: "" };
+}
+
+export const MsgOpenSanctionAppealResponse: MessageFns<
+  MsgOpenSanctionAppealResponse,
+  "virtengine.roles.v1.MsgOpenSanctionAppealResponse"
+> = {
+  $type: "virtengine.roles.v1.MsgOpenSanctionAppealResponse" as const,
+
+  encode(message: MsgOpenSanctionAppealResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.appealId !== "") {
+      writer.uint32(10).string(message.appealId);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgOpenSanctionAppealResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgOpenSanctionAppealResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.appealId = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgOpenSanctionAppealResponse {
+    return { appealId: isSet(object.appeal_id) ? globalThis.String(object.appeal_id) : "" };
+  },
+
+  toJSON(message: MsgOpenSanctionAppealResponse): unknown {
+    const obj: any = {};
+    if (message.appealId !== "") {
+      obj.appeal_id = message.appealId;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgOpenSanctionAppealResponse>): MsgOpenSanctionAppealResponse {
+    const message = createBaseMsgOpenSanctionAppealResponse();
+    message.appealId = object.appealId ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgResolveSanctionAppeal(): MsgResolveSanctionAppeal {
+  return { reviewer: "", appealId: "", grant: false, notes: "" };
+}
+
+export const MsgResolveSanctionAppeal: MessageFns<
+  MsgResolveSanctionAppeal,
+  "virtengine.roles.v1.MsgResolveSanctionAppeal"
+> = {
+  $type: "virtengine.roles.v1.MsgResolveSanctionAppeal" as const,
+
+  encode(message: MsgResolveSanctionAppeal, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.reviewer !== "") {
+      writer.uint32(10).string(message.reviewer);
+    }
+    if (message.appealId !== "") {
+      writer.uint32(18).string(message.appealId);
+    }
+    if (message.grant !== false) {
+      writer.uint32(24).bool(message.grant);
+    }
+    if (message.notes !== "") {
+      writer.uint32(34).string(message.notes);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgResolveSanctionAppeal {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgResolveSanctionAppeal();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.reviewer = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.appealId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.grant = reader.bool();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.notes = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MsgResolveSanctionAppeal {
+    return {
+      reviewer: isSet(object.reviewer) ? globalThis.String(object.reviewer) : "",
+      appealId: isSet(object.appeal_id) ? globalThis.String(object.appeal_id) : "",
+      grant: isSet(object.grant) ? globalThis.Boolean(object.grant) : false,
+      notes: isSet(object.notes) ? globalThis.String(object.notes) : "",
+    };
+  },
+
+  toJSON(message: MsgResolveSanctionAppeal): unknown {
+    const obj: any = {};
+    if (message.reviewer !== "") {
+      obj.reviewer = message.reviewer;
+    }
+    if (message.appealId !== "") {
+      obj.appeal_id = message.appealId;
+    }
+    if (message.grant !== false) {
+      obj.grant = message.grant;
+    }
+    if (message.notes !== "") {
+      obj.notes = message.notes;
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<MsgResolveSanctionAppeal>): MsgResolveSanctionAppeal {
+    const message = createBaseMsgResolveSanctionAppeal();
+    message.reviewer = object.reviewer ?? "";
+    message.appealId = object.appealId ?? "";
+    message.grant = object.grant ?? false;
+    message.notes = object.notes ?? "";
+    return message;
+  },
+};
+
+function createBaseMsgResolveSanctionAppealResponse(): MsgResolveSanctionAppealResponse {
+  return {};
+}
+
+export const MsgResolveSanctionAppealResponse: MessageFns<
+  MsgResolveSanctionAppealResponse,
+  "virtengine.roles.v1.MsgResolveSanctionAppealResponse"
+> = {
+  $type: "virtengine.roles.v1.MsgResolveSanctionAppealResponse" as const,
+
+  encode(_: MsgResolveSanctionAppealResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgResolveSanctionAppealResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMsgResolveSanctionAppealResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): MsgResolveSanctionAppealResponse {
+    return {};
+  },
+
+  toJSON(_: MsgResolveSanctionAppealResponse): unknown {
+    const obj: any = {};
+    return obj;
+  },
+  fromPartial(_: DeepPartial<MsgResolveSanctionAppealResponse>): MsgResolveSanctionAppealResponse {
+    const message = createBaseMsgResolveSanctionAppealResponse();
     return message;
   },
 };

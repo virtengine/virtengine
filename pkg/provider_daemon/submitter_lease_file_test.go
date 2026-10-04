@@ -133,7 +133,14 @@ func TestProviderMutationSubmitterStandbyTakesOverWithHigherFence(t *testing.T) 
 	chain.mu.Unlock()
 
 	require.NoError(t, first.Stop(context.Background()))
-	require.Eventually(t, func() bool { return second.Readiness(context.Background()).Ready }, time.Second, 10*time.Millisecond)
+	// The standby acquires on its own PollInterval tick (10ms here) after the
+	// leader releases, then runs recoverInProgress before it reports Ready.
+	// Measured over 60 back-to-back runs: median ~30ms, tail 639ms. A 1s
+	// budget left almost no headroom on a loaded runner and the failure moved
+	// between tests in this family -- the signature of a harness race, not a
+	// logic defect. This is a test-harness deadline, not a behaviour under
+	// test: a standby that genuinely cannot take over still fails, just later.
+	require.Eventually(t, func() bool { return second.Readiness(context.Background()).Ready }, 30*time.Second, 10*time.Millisecond)
 	require.Greater(t, second.leaseToken, firstToken)
 	replayed, err := second.Submit(context.Background(), MutationProviderDelete, &providerv1beta4.MsgDeleteProvider{Owner: address})
 	require.NoError(t, err)

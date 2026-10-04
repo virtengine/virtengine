@@ -31,34 +31,42 @@ service Query {
     option (google.api.http).get = "/virtengine/resources/v1/allocations/provider/{provider_address}";
   }
 
+  // Reservation returns a single reservation by its id.
   rpc Reservation(QueryReservationRequest) returns (QueryReservationResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/{reservation_id}";
   }
 
-  rpc ReservationByOrder(QueryReservationByOrderRequest) returns (QueryReservationResponse) {
+  // ReservationByOrder returns the reservation for an order.
+  rpc ReservationByOrder(QueryReservationByOrderRequest) returns (QueryReservationByOrderResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/order/{order_id}";
   }
 
-  rpc ReservationByBid(QueryReservationByBidRequest) returns (QueryReservationResponse) {
+  // ReservationByBid returns the reservation for a bid.
+  rpc ReservationByBid(QueryReservationByBidRequest) returns (QueryReservationByBidResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/bid/{bid_id}";
   }
 
-  rpc ReservationByLease(QueryReservationByLeaseRequest) returns (QueryReservationResponse) {
+  // ReservationByLease returns the reservation for a lease.
+  rpc ReservationByLease(QueryReservationByLeaseRequest) returns (QueryReservationByLeaseResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/lease/{lease_id}";
   }
 
-  rpc ReservationByJob(QueryReservationByJobRequest) returns (QueryReservationResponse) {
+  // ReservationByJob returns the reservation for an HPC job.
+  rpc ReservationByJob(QueryReservationByJobRequest) returns (QueryReservationByJobResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/job/{job_id}";
   }
 
-  rpc ReservationByConsumer(QueryReservationByConsumerRequest) returns (QueryReservationResponse) {
+  // ReservationByConsumer returns the reservation for a typed consumer.
+  rpc ReservationByConsumer(QueryReservationByConsumerRequest) returns (QueryReservationByConsumerResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/consumer/{consumer_type}/{consumer_id}";
   }
 
-  rpc ReservationsByProvider(QueryReservationsByProviderRequest) returns (QueryReservationsResponse) {
+  // ReservationsByProvider lists the reservations held by one provider.
+  rpc ReservationsByProvider(QueryReservationsByProviderRequest) returns (QueryReservationsByProviderResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservations/provider/{provider_address}";
   }
 
+  // ReservationLineage returns a reservation and its ordered event history.
   rpc ReservationLineage(QueryReservationLineageRequest) returns (QueryReservationLineageResponse) {
     option (google.api.http).get = "/virtengine/resources/v1/reservation/{reservation_id}/lineage";
   }
@@ -125,9 +133,45 @@ message QueryReservationsByProviderRequest {
   string provider_address = 1 [(cosmos_proto.scalar) = "cosmos.AddressString"];
   cosmos.base.query.v1beta1.PageRequest pagination = 2;
 }
+// QueryReservationResponse is the response for the Reservation RPC.
 message QueryReservationResponse {
   Reservation reservation = 1 [(gogoproto.nullable) = false];
 }
+// QueryReservationByOrderResponse is the response for the ReservationByOrder RPC.
+// Field layout is identical to QueryReservationResponse so the wire encoding of
+// an existing client is unchanged.
+message QueryReservationByOrderResponse {
+  Reservation reservation = 1 [(gogoproto.nullable) = false];
+}
+// QueryReservationByBidResponse is the response for the ReservationByBid RPC.
+message QueryReservationByBidResponse {
+  Reservation reservation = 1 [(gogoproto.nullable) = false];
+}
+// QueryReservationByLeaseResponse is the response for the ReservationByLease RPC.
+message QueryReservationByLeaseResponse {
+  Reservation reservation = 1 [(gogoproto.nullable) = false];
+}
+// QueryReservationByJobResponse is the response for the ReservationByJob RPC.
+message QueryReservationByJobResponse {
+  Reservation reservation = 1 [(gogoproto.nullable) = false];
+}
+// QueryReservationByConsumerResponse is the response for the ReservationByConsumer RPC.
+message QueryReservationByConsumerResponse {
+  Reservation reservation = 1 [(gogoproto.nullable) = false];
+}
+// QueryReservationsByProviderResponse is the response for the ReservationsByProvider RPC.
+message QueryReservationsByProviderResponse {
+  repeated Reservation reservations = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryReservationsResponse is the legacy shared response for the
+// reservation list RPCs.
+//
+// Deprecated: no RPC returns this type any more. ReservationsByProvider now
+// returns QueryReservationsByProviderResponse, whose field layout is identical,
+// so the encoded bytes are unchanged. It is retained only so existing Go and
+// TypeScript clients keep compiling against it.
 message QueryReservationsResponse {
   repeated Reservation reservations = 1 [(gogoproto.nullable) = false];
   cosmos.base.query.v1beta1.PageResponse pagination = 2;

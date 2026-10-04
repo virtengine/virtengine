@@ -4,6 +4,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -15,6 +16,44 @@ const (
 	PhaseResponseSchema    = "virtengine.trusted_setup.phase_response/v1"
 	ArtifactManifestSchema = "virtengine.trusted_setup.artifact_manifest/v1"
 )
+
+// ErrUnsafeBundlePath is returned when a file name carried inside a bundle would
+// escape the directory the bundle is read from or written to.
+var ErrUnsafeBundlePath = errors.New("unsafe bundle file name")
+
+// SafeJoin joins a bundle-relative file name onto baseDir, rejecting any name
+// that could escape it.
+//
+// File names recorded in phase request/response bundles are attacker-controlled:
+// bundles are exchanged between ceremony participants, so a hostile participant
+// can set `"input_file": "../../../../etc/passwd"` to make the tool read or
+// overwrite files outside the bundle directory (CWE-22 path traversal, reported
+// by gosec as G304/G703). Only bare file names are accepted.
+func SafeJoin(baseDir, name string) (string, error) {
+	trimmed := strings.TrimSpace(name)
+	if trimmed == "" {
+		return "", fmt.Errorf("%w: empty file name", ErrUnsafeBundlePath)
+	}
+	if strings.ContainsAny(trimmed, `/\`) {
+		return "", fmt.Errorf("%w: %q must not contain a path separator", ErrUnsafeBundlePath, name)
+	}
+	if trimmed == "." || trimmed == ".." {
+		return "", fmt.Errorf("%w: %q is not a file name", ErrUnsafeBundlePath, name)
+	}
+
+	joined := filepath.Join(baseDir, trimmed)
+
+	// Defence in depth: the joined path must still resolve inside baseDir.
+	rel, err := filepath.Rel(baseDir, joined)
+	if err != nil {
+		return "", fmt.Errorf("%w: %q: %v", ErrUnsafeBundlePath, name, err)
+	}
+	if rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("%w: %q escapes %s", ErrUnsafeBundlePath, name, baseDir)
+	}
+
+	return joined, nil
+}
 
 type FileRecord struct {
 	Path      string `json:"path"`
@@ -79,7 +118,7 @@ func WriteJSON(path string, v interface{}) error {
 }
 
 func ReadJSON(path string, v interface{}) error {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return err
 	}
@@ -99,7 +138,7 @@ func HashFile(path string) (string, int64, error) {
 	if info.IsDir() {
 		return "", 0, fmt.Errorf("%s is a directory", path)
 	}
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return "", 0, err
 	}

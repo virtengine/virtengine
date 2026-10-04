@@ -14,11 +14,17 @@ import { Coin, DecCoin } from "../../../cosmos/base/v1beta1/coin.ts";
 
 /** FinancialSubjectType identifies the canonical financial lineage root. */
 export enum FinancialSubjectType {
+  /** FINANCIAL_SUBJECT_TYPE_UNSPECIFIED - FINANCIAL_SUBJECT_TYPE_UNSPECIFIED marks an absent lineage root. */
   FINANCIAL_SUBJECT_TYPE_UNSPECIFIED = 0,
+  /** FINANCIAL_SUBJECT_TYPE_ORDER - FINANCIAL_SUBJECT_TYPE_ORDER roots the case at a marketplace order. */
   FINANCIAL_SUBJECT_TYPE_ORDER = 1,
+  /** FINANCIAL_SUBJECT_TYPE_INVOICE - FINANCIAL_SUBJECT_TYPE_INVOICE roots the case at an issued invoice. */
   FINANCIAL_SUBJECT_TYPE_INVOICE = 2,
+  /** FINANCIAL_SUBJECT_TYPE_USAGE - FINANCIAL_SUBJECT_TYPE_USAGE roots the case at a metered usage record. */
   FINANCIAL_SUBJECT_TYPE_USAGE = 3,
+  /** FINANCIAL_SUBJECT_TYPE_HPC_JOB - FINANCIAL_SUBJECT_TYPE_HPC_JOB roots the case at an HPC job. */
   FINANCIAL_SUBJECT_TYPE_HPC_JOB = 4,
+  /** FINANCIAL_SUBJECT_TYPE_SETTLEMENT - FINANCIAL_SUBJECT_TYPE_SETTLEMENT roots the case at a settlement event. */
   FINANCIAL_SUBJECT_TYPE_SETTLEMENT = 5,
   UNRECOGNIZED = -1,
 }
@@ -72,14 +78,23 @@ export function financialSubjectTypeToJSON(object: FinancialSubjectType): string
 
 /** FinancialClaimType identifies a privacy-safe typed allegation or finding. */
 export enum FinancialClaimType {
+  /** FINANCIAL_CLAIM_TYPE_UNSPECIFIED - FINANCIAL_CLAIM_TYPE_UNSPECIFIED marks an absent claim type. */
   FINANCIAL_CLAIM_TYPE_UNSPECIFIED = 0,
+  /** FINANCIAL_CLAIM_TYPE_BILLING - FINANCIAL_CLAIM_TYPE_BILLING disputes the billed amount. */
   FINANCIAL_CLAIM_TYPE_BILLING = 1,
+  /** FINANCIAL_CLAIM_TYPE_USAGE - FINANCIAL_CLAIM_TYPE_USAGE disputes metered usage. */
   FINANCIAL_CLAIM_TYPE_USAGE = 2,
+  /** FINANCIAL_CLAIM_TYPE_SERVICE - FINANCIAL_CLAIM_TYPE_SERVICE disputes the delivered service. */
   FINANCIAL_CLAIM_TYPE_SERVICE = 3,
+  /** FINANCIAL_CLAIM_TYPE_FRAUD - FINANCIAL_CLAIM_TYPE_FRAUD alleges fraudulent conduct. */
   FINANCIAL_CLAIM_TYPE_FRAUD = 4,
+  /** FINANCIAL_CLAIM_TYPE_HPC - FINANCIAL_CLAIM_TYPE_HPC disputes an HPC execution outcome. */
   FINANCIAL_CLAIM_TYPE_HPC = 5,
+  /** FINANCIAL_CLAIM_TYPE_REVIEW - FINANCIAL_CLAIM_TYPE_REVIEW is a reviewer assessment. */
   FINANCIAL_CLAIM_TYPE_REVIEW = 6,
+  /** FINANCIAL_CLAIM_TYPE_MODERATION - FINANCIAL_CLAIM_TYPE_MODERATION is a moderation finding. */
   FINANCIAL_CLAIM_TYPE_MODERATION = 7,
+  /** FINANCIAL_CLAIM_TYPE_MIGRATION - FINANCIAL_CLAIM_TYPE_MIGRATION was raised by a state migration. */
   FINANCIAL_CLAIM_TYPE_MIGRATION = 8,
   UNRECOGNIZED = -1,
 }
@@ -148,16 +163,27 @@ export function financialClaimTypeToJSON(object: FinancialClaimType): string {
 
 /** FinancialCaseStatus is the canonical dispute lifecycle state. */
 export enum FinancialCaseStatus {
+  /** FINANCIAL_CASE_STATUS_UNSPECIFIED - FINANCIAL_CASE_STATUS_UNSPECIFIED is the pre-open transition origin. */
   FINANCIAL_CASE_STATUS_UNSPECIFIED = 0,
+  /** FINANCIAL_CASE_STATUS_OPEN - FINANCIAL_CASE_STATUS_OPEN is a newly opened case awaiting evidence. */
   FINANCIAL_CASE_STATUS_OPEN = 1,
+  /** FINANCIAL_CASE_STATUS_EVIDENCE - FINANCIAL_CASE_STATUS_EVIDENCE is collecting party evidence. */
   FINANCIAL_CASE_STATUS_EVIDENCE = 2,
+  /** FINANCIAL_CASE_STATUS_REVIEW - FINANCIAL_CASE_STATUS_REVIEW is under resolver review. */
   FINANCIAL_CASE_STATUS_REVIEW = 3,
+  /** FINANCIAL_CASE_STATUS_ESCALATED - FINANCIAL_CASE_STATUS_ESCALATED has been escalated past review. */
   FINANCIAL_CASE_STATUS_ESCALATED = 4,
+  /** FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL - FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL is resolved but still appealable. */
   FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL = 5,
+  /** FINANCIAL_CASE_STATUS_FINAL - FINANCIAL_CASE_STATUS_FINAL is a terminal resolution with no appeal left. */
   FINANCIAL_CASE_STATUS_FINAL = 6,
+  /** FINANCIAL_CASE_STATUS_REJECTED - FINANCIAL_CASE_STATUS_REJECTED is a terminal rejection of the claim. */
   FINANCIAL_CASE_STATUS_REJECTED = 7,
+  /** FINANCIAL_CASE_STATUS_CANCELLED - FINANCIAL_CASE_STATUS_CANCELLED is a terminal withdrawal by the claimant. */
   FINANCIAL_CASE_STATUS_CANCELLED = 8,
+  /** FINANCIAL_CASE_STATUS_EXPIRED - FINANCIAL_CASE_STATUS_EXPIRED is a terminal deadline lapse. */
   FINANCIAL_CASE_STATUS_EXPIRED = 9,
+  /** FINANCIAL_CASE_STATUS_QUARANTINED - FINANCIAL_CASE_STATUS_QUARANTINED is held by authority pending integrity review. */
   FINANCIAL_CASE_STATUS_QUARANTINED = 10,
   UNRECOGNIZED = -1,
 }
@@ -236,12 +262,19 @@ export function financialCaseStatusToJSON(object: FinancialCaseStatus): string {
 
 /** FinancialResolutionType selects the terminal policy applied after appeal. */
 export enum FinancialResolutionType {
+  /** FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED - FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED marks an absent resolution policy. */
   FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED = 0,
+  /** FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN - FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN awards the dispute to the provider. */
   FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN = 1,
+  /** FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN - FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN awards the dispute to the customer. */
   FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN = 2,
+  /** FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT - FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT splits the allocation between both parties. */
   FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT = 3,
+  /** FINANCIAL_RESOLUTION_TYPE_MUTUAL - FINANCIAL_RESOLUTION_TYPE_MUTUAL records a mutually agreed resolution. */
   FINANCIAL_RESOLUTION_TYPE_MUTUAL = 4,
+  /** FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED - FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED records confirmed fraud. */
   FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED = 5,
+  /** FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT - FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT ends the case without a finding. */
   FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT = 6,
   UNRECOGNIZED = -1,
 }
@@ -300,12 +333,19 @@ export function financialResolutionTypeToJSON(object: FinancialResolutionType): 
 
 /** FinancialEffectType identifies an exactly-once terminal side effect. */
 export enum FinancialEffectType {
+  /** FINANCIAL_EFFECT_TYPE_UNSPECIFIED - FINANCIAL_EFFECT_TYPE_UNSPECIFIED marks an absent effect kind. */
   FINANCIAL_EFFECT_TYPE_UNSPECIFIED = 0,
+  /** FINANCIAL_EFFECT_TYPE_PAYOUT - FINANCIAL_EFFECT_TYPE_PAYOUT moves value to the winning party. */
   FINANCIAL_EFFECT_TYPE_PAYOUT = 1,
+  /** FINANCIAL_EFFECT_TYPE_ESCROW - FINANCIAL_EFFECT_TYPE_ESCROW returns or releases escrowed funds. */
   FINANCIAL_EFFECT_TYPE_ESCROW = 2,
+  /** FINANCIAL_EFFECT_TYPE_REWARD - FINANCIAL_EFFECT_TYPE_REWARD adjusts provider rewards. */
   FINANCIAL_EFFECT_TYPE_REWARD = 3,
+  /** FINANCIAL_EFFECT_TYPE_RESERVATION - FINANCIAL_EFFECT_TYPE_RESERVATION adjusts a resource reservation. */
   FINANCIAL_EFFECT_TYPE_RESERVATION = 4,
+  /** FINANCIAL_EFFECT_TYPE_REPUTATION - FINANCIAL_EFFECT_TYPE_REPUTATION adjusts reputation scores. */
   FINANCIAL_EFFECT_TYPE_REPUTATION = 5,
+  /** FINANCIAL_EFFECT_TYPE_PROJECTION - FINANCIAL_EFFECT_TYPE_PROJECTION updates derived read models only. */
   FINANCIAL_EFFECT_TYPE_PROJECTION = 6,
   UNRECOGNIZED = -1,
 }
@@ -364,9 +404,13 @@ export function financialEffectTypeToJSON(object: FinancialEffectType): string {
 
 /** FinancialEffectStatus identifies durable effect progress. */
 export enum FinancialEffectStatus {
+  /** FINANCIAL_EFFECT_STATUS_UNSPECIFIED - FINANCIAL_EFFECT_STATUS_UNSPECIFIED marks an absent effect status. */
   FINANCIAL_EFFECT_STATUS_UNSPECIFIED = 0,
+  /** FINANCIAL_EFFECT_STATUS_PENDING - FINANCIAL_EFFECT_STATUS_PENDING is a recorded but unapplied effect. */
   FINANCIAL_EFFECT_STATUS_PENDING = 1,
+  /** FINANCIAL_EFFECT_STATUS_APPLIED - FINANCIAL_EFFECT_STATUS_APPLIED is a durably applied effect. */
   FINANCIAL_EFFECT_STATUS_APPLIED = 2,
+  /** FINANCIAL_EFFECT_STATUS_FAILED - FINANCIAL_EFFECT_STATUS_FAILED is an effect that exhausted its retries. */
   FINANCIAL_EFFECT_STATUS_FAILED = 3,
   UNRECOGNIZED = -1,
 }
@@ -413,11 +457,17 @@ export function financialEffectStatusToJSON(object: FinancialEffectStatus): stri
  * external production certification. Only CERTIFIED_ENABLED is executable.
  */
 export enum FiatConversionProfileState {
+  /** FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED - FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED marks an absent profile state. */
   FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED = 0,
+  /** FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED - FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED is not backed by an engine profile. */
   FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED = 1,
+  /** FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE - FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE is still under construction. */
   FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE = 2,
+  /** FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED - FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED is built but externally blocked. */
   FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED = 3,
+  /** FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED - FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED is the only executable state. */
   FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED = 4,
+  /** FIAT_CONVERSION_PROFILE_STATE_PAUSED - FIAT_CONVERSION_PROFILE_STATE_PAUSED is administratively paused. */
   FIAT_CONVERSION_PROFILE_STATE_PAUSED = 5,
   UNRECOGNIZED = -1,
 }
@@ -471,14 +521,23 @@ export function fiatConversionProfileStateToJSON(object: FiatConversionProfileSt
 
 /** FiatConversionObservationStage is the legal external execution vocabulary. */
 export enum FiatConversionObservationStage {
+  /** FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED - FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED marks an absent stage. */
   FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED = 0,
+  /** FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED - FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED is a quoted route accepted. */
   FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED = 1,
+  /** FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED - FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED is a submitted on-chain swap. */
   FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED = 2,
+  /** FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED - FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED is a swap past finality. */
   FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED = 3,
+  /** FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED - FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED is a quoted off-ramp payout. */
   FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED = 4,
+  /** FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED - FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED is a submitted off-ramp payout. */
   FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED = 5,
+  /** FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED - FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED is a settled off-ramp payout. */
   FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED = 6,
+  /** FIAT_CONVERSION_OBSERVATION_STAGE_FAILED - FIAT_CONVERSION_OBSERVATION_STAGE_FAILED is a failed conversion leg. */
   FIAT_CONVERSION_OBSERVATION_STAGE_FAILED = 7,
+  /** FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED - FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED is a cancelled conversion leg. */
   FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED = 8,
   UNRECOGNIZED = -1,
 }
@@ -927,6 +986,7 @@ export interface EventFinancialCaseOpened {
   holdCount: number;
 }
 
+/** EventFinancialClaimAdded is emitted when a claim joins an open case. */
 export interface EventFinancialClaimAdded {
   caseId: string;
   claimId: string;
@@ -934,50 +994,59 @@ export interface EventFinancialClaimAdded {
   sourceModule: string;
 }
 
+/** EventFinancialCaseHeld is emitted when settlement funds are held. */
 export interface EventFinancialCaseHeld {
   caseId: string;
   referenceType: string;
   referenceId: string;
 }
 
+/** EventFinancialCaseReviewed is emitted when a case enters review. */
 export interface EventFinancialCaseReviewed {
   caseId: string;
   status: FinancialCaseStatus;
 }
 
+/** EventFinancialCaseEscalated is emitted when a case is escalated. */
 export interface EventFinancialCaseEscalated {
   caseId: string;
   status: FinancialCaseStatus;
 }
 
+/** EventFinancialCaseResolved is emitted when a resolver allocates the case. */
 export interface EventFinancialCaseResolved {
   caseId: string;
   resolutionType: FinancialResolutionType;
   allocationHash: Uint8Array;
 }
 
+/** EventFinancialCaseAppealed is emitted when a party appeals a resolution. */
 export interface EventFinancialCaseAppealed {
   caseId: string;
   appealId: string;
   appealCount: number;
 }
 
+/** EventFinancialCaseFinalized is emitted when a case becomes final. */
 export interface EventFinancialCaseFinalized {
   caseId: string;
   resolutionType: FinancialResolutionType;
 }
 
+/** EventFinancialCaseEffectApplied is emitted for each applied terminal effect. */
 export interface EventFinancialCaseEffectApplied {
   caseId: string;
   effectId: string;
   effectType: FinancialEffectType;
 }
 
+/** EventFinancialCaseQuarantined is emitted when authority quarantines a case. */
 export interface EventFinancialCaseQuarantined {
   caseId: string;
   reasonHash: Uint8Array;
 }
 
+/** EventFinancialCaseExpired is emitted when a case passes its deadline. */
 export interface EventFinancialCaseExpired {
   caseId: string;
   status: FinancialCaseStatus;
@@ -1132,6 +1201,7 @@ export interface EventFiatConversionObservationRecorded {
   recordedHeight: Long;
 }
 
+/** EventFiatConversionTerminal is emitted when a conversion reaches a terminal stage. */
 export interface EventFiatConversionTerminal {
   conversionId: string;
   payoutId: string;
@@ -1427,37 +1497,145 @@ export interface QueryFiatPayoutPreferenceResponse {
   preference: FiatPayoutPreference | undefined;
 }
 
+/** QueryFinancialCaseRequest is the request for the FinancialCase RPC. */
 export interface QueryFinancialCaseRequest {
   caseId: string;
 }
 
+/** QueryFinancialCaseResponse is the response for the FinancialCase RPC. */
 export interface QueryFinancialCaseResponse {
   financialCase: FinancialCase | undefined;
 }
 
+/** QueryFinancialCaseBySubjectRequest is the request for the FinancialCaseBySubject RPC. */
 export interface QueryFinancialCaseBySubjectRequest {
   subject: FinancialSubject | undefined;
 }
 
+/** QueryFinancialCaseBySubjectResponse is the response for the FinancialCaseBySubject RPC. */
 export interface QueryFinancialCaseBySubjectResponse {
   financialCase: FinancialCase | undefined;
 }
 
+/** QueryFinancialCasesByOrderRequest is the request for the FinancialCasesByOrder RPC. */
+export interface QueryFinancialCasesByOrderRequest {
+  orderId: string;
+  pagination: PageRequest | undefined;
+}
+
+/** QueryFinancialCasesByOrderResponse is the response for the FinancialCasesByOrder RPC. */
+export interface QueryFinancialCasesByOrderResponse {
+  financialCases: FinancialCase[];
+  pagination: PageResponse | undefined;
+}
+
+/** QueryFinancialCasesByInvoiceRequest is the request for the FinancialCasesByInvoice RPC. */
+export interface QueryFinancialCasesByInvoiceRequest {
+  invoiceId: string;
+  pagination: PageRequest | undefined;
+}
+
+/** QueryFinancialCasesByInvoiceResponse is the response for the FinancialCasesByInvoice RPC. */
+export interface QueryFinancialCasesByInvoiceResponse {
+  financialCases: FinancialCase[];
+  pagination: PageResponse | undefined;
+}
+
+/** QueryFinancialCasesByUsageRequest is the request for the FinancialCasesByUsage RPC. */
+export interface QueryFinancialCasesByUsageRequest {
+  usageId: string;
+  pagination: PageRequest | undefined;
+}
+
+/** QueryFinancialCasesByUsageResponse is the response for the FinancialCasesByUsage RPC. */
+export interface QueryFinancialCasesByUsageResponse {
+  financialCases: FinancialCase[];
+  pagination: PageResponse | undefined;
+}
+
+/** QueryFinancialCasesByJobRequest is the request for the FinancialCasesByJob RPC. */
+export interface QueryFinancialCasesByJobRequest {
+  jobId: string;
+  pagination: PageRequest | undefined;
+}
+
+/** QueryFinancialCasesByJobResponse is the response for the FinancialCasesByJob RPC. */
+export interface QueryFinancialCasesByJobResponse {
+  financialCases: FinancialCase[];
+  pagination: PageResponse | undefined;
+}
+
+/** QueryFinancialCasesByEscrowRequest is the request for the FinancialCasesByEscrow RPC. */
+export interface QueryFinancialCasesByEscrowRequest {
+  escrowId: string;
+  pagination: PageRequest | undefined;
+}
+
+/** QueryFinancialCasesByEscrowResponse is the response for the FinancialCasesByEscrow RPC. */
+export interface QueryFinancialCasesByEscrowResponse {
+  financialCases: FinancialCase[];
+  pagination: PageResponse | undefined;
+}
+
+/** QueryFinancialCasesByStatusRequest is the request for the FinancialCasesByStatus RPC. */
+export interface QueryFinancialCasesByStatusRequest {
+  status: string;
+  pagination: PageRequest | undefined;
+}
+
+/** QueryFinancialCasesByStatusResponse is the response for the FinancialCasesByStatus RPC. */
+export interface QueryFinancialCasesByStatusResponse {
+  financialCases: FinancialCase[];
+  pagination: PageResponse | undefined;
+}
+
+/** QueryFinancialCasesByPartyRequest is the request for the FinancialCasesByParty RPC. */
+export interface QueryFinancialCasesByPartyRequest {
+  party: string;
+  pagination: PageRequest | undefined;
+}
+
+/** QueryFinancialCasesByPartyResponse is the response for the FinancialCasesByParty RPC. */
+export interface QueryFinancialCasesByPartyResponse {
+  financialCases: FinancialCase[];
+  pagination: PageResponse | undefined;
+}
+
+/**
+ * QueryFinancialCasesRequest is the legacy shared request for the
+ * FinancialCasesBy* RPCs.
+ *
+ * Deprecated: no RPC takes this type any more. Each FinancialCasesBy* RPC now
+ * takes its own request whose field layout is identical (field 1 is the lookup
+ * key, field 2 the pagination), so the encoded bytes are unchanged. It is
+ * retained only so existing Go and TypeScript clients keep compiling.
+ */
 export interface QueryFinancialCasesRequest {
   key: string;
   pagination: PageRequest | undefined;
 }
 
+/**
+ * QueryFinancialCasesResponse is the legacy shared response for the
+ * FinancialCasesBy* RPCs.
+ *
+ * Deprecated: no RPC returns this type any more. Each FinancialCasesBy* RPC now
+ * returns its own response whose field layout is identical, so the encoded bytes
+ * are unchanged. It is retained only so existing Go and TypeScript clients keep
+ * compiling against it.
+ */
 export interface QueryFinancialCasesResponse {
   financialCases: FinancialCase[];
   pagination: PageResponse | undefined;
 }
 
+/** QueryFinancialCaseLineageRequest is the request for the FinancialCaseLineage RPC. */
 export interface QueryFinancialCaseLineageRequest {
   caseId: string;
   pagination: PageRequest | undefined;
 }
 
+/** QueryFinancialCaseLineageResponse is the response for the FinancialCaseLineage RPC. */
 export interface QueryFinancialCaseLineageResponse {
   transitions: FinancialCaseTransition[];
   claims: FinancialClaim[];
@@ -15112,6 +15290,1126 @@ export const QueryFinancialCaseBySubjectResponse: MessageFns<
     const message = createBaseQueryFinancialCaseBySubjectResponse();
     message.financialCase = (object.financialCase !== undefined && object.financialCase !== null)
       ? FinancialCase.fromPartial(object.financialCase)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByOrderRequest(): QueryFinancialCasesByOrderRequest {
+  return { orderId: "", pagination: undefined };
+}
+
+export const QueryFinancialCasesByOrderRequest: MessageFns<
+  QueryFinancialCasesByOrderRequest,
+  "virtengine.settlement.v1.QueryFinancialCasesByOrderRequest"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByOrderRequest" as const,
+
+  encode(message: QueryFinancialCasesByOrderRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.orderId !== "") {
+      writer.uint32(10).string(message.orderId);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByOrderRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByOrderRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.orderId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByOrderRequest {
+    return {
+      orderId: isSet(object.order_id) ? globalThis.String(object.order_id) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByOrderRequest): unknown {
+    const obj: any = {};
+    if (message.orderId !== "") {
+      obj.order_id = message.orderId;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByOrderRequest>): QueryFinancialCasesByOrderRequest {
+    const message = createBaseQueryFinancialCasesByOrderRequest();
+    message.orderId = object.orderId ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByOrderResponse(): QueryFinancialCasesByOrderResponse {
+  return { financialCases: [], pagination: undefined };
+}
+
+export const QueryFinancialCasesByOrderResponse: MessageFns<
+  QueryFinancialCasesByOrderResponse,
+  "virtengine.settlement.v1.QueryFinancialCasesByOrderResponse"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByOrderResponse" as const,
+
+  encode(message: QueryFinancialCasesByOrderResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.financialCases) {
+      FinancialCase.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByOrderResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByOrderResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.financialCases.push(FinancialCase.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByOrderResponse {
+    return {
+      financialCases: globalThis.Array.isArray(object?.financial_cases)
+        ? object.financial_cases.map((e: any) => FinancialCase.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByOrderResponse): unknown {
+    const obj: any = {};
+    if (message.financialCases?.length) {
+      obj.financial_cases = message.financialCases.map((e) => FinancialCase.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByOrderResponse>): QueryFinancialCasesByOrderResponse {
+    const message = createBaseQueryFinancialCasesByOrderResponse();
+    message.financialCases = object.financialCases?.map((e) => FinancialCase.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByInvoiceRequest(): QueryFinancialCasesByInvoiceRequest {
+  return { invoiceId: "", pagination: undefined };
+}
+
+export const QueryFinancialCasesByInvoiceRequest: MessageFns<
+  QueryFinancialCasesByInvoiceRequest,
+  "virtengine.settlement.v1.QueryFinancialCasesByInvoiceRequest"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByInvoiceRequest" as const,
+
+  encode(message: QueryFinancialCasesByInvoiceRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.invoiceId !== "") {
+      writer.uint32(10).string(message.invoiceId);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByInvoiceRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByInvoiceRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.invoiceId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByInvoiceRequest {
+    return {
+      invoiceId: isSet(object.invoice_id) ? globalThis.String(object.invoice_id) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByInvoiceRequest): unknown {
+    const obj: any = {};
+    if (message.invoiceId !== "") {
+      obj.invoice_id = message.invoiceId;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByInvoiceRequest>): QueryFinancialCasesByInvoiceRequest {
+    const message = createBaseQueryFinancialCasesByInvoiceRequest();
+    message.invoiceId = object.invoiceId ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByInvoiceResponse(): QueryFinancialCasesByInvoiceResponse {
+  return { financialCases: [], pagination: undefined };
+}
+
+export const QueryFinancialCasesByInvoiceResponse: MessageFns<
+  QueryFinancialCasesByInvoiceResponse,
+  "virtengine.settlement.v1.QueryFinancialCasesByInvoiceResponse"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByInvoiceResponse" as const,
+
+  encode(message: QueryFinancialCasesByInvoiceResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.financialCases) {
+      FinancialCase.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByInvoiceResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByInvoiceResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.financialCases.push(FinancialCase.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByInvoiceResponse {
+    return {
+      financialCases: globalThis.Array.isArray(object?.financial_cases)
+        ? object.financial_cases.map((e: any) => FinancialCase.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByInvoiceResponse): unknown {
+    const obj: any = {};
+    if (message.financialCases?.length) {
+      obj.financial_cases = message.financialCases.map((e) => FinancialCase.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByInvoiceResponse>): QueryFinancialCasesByInvoiceResponse {
+    const message = createBaseQueryFinancialCasesByInvoiceResponse();
+    message.financialCases = object.financialCases?.map((e) => FinancialCase.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByUsageRequest(): QueryFinancialCasesByUsageRequest {
+  return { usageId: "", pagination: undefined };
+}
+
+export const QueryFinancialCasesByUsageRequest: MessageFns<
+  QueryFinancialCasesByUsageRequest,
+  "virtengine.settlement.v1.QueryFinancialCasesByUsageRequest"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByUsageRequest" as const,
+
+  encode(message: QueryFinancialCasesByUsageRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.usageId !== "") {
+      writer.uint32(10).string(message.usageId);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByUsageRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByUsageRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.usageId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByUsageRequest {
+    return {
+      usageId: isSet(object.usage_id) ? globalThis.String(object.usage_id) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByUsageRequest): unknown {
+    const obj: any = {};
+    if (message.usageId !== "") {
+      obj.usage_id = message.usageId;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByUsageRequest>): QueryFinancialCasesByUsageRequest {
+    const message = createBaseQueryFinancialCasesByUsageRequest();
+    message.usageId = object.usageId ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByUsageResponse(): QueryFinancialCasesByUsageResponse {
+  return { financialCases: [], pagination: undefined };
+}
+
+export const QueryFinancialCasesByUsageResponse: MessageFns<
+  QueryFinancialCasesByUsageResponse,
+  "virtengine.settlement.v1.QueryFinancialCasesByUsageResponse"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByUsageResponse" as const,
+
+  encode(message: QueryFinancialCasesByUsageResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.financialCases) {
+      FinancialCase.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByUsageResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByUsageResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.financialCases.push(FinancialCase.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByUsageResponse {
+    return {
+      financialCases: globalThis.Array.isArray(object?.financial_cases)
+        ? object.financial_cases.map((e: any) => FinancialCase.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByUsageResponse): unknown {
+    const obj: any = {};
+    if (message.financialCases?.length) {
+      obj.financial_cases = message.financialCases.map((e) => FinancialCase.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByUsageResponse>): QueryFinancialCasesByUsageResponse {
+    const message = createBaseQueryFinancialCasesByUsageResponse();
+    message.financialCases = object.financialCases?.map((e) => FinancialCase.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByJobRequest(): QueryFinancialCasesByJobRequest {
+  return { jobId: "", pagination: undefined };
+}
+
+export const QueryFinancialCasesByJobRequest: MessageFns<
+  QueryFinancialCasesByJobRequest,
+  "virtengine.settlement.v1.QueryFinancialCasesByJobRequest"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByJobRequest" as const,
+
+  encode(message: QueryFinancialCasesByJobRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.jobId !== "") {
+      writer.uint32(10).string(message.jobId);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByJobRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByJobRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.jobId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByJobRequest {
+    return {
+      jobId: isSet(object.job_id) ? globalThis.String(object.job_id) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByJobRequest): unknown {
+    const obj: any = {};
+    if (message.jobId !== "") {
+      obj.job_id = message.jobId;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByJobRequest>): QueryFinancialCasesByJobRequest {
+    const message = createBaseQueryFinancialCasesByJobRequest();
+    message.jobId = object.jobId ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByJobResponse(): QueryFinancialCasesByJobResponse {
+  return { financialCases: [], pagination: undefined };
+}
+
+export const QueryFinancialCasesByJobResponse: MessageFns<
+  QueryFinancialCasesByJobResponse,
+  "virtengine.settlement.v1.QueryFinancialCasesByJobResponse"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByJobResponse" as const,
+
+  encode(message: QueryFinancialCasesByJobResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.financialCases) {
+      FinancialCase.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByJobResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByJobResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.financialCases.push(FinancialCase.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByJobResponse {
+    return {
+      financialCases: globalThis.Array.isArray(object?.financial_cases)
+        ? object.financial_cases.map((e: any) => FinancialCase.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByJobResponse): unknown {
+    const obj: any = {};
+    if (message.financialCases?.length) {
+      obj.financial_cases = message.financialCases.map((e) => FinancialCase.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByJobResponse>): QueryFinancialCasesByJobResponse {
+    const message = createBaseQueryFinancialCasesByJobResponse();
+    message.financialCases = object.financialCases?.map((e) => FinancialCase.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByEscrowRequest(): QueryFinancialCasesByEscrowRequest {
+  return { escrowId: "", pagination: undefined };
+}
+
+export const QueryFinancialCasesByEscrowRequest: MessageFns<
+  QueryFinancialCasesByEscrowRequest,
+  "virtengine.settlement.v1.QueryFinancialCasesByEscrowRequest"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByEscrowRequest" as const,
+
+  encode(message: QueryFinancialCasesByEscrowRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.escrowId !== "") {
+      writer.uint32(10).string(message.escrowId);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByEscrowRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByEscrowRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.escrowId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByEscrowRequest {
+    return {
+      escrowId: isSet(object.escrow_id) ? globalThis.String(object.escrow_id) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByEscrowRequest): unknown {
+    const obj: any = {};
+    if (message.escrowId !== "") {
+      obj.escrow_id = message.escrowId;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByEscrowRequest>): QueryFinancialCasesByEscrowRequest {
+    const message = createBaseQueryFinancialCasesByEscrowRequest();
+    message.escrowId = object.escrowId ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByEscrowResponse(): QueryFinancialCasesByEscrowResponse {
+  return { financialCases: [], pagination: undefined };
+}
+
+export const QueryFinancialCasesByEscrowResponse: MessageFns<
+  QueryFinancialCasesByEscrowResponse,
+  "virtengine.settlement.v1.QueryFinancialCasesByEscrowResponse"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByEscrowResponse" as const,
+
+  encode(message: QueryFinancialCasesByEscrowResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.financialCases) {
+      FinancialCase.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByEscrowResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByEscrowResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.financialCases.push(FinancialCase.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByEscrowResponse {
+    return {
+      financialCases: globalThis.Array.isArray(object?.financial_cases)
+        ? object.financial_cases.map((e: any) => FinancialCase.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByEscrowResponse): unknown {
+    const obj: any = {};
+    if (message.financialCases?.length) {
+      obj.financial_cases = message.financialCases.map((e) => FinancialCase.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByEscrowResponse>): QueryFinancialCasesByEscrowResponse {
+    const message = createBaseQueryFinancialCasesByEscrowResponse();
+    message.financialCases = object.financialCases?.map((e) => FinancialCase.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByStatusRequest(): QueryFinancialCasesByStatusRequest {
+  return { status: "", pagination: undefined };
+}
+
+export const QueryFinancialCasesByStatusRequest: MessageFns<
+  QueryFinancialCasesByStatusRequest,
+  "virtengine.settlement.v1.QueryFinancialCasesByStatusRequest"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByStatusRequest" as const,
+
+  encode(message: QueryFinancialCasesByStatusRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.status !== "") {
+      writer.uint32(10).string(message.status);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByStatusRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByStatusRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByStatusRequest {
+    return {
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByStatusRequest): unknown {
+    const obj: any = {};
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByStatusRequest>): QueryFinancialCasesByStatusRequest {
+    const message = createBaseQueryFinancialCasesByStatusRequest();
+    message.status = object.status ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByStatusResponse(): QueryFinancialCasesByStatusResponse {
+  return { financialCases: [], pagination: undefined };
+}
+
+export const QueryFinancialCasesByStatusResponse: MessageFns<
+  QueryFinancialCasesByStatusResponse,
+  "virtengine.settlement.v1.QueryFinancialCasesByStatusResponse"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByStatusResponse" as const,
+
+  encode(message: QueryFinancialCasesByStatusResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.financialCases) {
+      FinancialCase.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByStatusResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByStatusResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.financialCases.push(FinancialCase.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByStatusResponse {
+    return {
+      financialCases: globalThis.Array.isArray(object?.financial_cases)
+        ? object.financial_cases.map((e: any) => FinancialCase.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByStatusResponse): unknown {
+    const obj: any = {};
+    if (message.financialCases?.length) {
+      obj.financial_cases = message.financialCases.map((e) => FinancialCase.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByStatusResponse>): QueryFinancialCasesByStatusResponse {
+    const message = createBaseQueryFinancialCasesByStatusResponse();
+    message.financialCases = object.financialCases?.map((e) => FinancialCase.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByPartyRequest(): QueryFinancialCasesByPartyRequest {
+  return { party: "", pagination: undefined };
+}
+
+export const QueryFinancialCasesByPartyRequest: MessageFns<
+  QueryFinancialCasesByPartyRequest,
+  "virtengine.settlement.v1.QueryFinancialCasesByPartyRequest"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByPartyRequest" as const,
+
+  encode(message: QueryFinancialCasesByPartyRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.party !== "") {
+      writer.uint32(10).string(message.party);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByPartyRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByPartyRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.party = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByPartyRequest {
+    return {
+      party: isSet(object.party) ? globalThis.String(object.party) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByPartyRequest): unknown {
+    const obj: any = {};
+    if (message.party !== "") {
+      obj.party = message.party;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByPartyRequest>): QueryFinancialCasesByPartyRequest {
+    const message = createBaseQueryFinancialCasesByPartyRequest();
+    message.party = object.party ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryFinancialCasesByPartyResponse(): QueryFinancialCasesByPartyResponse {
+  return { financialCases: [], pagination: undefined };
+}
+
+export const QueryFinancialCasesByPartyResponse: MessageFns<
+  QueryFinancialCasesByPartyResponse,
+  "virtengine.settlement.v1.QueryFinancialCasesByPartyResponse"
+> = {
+  $type: "virtengine.settlement.v1.QueryFinancialCasesByPartyResponse" as const,
+
+  encode(message: QueryFinancialCasesByPartyResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.financialCases) {
+      FinancialCase.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryFinancialCasesByPartyResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryFinancialCasesByPartyResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.financialCases.push(FinancialCase.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryFinancialCasesByPartyResponse {
+    return {
+      financialCases: globalThis.Array.isArray(object?.financial_cases)
+        ? object.financial_cases.map((e: any) => FinancialCase.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryFinancialCasesByPartyResponse): unknown {
+    const obj: any = {};
+    if (message.financialCases?.length) {
+      obj.financial_cases = message.financialCases.map((e) => FinancialCase.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryFinancialCasesByPartyResponse>): QueryFinancialCasesByPartyResponse {
+    const message = createBaseQueryFinancialCasesByPartyResponse();
+    message.financialCases = object.financialCases?.map((e) => FinancialCase.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
       : undefined;
     return message;
   },

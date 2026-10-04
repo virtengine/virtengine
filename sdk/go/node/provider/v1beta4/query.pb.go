@@ -227,6 +227,7 @@ func (m *QueryProviderResponse) GetProvider() Provider {
 	return Provider{}
 }
 
+// ProviderSigningKeyRecord is a provider signing key and its lifecycle.
 type ProviderSigningKeyRecord struct {
 	PublicKey         []byte `protobuf:"bytes,1,opt,name=public_key,json=publicKey,proto3" json:"public_key,omitempty"`
 	KeyType           string `protobuf:"bytes,2,opt,name=key_type,json=keyType,proto3" json:"key_type,omitempty"`
@@ -375,6 +376,7 @@ func (m *ProviderSigningKeyRecord) GetRotationCount() uint32 {
 	return 0
 }
 
+// QueryProviderSigningKeyRequest is the request for the ProviderSigningKey RPC.
 type QueryProviderSigningKeyRequest struct {
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
 	KeyId string `protobuf:"bytes,2,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
@@ -435,6 +437,7 @@ func (m *QueryProviderSigningKeyRequest) GetEpoch() uint64 {
 	return 0
 }
 
+// QueryProviderSigningKeyResponse is the response for the ProviderSigningKey RPC.
 type QueryProviderSigningKeyResponse struct {
 	Key ProviderSigningKeyRecord `protobuf:"bytes,1,opt,name=key,proto3" json:"key"`
 }
@@ -479,6 +482,7 @@ func (m *QueryProviderSigningKeyResponse) GetKey() ProviderSigningKeyRecord {
 	return ProviderSigningKeyRecord{}
 }
 
+// QueryProviderSigningKeyEpochsRequest is the request for the ProviderSigningKeyEpochs RPC.
 type QueryProviderSigningKeyEpochsRequest struct {
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner,omitempty"`
 }
@@ -523,6 +527,7 @@ func (m *QueryProviderSigningKeyEpochsRequest) GetOwner() string {
 	return ""
 }
 
+// QueryProviderSigningKeyEpochsResponse is the response for the ProviderSigningKeyEpochs RPC.
 type QueryProviderSigningKeyEpochsResponse struct {
 	Keys []ProviderSigningKeyRecord `protobuf:"bytes,1,rep,name=keys,proto3" json:"keys"`
 }
@@ -657,7 +662,9 @@ type QueryClient interface {
 	Providers(ctx context.Context, in *QueryProvidersRequest, opts ...grpc.CallOption) (*QueryProvidersResponse, error)
 	// Provider queries provider details
 	Provider(ctx context.Context, in *QueryProviderRequest, opts ...grpc.CallOption) (*QueryProviderResponse, error)
+	// ProviderSigningKey returns one provider signing key by id or epoch.
 	ProviderSigningKey(ctx context.Context, in *QueryProviderSigningKeyRequest, opts ...grpc.CallOption) (*QueryProviderSigningKeyResponse, error)
+	// ProviderSigningKeyEpochs lists every signing key epoch for a provider.
 	ProviderSigningKeyEpochs(ctx context.Context, in *QueryProviderSigningKeyEpochsRequest, opts ...grpc.CallOption) (*QueryProviderSigningKeyEpochsResponse, error)
 }
 
@@ -711,7 +718,9 @@ type QueryServer interface {
 	Providers(context.Context, *QueryProvidersRequest) (*QueryProvidersResponse, error)
 	// Provider queries provider details
 	Provider(context.Context, *QueryProviderRequest) (*QueryProviderResponse, error)
+	// ProviderSigningKey returns one provider signing key by id or epoch.
 	ProviderSigningKey(context.Context, *QueryProviderSigningKeyRequest) (*QueryProviderSigningKeyResponse, error)
+	// ProviderSigningKeyEpochs lists every signing key epoch for a provider.
 	ProviderSigningKeyEpochs(context.Context, *QueryProviderSigningKeyEpochsRequest) (*QueryProviderSigningKeyEpochsResponse, error)
 }
 

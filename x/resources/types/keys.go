@@ -47,7 +47,7 @@ var (
 // InventoryKey returns the key for a provider inventory entry.
 func InventoryKey(provider string, class ResourceClass, inventoryID string) []byte {
 	key := append([]byte(provider), 0x00)
-	key = append(key, byte(class))
+	key = append(key, byte(class)) // #nosec G115 -- fixed-width big-endian encoding: byte(class) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	key = append(key, 0x00)
 	key = append(key, []byte(inventoryID)...)
 	return append(InventoryKeyPrefix, key...)

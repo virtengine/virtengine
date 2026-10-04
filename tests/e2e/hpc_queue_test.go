@@ -29,9 +29,9 @@ type HPCQueueE2ETestSuite struct {
 }
 
 func TestHPCQueueE2E(t *testing.T) {
-	suite.Run(t, &HPCQueueE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &HPCQueueE2ETestSuite{}),
-	})
+	s := &HPCQueueE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 func (s *HPCQueueE2ETestSuite) SetupSuite() {

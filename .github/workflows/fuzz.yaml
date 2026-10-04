@@ -22,7 +22,7 @@ on:
   workflow_dispatch:
     inputs:
       fuzz_time:
-        description: "Fuzz test duration per target (e.g., 30s, 5m)"
+        description: "Fuzz budget per step, divided across that step's fuzz targets (e.g., 30s, 5m)"
         required: false
         default: "30s"
 
@@ -41,15 +41,23 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.26.8"
           cache: true
+
+      - name: Install build dependencies for cgo packages
+        # github.com/zondax/hid (via go.mod replace) carries `#cgo pkg-config: libudev`;
+        # without libudev-dev the packages below die at pkg-config build time and
+        # `go build`/`go test` never run. Not present on the ubuntu-latest image.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Sync vendor directory
         run: |
@@ -67,30 +75,66 @@ jobs:
             echo "duration=30s" >> $GITHUB_OUTPUT
           fi
 
-      - name: Run encryption crypto fuzz tests
+      # Regression test for the runner below. Hermetic - it stubs `go` on PATH -
+      # so it costs nothing and pins the argument contract that this workflow
+      # broke (`-fuzz=.` matches 10-14 targets per package and aborts before
+      # fuzzing anything). Not continue-on-error: a broken runner is a defect.
+      - name: Test the fuzz-target runner
         run: |
-          go test -fuzz=. -fuzztime=${{ steps.fuzz-time.outputs.duration }} ./x/encryption/crypto/...
+          bash .github/tests/test_run_fuzz_targets.sh
+          bash .github/tests/test_summarize_fuzz_outcomes.sh
+
+      # Each step fuzzes every target in its packages one at a time. `-fuzz=.`
+      # cannot be used: it requires the pattern to match exactly ONE fuzz target,
+      # and these packages declare 7-14 each, so the old invocation aborted with
+      # "will not fuzz, -fuzz matches more than one fuzz test" and fuzzed nothing
+      # - on every run, for every one of these steps.
+      - name: Run encryption crypto fuzz tests
+        id: fuzz-encryption-crypto
+        run: |
+          bash .github/scripts/run_fuzz_targets.sh "${{ steps.fuzz-time.outputs.duration }}" ./x/encryption/crypto/...
         continue-on-error: true
 
       - name: Run encryption types fuzz tests
+        id: fuzz-encryption-types
         run: |
-          go test -fuzz=. -fuzztime=${{ steps.fuzz-time.outputs.duration }} ./x/encryption/types/...
+          bash .github/scripts/run_fuzz_targets.sh "${{ steps.fuzz-time.outputs.duration }}" ./x/encryption/types/...
         continue-on-error: true
 
       - name: Run VEID types fuzz tests
+        id: fuzz-veid-types
         run: |
-          go test -fuzz=. -fuzztime=${{ steps.fuzz-time.outputs.duration }} ./x/veid/types/...
+          bash .github/scripts/run_fuzz_targets.sh "${{ steps.fuzz-time.outputs.duration }}" ./x/veid/types/...
         continue-on-error: true
 
       - name: Run marketplace types fuzz tests
+        id: fuzz-market-types
         run: |
-          go test -fuzz=. -fuzztime=${{ steps.fuzz-time.outputs.duration }} ./x/market/types/marketplace/...
+          bash .github/scripts/run_fuzz_targets.sh "${{ steps.fuzz-time.outputs.duration }}" ./x/market/types/marketplace/...
         continue-on-error: true
 
       - name: Run MFA types fuzz tests
+        id: fuzz-mfa-types
         run: |
-          go test -fuzz=. -fuzztime=${{ steps.fuzz-time.outputs.duration }} ./x/mfa/types/...
+          bash .github/scripts/run_fuzz_targets.sh "${{ steps.fuzz-time.outputs.duration }}" ./x/mfa/types/...
         continue-on-error: true
+
+      # The fuzz steps above stay non-gating (a crash in a pre-existing fuzz
+      # target must not red the whole workflow overnight), but the masking was
+      # invisible: the job reported success while every step exited 1. This makes
+      # a failing fuzz step show up in the run summary and as a job annotation
+      # instead of only in the raw log.
+      - name: Summarize fuzz step outcomes
+        if: always()
+        env:
+          OUTCOMES: |
+            encryption-crypto=${{ steps.fuzz-encryption-crypto.outcome }}
+            encryption-types=${{ steps.fuzz-encryption-types.outcome }}
+            veid-types=${{ steps.fuzz-veid-types.outcome }}
+            market-types=${{ steps.fuzz-market-types.outcome }}
+            mfa-types=${{ steps.fuzz-mfa-types.outcome }}
+        run: |
+          printf '%s\n' "$OUTCOMES" | bash .github/scripts/summarize_fuzz_outcomes.sh "${GITHUB_STEP_SUMMARY:-/dev/null}"
 
       # Provider daemon and enclave fuzz tests are currently disabled due to pre-existing
       # compilation issues in those packages. They will be re-enabled once those issues
@@ -102,7 +146,7 @@ jobs:
 
       - name: Upload fuzz corpus artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fuzz-corpus
           path: |
@@ -118,10 +162,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.26.8"
           cache: true
@@ -157,10 +201,10 @@ jobs:
 
     steps:
       - name: Checkout code
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: "1.26.8"
           cache: true
@@ -188,7 +232,7 @@ jobs:
           cat fuzz-summary.md
 
       - name: Upload fuzz summary
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: fuzz-summary
           path: fuzz-summary.md

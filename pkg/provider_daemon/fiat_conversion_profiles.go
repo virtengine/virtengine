@@ -223,7 +223,7 @@ func fiatProfileAuthorizationPayload(kind, authorityID string, schemaVersion uin
 	result := make([]byte, 0, 128)
 	for _, value := range [][]byte{[]byte("virtengine/provider-daemon/fiat-profile/v1"), []byte(kind), []byte(authorityID)} {
 		length := make([]byte, 4)
-		binary.BigEndian.PutUint32(length, uint32(len(value))) //nolint:gosec // bounded configuration fields.
+		binary.BigEndian.PutUint32(length, uint32(len(value))) /* #nosec G115 -- bounded configuration fields. */ //nolint:gosec
 		result = append(result, length...)
 		result = append(result, value...)
 	}

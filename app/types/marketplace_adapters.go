@@ -44,6 +44,16 @@ func (a marketplaceVEIDAdapter) IsDomainVerified(ctx sdk.Context, address sdk.Ac
 	return hasVerifiedActiveScope(scopes, ctx.BlockTime())
 }
 
+// IsIdentityLocked reports whether the account's identity is locked/revoked.
+// Listings that opt into RequireUnlockedIdentity gate on this.
+func (a marketplaceVEIDAdapter) IsIdentityLocked(ctx sdk.Context, address sdk.AccAddress) bool {
+	record, found := a.keeper.GetIdentityRecord(ctx, address)
+	if !found {
+		return false
+	}
+	return record.Locked
+}
+
 func (a marketplaceVEIDAdapter) IsComplianceCleared(ctx sdk.Context, address sdk.AccAddress) (bool, bool) {
 	record, found := a.keeper.GetComplianceRecord(ctx, address.String())
 	if !found {

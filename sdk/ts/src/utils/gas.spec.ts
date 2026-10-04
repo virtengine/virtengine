@@ -54,7 +54,7 @@ describe("GAS_ESTIMATES", () => {
 
 describe("DEFAULT_GAS_CONFIG", () => {
   it("should have reasonable default values", () => {
-    expect(DEFAULT_GAS_CONFIG.gasPrice).toBe("0.025uakt");
+    expect(DEFAULT_GAS_CONFIG.gasPrice).toBe("0.025uve");
     expect(DEFAULT_GAS_CONFIG.gasAdjustment).toBe(1.3);
     expect(DEFAULT_GAS_CONFIG.defaultGasLimit).toBe(200000);
   });
@@ -62,9 +62,9 @@ describe("DEFAULT_GAS_CONFIG", () => {
 
 describe("parseGasPrice", () => {
   it("should parse valid gas price string", () => {
-    const result = parseGasPrice("0.025uakt");
+    const result = parseGasPrice("0.025uve");
     expect(result.amount).toBe("0.025");
-    expect(result.denom).toBe("uakt");
+    expect(result.denom).toBe("uve");
   });
 
   it("should parse integer gas price", () => {
@@ -81,14 +81,14 @@ describe("parseGasPrice", () => {
 
 describe("calculateFee", () => {
   it("should calculate fee from gas limit and price", () => {
-    const fee = calculateFee(100000, "0.025uakt");
+    const fee = calculateFee(100000, "0.025uve");
     expect(fee.gas).toBe("100000");
-    expect(fee.amount[0].denom).toBe("uakt");
+    expect(fee.amount[0].denom).toBe("uve");
     expect(fee.amount[0].amount).toBe("2500");
   });
 
   it("should round up fee amount", () => {
-    const fee = calculateFee(100001, "0.025uakt");
+    const fee = calculateFee(100001, "0.025uve");
     expect(fee.amount[0].amount).toBe("2501");
   });
 });
@@ -153,10 +153,10 @@ describe("estimateGasForMessages", () => {
 describe("createFeeForMessage", () => {
   it("should create fee with defaults", () => {
     const fee = createFeeForMessage("cosmos.bank.v1beta1/MsgSend");
-    // 100000 * 1.3 = 130000 gas, 130000 * 0.025 = 3250 uakt
+    // 100000 * 1.3 = 130000 gas, 130000 * 0.025 = 3250 uve
     expect(fee.gas).toBe("130000");
     expect(fee.amount[0].amount).toBe("3250");
-    expect(fee.amount[0].denom).toBe("uakt");
+    expect(fee.amount[0].denom).toBe("uve");
   });
 
   it("should use custom gas price", () => {
@@ -178,7 +178,7 @@ describe("createFeeForMessages", () => {
 
 describe("isValidGasPrice", () => {
   it("should return true for valid gas price", () => {
-    expect(isValidGasPrice("0.025uakt")).toBe(true);
+    expect(isValidGasPrice("0.025uve")).toBe(true);
     expect(isValidGasPrice("100uvirt")).toBe(true);
   });
 

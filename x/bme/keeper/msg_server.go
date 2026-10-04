@@ -61,8 +61,8 @@ func (m *MsgServer) BurnMint(ctx context.Context, msg *types.MsgBurnMint) (*type
 	}, nil
 }
 
-// MintACT implements the MsgMintACT handler.
-func (m *MsgServer) MintACT(ctx context.Context, msg *types.MsgMintACT) (*types.MsgMintACTResponse, error) {
+// MintVCC implements the MsgMintVCC handler.
+func (m *MsgServer) MintVCC(ctx context.Context, msg *types.MsgMintVCC) (*types.MsgMintVCCResponse, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
 	// Get current params to check circuit breaker status
@@ -77,14 +77,14 @@ func (m *MsgServer) MintACT(ctx context.Context, msg *types.MsgMintACT) (*types.
 
 	// For now, return a pending status as actual mint logic
 	// requires oracle integration and bank keeper
-	return &types.MsgMintACTResponse{
+	return &types.MsgMintVCCResponse{
 		ID:     recordID,
 		Status: types.LedgerRecordSatusPending,
 	}, nil
 }
 
-// BurnACT implements the MsgBurnACT handler.
-func (m *MsgServer) BurnACT(ctx context.Context, msg *types.MsgBurnACT) (*types.MsgBurnACTResponse, error) {
+// BurnVCC implements the MsgBurnVCC handler.
+func (m *MsgServer) BurnVCC(ctx context.Context, msg *types.MsgBurnVCC) (*types.MsgBurnVCCResponse, error) {
 	sdkCtx := sdk.UnwrapSDKContext(ctx)
 
 	// Get current params and state
@@ -99,7 +99,7 @@ func (m *MsgServer) BurnACT(ctx context.Context, msg *types.MsgBurnACT) (*types.
 
 	// For now, return a pending status as actual burn logic
 	// requires oracle integration and bank keeper
-	return &types.MsgBurnACTResponse{
+	return &types.MsgBurnVCCResponse{
 		ID:     recordID,
 		Status: types.LedgerRecordSatusPending,
 	}, nil

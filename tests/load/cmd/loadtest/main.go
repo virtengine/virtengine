@@ -175,7 +175,7 @@ func defaultScenarioAccounts() []string {
 }
 
 func readReport(path string) (*framework.TestReport, error) {
-	file, err := os.Open(path)
+	file, err := os.Open(path) // #nosec G304 -- the path is supplied by the operator or test harness on the command line
 	if err != nil {
 		return nil, err
 	}

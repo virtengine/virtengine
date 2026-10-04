@@ -130,7 +130,7 @@ func (dc *DeterminismController) ComputeInputHash(inputs *ScoreInputs) string {
 
 	blockHeightBytes := make([]byte, 8)
 	//nolint:gosec // G115: BlockHeight is a bounded blockchain block number
-	binary.BigEndian.PutUint64(blockHeightBytes, uint64(inputs.Metadata.BlockHeight))
+	binary.BigEndian.PutUint64(blockHeightBytes, uint64(inputs.Metadata.BlockHeight)) // #nosec G115 -- uint64(inputs.Metadata.BlockHeight) is a non-negative counter/height bounded well below 2^63
 	h.Write(blockHeightBytes)
 
 	// Hash face embedding (normalize to fixed precision)
@@ -187,7 +187,7 @@ func (dc *DeterminismController) ComputeInputHash(inputs *ScoreInputs) string {
 
 	scopeCountBytes := make([]byte, 4)
 	//nolint:gosec // G115: ScopeCount is a bounded small count value
-	binary.BigEndian.PutUint32(scopeCountBytes, uint32(inputs.ScopeCount))
+	binary.BigEndian.PutUint32(scopeCountBytes, uint32(inputs.ScopeCount)) // #nosec G115 -- uint32(inputs.ScopeCount) is a bounded count/flag that fits uint32
 	h.Write(scopeCountBytes)
 
 	return hex.EncodeToString(h.Sum(nil))

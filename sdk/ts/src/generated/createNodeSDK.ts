@@ -342,7 +342,7 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
           }, { path: [7, 0] }),
           /**
            * burnMint allows users to burn one token and mint another at current oracle prices.
-           * Typically used to burn unused ACT tokens back to AKT.
+           * Typically used to burn unused VCC tokens back to VE.
            * The operation may be delayed or rejected based on circuit breaker status.
            */
           burnMint: withMetadata(async function burnMint(input: DeepSimplify<virtengine_bme_v1_msgs.MsgBurnMint>, options?: TxCallOptions) {
@@ -350,22 +350,22 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             return getMsgClient(service).burnMint(input, options);
           }, { path: [7, 1] }),
           /**
-           * mintACT mints ACT tokens by burning the specified source token.
+           * mintVCC mints VCC tokens by burning the specified source token.
            * The mint amount is calculated based on current oracle prices and
            * the collateral ratio. May be halted if circuit breaker is triggered.
            */
-          mintACT: withMetadata(async function mintACT(input: DeepSimplify<virtengine_bme_v1_msgs.MsgMintACT>, options?: TxCallOptions) {
+          mintVCC: withMetadata(async function mintVCC(input: DeepSimplify<virtengine_bme_v1_msgs.MsgMintVCC>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(7);
-            return getMsgClient(service).mintACT(input, options);
+            return getMsgClient(service).mintVCC(input, options);
           }, { path: [7, 2] }),
           /**
-           * burnACT burns ACT tokens and mints the specified destination token.
+           * burnVCC burns VCC tokens and mints the specified destination token.
            * The burn operation uses remint credits when available, otherwise
            * requires adequate collateral backing based on oracle prices.
            */
-          burnACT: withMetadata(async function burnACT(input: DeepSimplify<virtengine_bme_v1_msgs.MsgBurnACT>, options?: TxCallOptions) {
+          burnVCC: withMetadata(async function burnVCC(input: DeepSimplify<virtengine_bme_v1_msgs.MsgBurnVCC>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(7);
-            return getMsgClient(service).burnACT(input, options);
+            return getMsgClient(service).burnVCC(input, options);
           }, { path: [7, 3] })
         }
       },
@@ -1070,6 +1070,13 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             return getClient(service).moderatorQueue(input, options);
           }, { path: [26, 6] }),
           /**
+           * getFraudResponses returns the responses/rebuttals filed against a report
+           */
+          getFraudResponses: withMetadata(async function getFraudResponses(input: DeepPartial<virtengine_fraud_v1_query.QueryFraudResponsesRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(26);
+            return getClient(service).fraudResponses(input, options);
+          }, { path: [26, 7] }),
+          /**
            * submitFraudReport submits a new fraud report
            */
           submitFraudReport: withMetadata(async function submitFraudReport(input: DeepSimplify<virtengine_fraud_v1_tx.MsgSubmitFraudReport>, options?: TxCallOptions) {
@@ -1077,47 +1084,62 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             return getMsgClient(service).submitFraudReport(input, options);
           }, { path: [27, 0] }),
           /**
+           * submitFraudResponse files a rebuttal/response against an existing fraud report
+           */
+          submitFraudResponse: withMetadata(async function submitFraudResponse(input: DeepSimplify<virtengine_fraud_v1_tx.MsgSubmitFraudResponse>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(27);
+            return getMsgClient(service).submitFraudResponse(input, options);
+          }, { path: [27, 1] }),
+          /**
            * assignModerator assigns a moderator to a fraud report
            */
           assignModerator: withMetadata(async function assignModerator(input: DeepSimplify<virtengine_fraud_v1_tx.MsgAssignModerator>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(27);
             return getMsgClient(service).assignModerator(input, options);
-          }, { path: [27, 1] }),
+          }, { path: [27, 2] }),
           /**
            * updateReportStatus updates the status of a fraud report
            */
           updateReportStatus: withMetadata(async function updateReportStatus(input: DeepSimplify<virtengine_fraud_v1_tx.MsgUpdateReportStatus>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(27);
             return getMsgClient(service).updateReportStatus(input, options);
-          }, { path: [27, 2] }),
+          }, { path: [27, 3] }),
           /**
            * resolveFraudReport resolves a fraud report with action
            */
           resolveFraudReport: withMetadata(async function resolveFraudReport(input: DeepSimplify<virtengine_fraud_v1_tx.MsgResolveFraudReport>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(27);
             return getMsgClient(service).resolveFraudReport(input, options);
-          }, { path: [27, 3] }),
+          }, { path: [27, 4] }),
+          /**
+           * confirmFraudResolution applies a proposed suspension or termination as the
+           * second, distinct reviewer
+           */
+          confirmFraudResolution: withMetadata(async function confirmFraudResolution(input: DeepSimplify<virtengine_fraud_v1_tx.MsgConfirmFraudResolution>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(27);
+            return getMsgClient(service).confirmFraudResolution(input, options);
+          }, { path: [27, 5] }),
           /**
            * rejectFraudReport rejects a fraud report
            */
           rejectFraudReport: withMetadata(async function rejectFraudReport(input: DeepSimplify<virtengine_fraud_v1_tx.MsgRejectFraudReport>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(27);
             return getMsgClient(service).rejectFraudReport(input, options);
-          }, { path: [27, 4] }),
+          }, { path: [27, 6] }),
           /**
            * escalateFraudReport escalates a fraud report to admin
            */
           escalateFraudReport: withMetadata(async function escalateFraudReport(input: DeepSimplify<virtengine_fraud_v1_tx.MsgEscalateFraudReport>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(27);
             return getMsgClient(service).escalateFraudReport(input, options);
-          }, { path: [27, 5] }),
+          }, { path: [27, 7] }),
           /**
            * updateParams updates module parameters (governance only)
            */
           updateParams: withMetadata(async function updateParams(input: DeepSimplify<virtengine_fraud_v1_tx.MsgUpdateParams>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(27);
             return getMsgClient(service).updateParams(input, options);
-          }, { path: [27, 6] })
+          }, { path: [27, 8] })
         }
       },
       hpc: {
@@ -1573,6 +1595,20 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             return getClient(service).allocationsByProvider(input, options);
           }, { path: [34, 2] }),
           /**
+           * getCatalog returns active, browsable offerings across supply sources.
+           */
+          getCatalog: withMetadata(async function getCatalog(input: DeepPartial<virtengine_marketplace_v1_query.QueryCatalogRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(34);
+            return getClient(service).catalog(input, options);
+          }, { path: [34, 3] }),
+          /**
+           * getWaldurCommands lists durable commands for off-chain Waldur adapters.
+           */
+          getWaldurCommands: withMetadata(async function getWaldurCommands(input: DeepPartial<virtengine_marketplace_v1_query.QueryWaldurCommandsRequest>, options?: CallOptions) {
+            const service = await serviceLoader.loadAt(34);
+            return getClient(service).waldurCommands(input, options);
+          }, { path: [34, 4] }),
+          /**
            * createOffering creates a new marketplace offering
            */
           createOffering: withMetadata(async function createOffering(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgCreateOffering>, options?: TxCallOptions) {
@@ -1627,7 +1663,56 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
           waldurCallback: withMetadata(async function waldurCallback(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgWaldurCallback>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(35);
             return getMsgClient(service).waldurCallback(input, options);
-          }, { path: [35, 7] })
+          }, { path: [35, 7] }),
+          /**
+           * createOrder opens a demand order for automatic or manual resolution
+           */
+          createOrder: withMetadata(async function createOrder(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgCreateOrder>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).createOrder(input, options);
+          }, { path: [35, 8] }),
+          /**
+           * placeBid places a provider bid on a bid-mode order
+           */
+          placeBid: withMetadata(async function placeBid(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgPlaceBid>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).placeBid(input, options);
+          }, { path: [35, 9] }),
+          /**
+           * withdrawBid withdraws an open provider bid
+           */
+          withdrawBid: withMetadata(async function withdrawBid(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgWithdrawBid>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).withdrawBid(input, options);
+          }, { path: [35, 10] }),
+          /**
+           * registerWaldurSource registers a trusted Waldur instance (authority-gated)
+           */
+          registerWaldurSource: withMetadata(async function registerWaldurSource(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgRegisterWaldurSource>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).registerWaldurSource(input, options);
+          }, { path: [35, 11] }),
+          /**
+           * ingestWaldurOffering ingests a signed Waldur offering snapshot
+           */
+          ingestWaldurOffering: withMetadata(async function ingestWaldurOffering(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgIngestWaldurOffering>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).ingestWaldurOffering(input, options);
+          }, { path: [35, 12] }),
+          /**
+           * setOfferingVisibility updates an offering's visibility
+           */
+          setOfferingVisibility: withMetadata(async function setOfferingVisibility(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgSetOfferingVisibility>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).setOfferingVisibility(input, options);
+          }, { path: [35, 13] }),
+          /**
+           * ackWaldurCommand acknowledges a durable Waldur command
+           */
+          ackWaldurCommand: withMetadata(async function ackWaldurCommand(input: DeepSimplify<virtengine_marketplace_v1_tx.MsgAckWaldurCommand>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(35);
+            return getMsgClient(service).ackWaldurCommand(input, options);
+          }, { path: [35, 14] })
         }
       },
       mfa: {
@@ -1874,10 +1959,16 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             const service = await serviceLoader.loadAt(40);
             return getClient(service).provider(input, options);
           }, { path: [40, 1] }),
+          /**
+           * getProviderSigningKey returns one provider signing key by id or epoch.
+           */
           getProviderSigningKey: withMetadata(async function getProviderSigningKey(input: DeepPartial<virtengine_provider_v1beta4_query.QueryProviderSigningKeyRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(40);
             return getClient(service).providerSigningKey(input, options);
           }, { path: [40, 2] }),
+          /**
+           * getProviderSigningKeyEpochs lists every signing key epoch for a provider.
+           */
           getProviderSigningKeyEpochs: withMetadata(async function getProviderSigningKeyEpochs(input: DeepPartial<virtengine_provider_v1beta4_query.QueryProviderSigningKeyEpochsRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(40);
             return getClient(service).providerSigningKeyEpochs(input, options);
@@ -1991,34 +2082,58 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             const service = await serviceLoader.loadAt(42);
             return getClient(service).allocationsByProvider(input, options);
           }, { path: [42, 3] }),
+          /**
+           * getReservation returns a single reservation by its id.
+           */
           getReservation: withMetadata(async function getReservation(input: DeepPartial<virtengine_resources_v1_query.QueryReservationRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(42);
             return getClient(service).reservation(input, options);
           }, { path: [42, 4] }),
+          /**
+           * getReservationByOrder returns the reservation for an order.
+           */
           getReservationByOrder: withMetadata(async function getReservationByOrder(input: DeepPartial<virtengine_resources_v1_query.QueryReservationByOrderRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(42);
             return getClient(service).reservationByOrder(input, options);
           }, { path: [42, 5] }),
+          /**
+           * getReservationByBid returns the reservation for a bid.
+           */
           getReservationByBid: withMetadata(async function getReservationByBid(input: DeepPartial<virtengine_resources_v1_query.QueryReservationByBidRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(42);
             return getClient(service).reservationByBid(input, options);
           }, { path: [42, 6] }),
+          /**
+           * getReservationByLease returns the reservation for a lease.
+           */
           getReservationByLease: withMetadata(async function getReservationByLease(input: DeepPartial<virtengine_resources_v1_query.QueryReservationByLeaseRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(42);
             return getClient(service).reservationByLease(input, options);
           }, { path: [42, 7] }),
+          /**
+           * getReservationByJob returns the reservation for an HPC job.
+           */
           getReservationByJob: withMetadata(async function getReservationByJob(input: DeepPartial<virtengine_resources_v1_query.QueryReservationByJobRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(42);
             return getClient(service).reservationByJob(input, options);
           }, { path: [42, 8] }),
+          /**
+           * getReservationByConsumer returns the reservation for a typed consumer.
+           */
           getReservationByConsumer: withMetadata(async function getReservationByConsumer(input: DeepPartial<virtengine_resources_v1_query.QueryReservationByConsumerRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(42);
             return getClient(service).reservationByConsumer(input, options);
           }, { path: [42, 9] }),
+          /**
+           * getReservationsByProvider lists the reservations held by one provider.
+           */
           getReservationsByProvider: withMetadata(async function getReservationsByProvider(input: DeepPartial<virtengine_resources_v1_query.QueryReservationsByProviderRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(42);
             return getClient(service).reservationsByProvider(input, options);
           }, { path: [42, 10] }),
+          /**
+           * getReservationLineage returns a reservation and its ordered event history.
+           */
           getReservationLineage: withMetadata(async function getReservationLineage(input: DeepPartial<virtengine_resources_v1_query.QueryReservationLineageRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(42);
             return getClient(service).reservationLineage(input, options);
@@ -2191,7 +2306,42 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
           updateParams: withMetadata(async function updateParams(input: DeepSimplify<virtengine_roles_v1_tx.MsgUpdateParams>, options?: TxCallOptions) {
             const service = await serviceLoader.loadAt(47);
             return getMsgClient(service).updateParams(input, options);
-          }, { path: [47, 4] })
+          }, { path: [47, 4] }),
+          /**
+           * imposeSanction records a scoped, time-limited sanction against an account
+           */
+          imposeSanction: withMetadata(async function imposeSanction(input: DeepSimplify<virtengine_roles_v1_tx.MsgImposeSanction>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(47);
+            return getMsgClient(service).imposeSanction(input, options);
+          }, { path: [47, 5] }),
+          /**
+           * confirmSanction applies a pending sanction as its second, distinct reviewer
+           */
+          confirmSanction: withMetadata(async function confirmSanction(input: DeepSimplify<virtengine_roles_v1_tx.MsgConfirmSanction>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(47);
+            return getMsgClient(service).confirmSanction(input, options);
+          }, { path: [47, 6] }),
+          /**
+           * revokeSanction clears an in-force or pending sanction
+           */
+          revokeSanction: withMetadata(async function revokeSanction(input: DeepSimplify<virtengine_roles_v1_tx.MsgRevokeSanction>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(47);
+            return getMsgClient(service).revokeSanction(input, options);
+          }, { path: [47, 7] }),
+          /**
+           * openSanctionAppeal opens an appeal against an in-force sanction
+           */
+          openSanctionAppeal: withMetadata(async function openSanctionAppeal(input: DeepSimplify<virtengine_roles_v1_tx.MsgOpenSanctionAppeal>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(47);
+            return getMsgClient(service).openSanctionAppeal(input, options);
+          }, { path: [47, 8] }),
+          /**
+           * resolveSanctionAppeal resolves an open appeal
+           */
+          resolveSanctionAppeal: withMetadata(async function resolveSanctionAppeal(input: DeepSimplify<virtengine_roles_v1_tx.MsgResolveSanctionAppeal>, options?: TxCallOptions) {
+            const service = await serviceLoader.loadAt(47);
+            return getMsgClient(service).resolveSanctionAppeal(input, options);
+          }, { path: [47, 9] })
         }
       },
       settlement: {
@@ -2280,31 +2430,31 @@ export function createSDK(queryTransport: Transport, txTransport: Transport, opt
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCaseBySubject(input, options);
           }, { path: [48, 20] }),
-          getFinancialCasesByOrder: withMetadata(async function getFinancialCasesByOrder(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByOrder: withMetadata(async function getFinancialCasesByOrder(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByOrderRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByOrder(input, options);
           }, { path: [48, 21] }),
-          getFinancialCasesByInvoice: withMetadata(async function getFinancialCasesByInvoice(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByInvoice: withMetadata(async function getFinancialCasesByInvoice(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByInvoiceRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByInvoice(input, options);
           }, { path: [48, 22] }),
-          getFinancialCasesByUsage: withMetadata(async function getFinancialCasesByUsage(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByUsage: withMetadata(async function getFinancialCasesByUsage(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByUsageRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByUsage(input, options);
           }, { path: [48, 23] }),
-          getFinancialCasesByJob: withMetadata(async function getFinancialCasesByJob(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByJob: withMetadata(async function getFinancialCasesByJob(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByJobRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByJob(input, options);
           }, { path: [48, 24] }),
-          getFinancialCasesByEscrow: withMetadata(async function getFinancialCasesByEscrow(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByEscrow: withMetadata(async function getFinancialCasesByEscrow(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByEscrowRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByEscrow(input, options);
           }, { path: [48, 25] }),
-          getFinancialCasesByStatus: withMetadata(async function getFinancialCasesByStatus(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByStatus: withMetadata(async function getFinancialCasesByStatus(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByStatusRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByStatus(input, options);
           }, { path: [48, 26] }),
-          getFinancialCasesByParty: withMetadata(async function getFinancialCasesByParty(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesRequest>, options?: CallOptions) {
+          getFinancialCasesByParty: withMetadata(async function getFinancialCasesByParty(input: DeepPartial<virtengine_settlement_v1_query.QueryFinancialCasesByPartyRequest>, options?: CallOptions) {
             const service = await serviceLoader.loadAt(48);
             return getClient(service).financialCasesByParty(input, options);
           }, { path: [48, 27] }),

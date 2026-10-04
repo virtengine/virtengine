@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/virtengine/virtengine/pkg/data_vault/contracts"
+	"github.com/virtengine/virtengine/pkg/data_vault/internal/pathnorm"
 )
 
 const fixtureStateVersion uint32 = 1
@@ -298,15 +299,15 @@ func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
 	tempName := temp.Name()
 	defer os.Remove(tempName)
 	if err := temp.Chmod(mode); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return err
 	}
 	if _, err := temp.Write(data); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return err
 	}
 	if err := temp.Sync(); err != nil {
-		temp.Close()
+		_ = temp.Close()
 		return err
 	}
 	if err := temp.Close(); err != nil {
@@ -318,7 +319,7 @@ func atomicWriteFile(path string, data []byte, mode os.FileMode) error {
 	if runtime.GOOS == goosWindows {
 		return nil
 	}
-	directory, err := os.Open(dir)
+	directory, err := os.Open(dir) // #nosec G304 -- dir is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err != nil {
 		return err
 	}
@@ -338,12 +339,28 @@ func rejectSymlinkTarget(path string) error {
 				return fmt.Errorf("fixture path ancestor must not be a symlink: %s", current)
 			}
 			if runtime.GOOS == goosWindows {
+				longPath, longErr := pathnorm.LongPath(current)
+				if longErr != nil {
+					return longErr
+				}
 				resolved, resolveErr := filepath.EvalSymlinks(current)
 				if resolveErr != nil {
 					return resolveErr
 				}
 				resolvedAbs, resolveErr := filepath.Abs(resolved)
-				if resolveErr != nil || !strings.EqualFold(filepath.Clean(resolvedAbs), filepath.Clean(current)) {
+				if resolveErr != nil {
+					return resolveErr
+				}
+				longAbs, longErr := filepath.Abs(longPath)
+				if longErr != nil {
+					return longErr
+				}
+				// EvalSymlinks resolves reparse points but also expands 8.3
+				// short names, so compare against the long-name spelling.
+				// Otherwise a legitimate short-name ancestor such as
+				// C:\Users\RUNNER~1\AppData\Local\Temp (the %TEMP% GitHub's
+				// Windows runners hand out) is misreported as a reparse point.
+				if !strings.EqualFold(filepath.Clean(resolvedAbs), filepath.Clean(longAbs)) {
 					return fmt.Errorf("fixture path ancestor is a reparse point: %s", current)
 				}
 			}

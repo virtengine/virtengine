@@ -857,18 +857,6 @@
       "title": "MintStatus indicates the current state of mint",
       "type": "string"
     },
-    "virtengine.bme.v1.MsgBurnACTResponse": {
-      "properties": {
-        "id": {
-          "$ref": "#/definitions/virtengine.bme.v1.LedgerRecordID"
-        },
-        "status": {
-          "$ref": "#/definitions/virtengine.bme.v1.LedgerRecordStatus"
-        }
-      },
-      "title": "MsgBurnMintResponse is the response type for MsgBurnMint",
-      "type": "object"
-    },
     "virtengine.bme.v1.MsgBurnMintResponse": {
       "properties": {
         "id": {
@@ -881,7 +869,19 @@
       "title": "MsgBurnMintResponse is the response type for MsgBurnMint",
       "type": "object"
     },
-    "virtengine.bme.v1.MsgMintACTResponse": {
+    "virtengine.bme.v1.MsgBurnVCCResponse": {
+      "properties": {
+        "id": {
+          "$ref": "#/definitions/virtengine.bme.v1.LedgerRecordID"
+        },
+        "status": {
+          "$ref": "#/definitions/virtengine.bme.v1.LedgerRecordStatus"
+        }
+      },
+      "title": "MsgBurnMintResponse is the response type for MsgBurnMint",
+      "type": "object"
+    },
+    "virtengine.bme.v1.MsgMintVCCResponse": {
       "properties": {
         "id": {
           "$ref": "#/definitions/virtengine.bme.v1.LedgerRecordID"
@@ -917,12 +917,12 @@
         },
         "min_epoch_blocks": {
           "format": "int64",
-          "title": "min_epoch_blocks is the minimum amount of blocks required for ACT mints",
+          "title": "min_epoch_blocks is the minimum amount of blocks required for VCC mints",
           "type": "string"
         },
         "mint_spread_bps": {
           "format": "int64",
-          "title": "mint_spread_bps is the spread in basis points applied during ACT mint\n(default: 25 bps = 0.25%)",
+          "title": "mint_spread_bps is the spread in basis points applied during VCC mint\n(default: 25 bps = 0.25%)",
           "type": "integer"
         },
         "settle_spread_bps": {
@@ -954,11 +954,11 @@
           "type": "string"
         },
         "mints_allowed": {
-          "title": "mints_allowed indicates if new ACT mints are allowed",
+          "title": "mints_allowed indicates if new VCC mints are allowed",
           "type": "boolean"
         },
         "refunds_allowed": {
-          "title": "refunds_allowed indicates if ACT refunds are allowed",
+          "title": "refunds_allowed indicates if VCC refunds are allowed",
           "type": "boolean"
         },
         "status": {
@@ -3366,7 +3366,7 @@
           "description": "Balance amount of funds available to spend in this deposit."
         },
         "direct": {
-          "title": "direct indicates if deposited currency should be swapped to ACT (false) at time of the deposit",
+          "title": "direct indicates if deposited currency should be swapped to VCC (false) at time of the deposit",
           "type": "boolean"
         },
         "height": {
@@ -3661,7 +3661,7 @@
     },
     "virtengine.fraud.v1.AuditAction": {
       "default": "AUDIT_ACTION_UNSPECIFIED",
-      "description": "- AUDIT_ACTION_UNSPECIFIED: AUDIT_ACTION_UNSPECIFIED represents an unspecified action\n - AUDIT_ACTION_SUBMITTED: AUDIT_ACTION_SUBMITTED indicates report was submitted\n - AUDIT_ACTION_ASSIGNED: AUDIT_ACTION_ASSIGNED indicates report was assigned to moderator\n - AUDIT_ACTION_STATUS_CHANGED: AUDIT_ACTION_STATUS_CHANGED indicates status was changed\n - AUDIT_ACTION_EVIDENCE_VIEWED: AUDIT_ACTION_EVIDENCE_VIEWED indicates evidence was viewed by moderator\n - AUDIT_ACTION_RESOLVED: AUDIT_ACTION_RESOLVED indicates report was resolved\n - AUDIT_ACTION_REJECTED: AUDIT_ACTION_REJECTED indicates report was rejected\n - AUDIT_ACTION_ESCALATED: AUDIT_ACTION_ESCALATED indicates report was escalated\n - AUDIT_ACTION_COMMENT_ADDED: AUDIT_ACTION_COMMENT_ADDED indicates a comment was added",
+      "description": "- AUDIT_ACTION_UNSPECIFIED: AUDIT_ACTION_UNSPECIFIED represents an unspecified action\n - AUDIT_ACTION_SUBMITTED: AUDIT_ACTION_SUBMITTED indicates report was submitted\n - AUDIT_ACTION_ASSIGNED: AUDIT_ACTION_ASSIGNED indicates report was assigned to moderator\n - AUDIT_ACTION_STATUS_CHANGED: AUDIT_ACTION_STATUS_CHANGED indicates status was changed\n - AUDIT_ACTION_EVIDENCE_VIEWED: AUDIT_ACTION_EVIDENCE_VIEWED indicates evidence was viewed by moderator\n - AUDIT_ACTION_RESOLVED: AUDIT_ACTION_RESOLVED indicates report was resolved\n - AUDIT_ACTION_REJECTED: AUDIT_ACTION_REJECTED indicates report was rejected\n - AUDIT_ACTION_ESCALATED: AUDIT_ACTION_ESCALATED indicates report was escalated\n - AUDIT_ACTION_COMMENT_ADDED: AUDIT_ACTION_COMMENT_ADDED indicates a comment was added\n - AUDIT_ACTION_RESPONDED: AUDIT_ACTION_RESPONDED indicates the reported party or the reporter filed a\nresponse/rebuttal against a report",
       "enum": [
         "AUDIT_ACTION_UNSPECIFIED",
         "AUDIT_ACTION_SUBMITTED",
@@ -3671,7 +3671,8 @@
         "AUDIT_ACTION_RESOLVED",
         "AUDIT_ACTION_REJECTED",
         "AUDIT_ACTION_ESCALATED",
-        "AUDIT_ACTION_COMMENT_ADDED"
+        "AUDIT_ACTION_COMMENT_ADDED",
+        "AUDIT_ACTION_RESPONDED"
       ],
       "title": "AuditAction represents the type of action recorded in the audit log",
       "type": "string"
@@ -3835,6 +3836,10 @@
           "title": "ID is the unique identifier for this report",
           "type": "string"
         },
+        "no_order_available": {
+          "description": "NoOrderAvailable records that the reporter asserted there is genuinely no\norder/resource to reference. PUBLIC BY DESIGN: a boolean only; the actual\njustification lives in EncryptedEvidence so it never reaches public state.",
+          "type": "boolean"
+        },
         "related_order_ids": {
           "items": {
             "type": "string"
@@ -3862,6 +3867,11 @@
           "format": "date-time",
           "title": "ResolvedAt is when the report was resolved (if applicable)",
           "type": "string"
+        },
+        "response_count": {
+          "description": "ResponseCount is the number of responses/rebuttals filed against this report.\nPUBLIC BY DESIGN: a counter only, it carries no free text.",
+          "format": "int64",
+          "type": "integer"
         },
         "status": {
           "$ref": "#/definitions/virtengine.fraud.v1.FraudReportStatus",
@@ -3895,6 +3905,64 @@
       "title": "FraudReportStatus represents the state of a fraud report",
       "type": "string"
     },
+    "virtengine.fraud.v1.FraudRespondentRole": {
+      "default": "FRAUD_RESPONDENT_ROLE_UNSPECIFIED",
+      "description": "- FRAUD_RESPONDENT_ROLE_UNSPECIFIED: FRAUD_RESPONDENT_ROLE_UNSPECIFIED represents an unspecified respondent role\n - FRAUD_RESPONDENT_ROLE_REPORTED_PARTY: FRAUD_RESPONDENT_ROLE_REPORTED_PARTY indicates the party the report was filed against\n - FRAUD_RESPONDENT_ROLE_REPORTER: FRAUD_RESPONDENT_ROLE_REPORTER indicates the original reporter",
+      "enum": [
+        "FRAUD_RESPONDENT_ROLE_UNSPECIFIED",
+        "FRAUD_RESPONDENT_ROLE_REPORTED_PARTY",
+        "FRAUD_RESPONDENT_ROLE_REPORTER"
+      ],
+      "title": "FraudRespondentRole identifies which side of the report filed a response",
+      "type": "string"
+    },
+    "virtengine.fraud.v1.FraudResponse": {
+      "description": "FraudResponse is a response/rebuttal filed by a party to a report.\n\nPUBLIC/PRIVATE SPLIT: every field below is integrity metadata (ids, role,\nhashes, timestamps). The respondent's actual statement is NOT a public field;\nit is carried in EncryptedEvidence addressed to the moderator recipients.",
+      "properties": {
+        "block_height": {
+          "format": "int64",
+          "title": "BlockHeight is the block height when the response was filed",
+          "type": "string"
+        },
+        "content_hash": {
+          "title": "ContentHash is SHA256 over the immutable response fields for integrity",
+          "type": "string"
+        },
+        "evidence": {
+          "items": {
+            "$ref": "#/definitions/virtengine.fraud.v1.EncryptedEvidence"
+          },
+          "title": "Evidence holds the encrypted response content for the moderator recipients",
+          "type": "array"
+        },
+        "id": {
+          "title": "ID is the unique identifier for this response",
+          "type": "string"
+        },
+        "report_id": {
+          "title": "ReportID is the report this response is filed against",
+          "type": "string"
+        },
+        "respondent": {
+          "title": "Respondent is the address filing the response",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/definitions/virtengine.fraud.v1.FraudRespondentRole",
+          "title": "Role identifies which side of the report the respondent represents"
+        },
+        "statement_hash": {
+          "description": "StatementHash is SHA256 of the plaintext statement, for integrity only.\nPUBLIC BY DESIGN: a digest, not the statement.",
+          "type": "string"
+        },
+        "submitted_at": {
+          "format": "date-time",
+          "title": "SubmittedAt is when the response was filed",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
     "virtengine.fraud.v1.ModeratorQueueEntry": {
       "properties": {
         "assigned_to": {
@@ -3918,6 +3986,11 @@
         "report_id": {
           "title": "ReportID is the fraud report ID",
           "type": "string"
+        },
+        "response_count": {
+          "description": "ResponseCount is how many responses/rebuttals are attached to the report,\nso a moderator sees the rebuttal alongside the report in the queue.",
+          "format": "int64",
+          "type": "integer"
         }
       },
       "title": "ModeratorQueueEntry represents an entry in the moderator queue",
@@ -3925,6 +3998,16 @@
     },
     "virtengine.fraud.v1.MsgAssignModeratorResponse": {
       "title": "MsgAssignModeratorResponse is the response for MsgAssignModerator",
+      "type": "object"
+    },
+    "virtengine.fraud.v1.MsgConfirmFraudResolutionResponse": {
+      "properties": {
+        "resolution": {
+          "$ref": "#/definitions/virtengine.fraud.v1.ResolutionType",
+          "title": "Resolution is the resolution that was applied"
+        }
+      },
+      "title": "MsgConfirmFraudResolutionResponse is the response for MsgConfirmFraudResolution",
       "type": "object"
     },
     "virtengine.fraud.v1.MsgEscalateFraudReportResponse": {
@@ -3936,6 +4019,22 @@
       "type": "object"
     },
     "virtengine.fraud.v1.MsgResolveFraudReportResponse": {
+      "description": "A suspension or termination is not applied by the proposing message: it is\nrecorded pending review. `requires_second_reviewer` and `pending` tell the\ncaller that the report is unresolved and that a distinct second reviewer must\nconfirm via MsgConfirmFraudResolution before anything takes effect.",
+      "properties": {
+        "pending": {
+          "title": "Pending reports that a proposal was recorded awaiting a second reviewer",
+          "type": "boolean"
+        },
+        "pending_expires_at": {
+          "format": "int64",
+          "title": "PendingExpiresAt is the Unix time the proposal lapses if unreviewed",
+          "type": "string"
+        },
+        "requires_second_reviewer": {
+          "title": "RequiresSecondReviewer reports that this resolution can never be applied\nby a single moderator",
+          "type": "boolean"
+        }
+      },
       "title": "MsgResolveFraudReportResponse is the response for MsgResolveFraudReport",
       "type": "object"
     },
@@ -3947,6 +4046,16 @@
         }
       },
       "title": "MsgSubmitFraudReportResponse is the response for MsgSubmitFraudReport",
+      "type": "object"
+    },
+    "virtengine.fraud.v1.MsgSubmitFraudResponseResponse": {
+      "properties": {
+        "response_id": {
+          "title": "ResponseID is the unique identifier for the stored response",
+          "type": "string"
+        }
+      },
+      "title": "MsgSubmitFraudResponseResponse is the response for MsgSubmitFraudResponse",
       "type": "object"
     },
     "virtengine.fraud.v1.MsgUpdateParamsResponse": {
@@ -3988,6 +4097,11 @@
           "title": "MaxEvidenceSizeBytes is the maximum size per evidence item",
           "type": "string"
         },
+        "max_reports_per_window": {
+          "description": "MaxReportsPerWindow caps how many fraud reports a single reporter may submit\nwithin ReportWindowBlocks (spam control).",
+          "format": "int32",
+          "type": "integer"
+        },
         "min_description_length": {
           "format": "int32",
           "title": "MinDescriptionLength is the minimum description length",
@@ -3996,6 +4110,11 @@
         "report_retention_days": {
           "format": "int32",
           "title": "ReportRetentionDays is how long to retain resolved reports",
+          "type": "integer"
+        },
+        "report_window_blocks": {
+          "description": "ReportWindowBlocks is the block-height window used for the per-reporter\nsubmission limit. Block height (not wall clock) keeps the check deterministic.",
+          "format": "int32",
           "type": "integer"
         }
       },
@@ -4078,6 +4197,23 @@
         }
       },
       "title": "QueryFraudReportsResponse is the response for FraudReports query",
+      "type": "object"
+    },
+    "virtengine.fraud.v1.QueryFraudResponsesResponse": {
+      "properties": {
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse",
+          "title": "Pagination defines the pagination response"
+        },
+        "responses": {
+          "items": {
+            "$ref": "#/definitions/virtengine.fraud.v1.FraudResponse"
+          },
+          "title": "Responses are the responses/rebuttals filed against the report",
+          "type": "array"
+        }
+      },
+      "title": "QueryFraudResponsesResponse is the response for FraudResponses query",
       "type": "object"
     },
     "virtengine.fraud.v1.QueryModeratorQueueResponse": {
@@ -7424,6 +7560,10 @@
       "title": "MsgAcceptBidResponse is the response for MsgAcceptBid",
       "type": "object"
     },
+    "virtengine.marketplace.v1.MsgAckWaldurCommandResponse": {
+      "title": "MsgAckWaldurCommandResponse is the response for MsgAckWaldurCommand",
+      "type": "object"
+    },
     "virtengine.marketplace.v1.MsgCreateOfferingResponse": {
       "properties": {
         "offering_id": {
@@ -7433,16 +7573,62 @@
       "title": "MsgCreateOfferingResponse is the response for MsgCreateOffering",
       "type": "object"
     },
+    "virtengine.marketplace.v1.MsgCreateOrderResponse": {
+      "properties": {
+        "order_id": {
+          "description": "On-chain order ID string (customer/sequence).",
+          "type": "string"
+        }
+      },
+      "title": "MsgCreateOrderResponse is the response for MsgCreateOrder",
+      "type": "object"
+    },
     "virtengine.marketplace.v1.MsgDeactivateOfferingResponse": {
       "title": "MsgDeactivateOfferingResponse is the response for MsgDeactivateOffering",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.MsgIngestWaldurOfferingResponse": {
+      "properties": {
+        "action": {
+          "description": "Ingestion action performed (create, update, deprecate, skip).",
+          "type": "string"
+        },
+        "checksum": {
+          "description": "Snapshot checksum.",
+          "type": "string"
+        },
+        "offering_id": {
+          "description": "On-chain offering ID string.",
+          "type": "string"
+        }
+      },
+      "title": "MsgIngestWaldurOfferingResponse is the response for MsgIngestWaldurOffering",
       "type": "object"
     },
     "virtengine.marketplace.v1.MsgPauseAllocationResponse": {
       "title": "MsgPauseAllocationResponse is the response for MsgPauseAllocation",
       "type": "object"
     },
+    "virtengine.marketplace.v1.MsgPlaceBidResponse": {
+      "properties": {
+        "bid_id": {
+          "description": "On-chain bid ID string.",
+          "type": "string"
+        }
+      },
+      "title": "MsgPlaceBidResponse is the response for MsgPlaceBid",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.MsgRegisterWaldurSourceResponse": {
+      "title": "MsgRegisterWaldurSourceResponse is the response for MsgRegisterWaldurSource",
+      "type": "object"
+    },
     "virtengine.marketplace.v1.MsgResizeAllocationResponse": {
       "title": "MsgResizeAllocationResponse is the response for MsgResizeAllocation",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.MsgSetOfferingVisibilityResponse": {
+      "title": "MsgSetOfferingVisibilityResponse is the response for MsgSetOfferingVisibility",
       "type": "object"
     },
     "virtengine.marketplace.v1.MsgTerminateAllocationResponse": {
@@ -7457,8 +7643,19 @@
       "title": "MsgWaldurCallbackResponse is the response for MsgWaldurCallback",
       "type": "object"
     },
+    "virtengine.marketplace.v1.MsgWithdrawBidResponse": {
+      "title": "MsgWithdrawBidResponse is the response for MsgWithdrawBid",
+      "type": "object"
+    },
     "virtengine.marketplace.v1.Offering": {
       "properties": {
+        "acquisition_modes": {
+          "description": "Supported acquisition modes (\"direct\", \"bid\").",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
         "activated_at": {
           "format": "date-time",
           "type": "string"
@@ -7469,6 +7666,10 @@
         },
         "allow_bidding": {
           "type": "boolean"
+        },
+        "backend_type": {
+          "description": "Provider execution backend.",
+          "type": "string"
         },
         "category": {
           "$ref": "#/definitions/virtengine.marketplace.v1.OfferingCategory"
@@ -7492,6 +7693,10 @@
         "max_concurrent_orders": {
           "format": "int64",
           "type": "integer"
+        },
+        "metering_profile": {
+          "description": "Metering component profile.",
+          "type": "string"
         },
         "min_bid": {
           "$ref": "#/definitions/cosmos.base.v1beta1.Coin"
@@ -7523,6 +7728,10 @@
         "require_mfa_for_orders": {
           "type": "boolean"
         },
+        "source": {
+          "description": "Supply origin: \"native\" or \"waldur\" (empty means native).",
+          "type": "string"
+        },
         "specifications": {
           "additionalProperties": {
             "type": "string"
@@ -7552,6 +7761,14 @@
         },
         "version": {
           "type": "string"
+        },
+        "visibility": {
+          "description": "Catalogue visibility: \"public\", \"unlisted\", or \"private\".",
+          "type": "string"
+        },
+        "waldur": {
+          "$ref": "#/definitions/virtengine.marketplace.v1.WaldurOfferingRef",
+          "description": "Waldur source reference (set when source is \"waldur\")."
         }
       },
       "title": "Offering represents a marketplace offering from a provider",
@@ -7678,12 +7895,46 @@
       },
       "type": "object"
     },
+    "virtengine.marketplace.v1.QueryCatalogResponse": {
+      "description": "QueryCatalogResponse is the response for the catalogue query.",
+      "properties": {
+        "offerings": {
+          "description": "Active, browsable offerings in deterministic order.",
+          "items": {
+            "$ref": "#/definitions/virtengine.marketplace.v1.Offering"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse",
+          "description": "Pagination."
+        }
+      },
+      "type": "object"
+    },
     "virtengine.marketplace.v1.QueryOfferingPriceResponse": {
       "description": "QueryOfferingPriceResponse is response type for the Query/OfferingPrice RPC method.",
       "properties": {
         "total": {
           "$ref": "#/definitions/cosmos.base.v1beta1.Coin",
           "description": "Total calculated price."
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.QueryWaldurCommandsResponse": {
+      "description": "QueryWaldurCommandsResponse is the response for durable Waldur commands.",
+      "properties": {
+        "commands": {
+          "description": "Durable commands in ID order.",
+          "items": {
+            "$ref": "#/definitions/virtengine.marketplace.v1.WaldurCommandSummary"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse",
+          "description": "Pagination."
         }
       },
       "type": "object"
@@ -7699,6 +7950,177 @@
         }
       },
       "title": "ResourceUnit represents a resource type and its unit quantity for resizing",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.WaldurCommandSummary": {
+      "description": "WaldurCommandSummary describes a durable command for an off-chain adapter.",
+      "properties": {
+        "acked": {
+          "description": "Whether the command was acknowledged.",
+          "type": "boolean"
+        },
+        "backend_id": {
+          "description": "Canonical VirtEngine identifier for reconciliation.",
+          "type": "string"
+        },
+        "chain_entity_id": {
+          "description": "On-chain entity ID.",
+          "type": "string"
+        },
+        "created_at": {
+          "description": "Creation timestamp.",
+          "format": "date-time",
+          "type": "string"
+        },
+        "id": {
+          "description": "Command identifier.",
+          "type": "string"
+        },
+        "instance_id": {
+          "description": "Target Waldur instance.",
+          "type": "string"
+        },
+        "kind": {
+          "description": "Command kind.",
+          "type": "string"
+        },
+        "waldur_offering_uuid": {
+          "description": "Target Waldur offering UUID.",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.WaldurOfferingRef": {
+      "properties": {
+        "backend_type": {
+          "description": "Backend type.",
+          "type": "string"
+        },
+        "customer_uuid": {
+          "description": "Waldur customer UUID (provider organization).",
+          "type": "string"
+        },
+        "instance_id": {
+          "description": "Waldur instance identifier.",
+          "type": "string"
+        },
+        "offering_uuid": {
+          "description": "Waldur offering UUID.",
+          "type": "string"
+        },
+        "snapshot_hash": {
+          "description": "Snapshot hash.",
+          "type": "string"
+        },
+        "snapshot_height": {
+          "description": "Monotonic Waldur revision.",
+          "format": "uint64",
+          "type": "string"
+        }
+      },
+      "title": "WaldurOfferingRef links an on-chain offering to its Waldur source",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.WaldurOfferingSnapshot": {
+      "properties": {
+        "attributes": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "Flattened string attributes (numeric values encoded as strings).",
+          "type": "object"
+        },
+        "billable": {
+          "description": "Whether the offering is billable.",
+          "type": "boolean"
+        },
+        "category_uuid": {
+          "description": "Waldur category UUID.",
+          "type": "string"
+        },
+        "components": {
+          "description": "Pricing components.",
+          "items": {
+            "$ref": "#/definitions/virtengine.marketplace.v1.WaldurPricingComponent"
+          },
+          "type": "array"
+        },
+        "created": {
+          "description": "Waldur creation timestamp (unix seconds). Part of the signed checksum.",
+          "format": "int64",
+          "type": "string"
+        },
+        "customer_uuid": {
+          "description": "Waldur customer UUID (provider organization).",
+          "type": "string"
+        },
+        "description": {
+          "description": "Offering description.",
+          "type": "string"
+        },
+        "instance_id": {
+          "description": "Source Waldur instance identifier.",
+          "type": "string"
+        },
+        "modified": {
+          "description": "Waldur modification timestamp (unix seconds). Part of the signed checksum.",
+          "format": "int64",
+          "type": "string"
+        },
+        "name": {
+          "description": "Offering name.",
+          "type": "string"
+        },
+        "shared": {
+          "description": "Whether the offering is publicly visible.",
+          "type": "boolean"
+        },
+        "snapshot_height": {
+          "description": "Monotonic Waldur revision.",
+          "format": "uint64",
+          "type": "string"
+        },
+        "state": {
+          "description": "Waldur state (Active, Paused, Archived).",
+          "type": "string"
+        },
+        "type": {
+          "description": "Waldur offering type.",
+          "type": "string"
+        },
+        "uuid": {
+          "description": "Waldur offering UUID.",
+          "type": "string"
+        }
+      },
+      "title": "WaldurOfferingSnapshot carries a canonical Waldur offering snapshot",
+      "type": "object"
+    },
+    "virtengine.marketplace.v1.WaldurPricingComponent": {
+      "properties": {
+        "billing_type": {
+          "description": "How billing is calculated.",
+          "type": "string"
+        },
+        "measured_unit": {
+          "description": "Unit of measurement.",
+          "type": "string"
+        },
+        "name": {
+          "description": "Component name.",
+          "type": "string"
+        },
+        "price": {
+          "description": "Price per unit as a decimal string.",
+          "type": "string"
+        },
+        "type": {
+          "description": "Component type (usage, fixed, one_time).",
+          "type": "string"
+        }
+      },
+      "title": "WaldurPricingComponent mirrors a Waldur pricing component for ingestion",
       "type": "object"
     },
     "virtengine.mfa.v1.AuthorizationSession": {
@@ -9611,6 +10033,7 @@
       "type": "object"
     },
     "virtengine.provider.v1beta4.MsgRevokeProviderSigningKeyResponse": {
+      "description": "MsgRevokeProviderSigningKeyResponse returns the revocation height.",
       "properties": {
         "revoked_at_height": {
           "format": "int64",
@@ -9620,6 +10043,7 @@
       "type": "object"
     },
     "virtengine.provider.v1beta4.MsgRotateProviderSigningKeyResponse": {
+      "description": "MsgRotateProviderSigningKeyResponse returns the activated key id and epoch.",
       "properties": {
         "activated_at_height": {
           "format": "int64",
@@ -9636,6 +10060,7 @@
       "type": "object"
     },
     "virtengine.provider.v1beta4.MsgSetProviderSigningKeyResponse": {
+      "description": "MsgSetProviderSigningKeyResponse returns the activated key id and epoch.",
       "properties": {
         "activated_at_height": {
           "format": "int64",
@@ -9690,6 +10115,7 @@
       "type": "object"
     },
     "virtengine.provider.v1beta4.ProviderSigningKeyRecord": {
+      "description": "ProviderSigningKeyRecord is a provider signing key and its lifecycle.",
       "properties": {
         "activated_at_height": {
           "format": "int64",
@@ -9758,6 +10184,7 @@
       "type": "object"
     },
     "virtengine.provider.v1beta4.QueryProviderSigningKeyEpochsResponse": {
+      "description": "QueryProviderSigningKeyEpochsResponse is the response for the ProviderSigningKeyEpochs RPC.",
       "properties": {
         "keys": {
           "items": {
@@ -9769,6 +10196,7 @@
       "type": "object"
     },
     "virtengine.provider.v1beta4.QueryProviderSigningKeyResponse": {
+      "description": "QueryProviderSigningKeyResponse is the response for the ProviderSigningKey RPC.",
       "properties": {
         "key": {
           "$ref": "#/definitions/virtengine.provider.v1beta4.ProviderSigningKeyRecord"
@@ -9989,6 +10417,51 @@
       },
       "type": "object"
     },
+    "virtengine.resources.v1.QueryReservationByBidResponse": {
+      "description": "QueryReservationByBidResponse is the response for the ReservationByBid RPC.",
+      "properties": {
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.QueryReservationByConsumerResponse": {
+      "description": "QueryReservationByConsumerResponse is the response for the ReservationByConsumer RPC.",
+      "properties": {
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.QueryReservationByJobResponse": {
+      "description": "QueryReservationByJobResponse is the response for the ReservationByJob RPC.",
+      "properties": {
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.QueryReservationByLeaseResponse": {
+      "description": "QueryReservationByLeaseResponse is the response for the ReservationByLease RPC.",
+      "properties": {
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.resources.v1.QueryReservationByOrderResponse": {
+      "description": "QueryReservationByOrderResponse is the response for the ReservationByOrder RPC.\nField layout is identical to QueryReservationResponse so the wire encoding of\nan existing client is unchanged.",
+      "properties": {
+        "reservation": {
+          "$ref": "#/definitions/virtengine.resources.v1.Reservation"
+        }
+      },
+      "type": "object"
+    },
     "virtengine.resources.v1.QueryReservationLineageResponse": {
       "properties": {
         "events": {
@@ -10007,6 +10480,7 @@
       "type": "object"
     },
     "virtengine.resources.v1.QueryReservationResponse": {
+      "description": "QueryReservationResponse is the response for the Reservation RPC.",
       "properties": {
         "reservation": {
           "$ref": "#/definitions/virtengine.resources.v1.Reservation"
@@ -10014,7 +10488,8 @@
       },
       "type": "object"
     },
-    "virtengine.resources.v1.QueryReservationsResponse": {
+    "virtengine.resources.v1.QueryReservationsByProviderResponse": {
+      "description": "QueryReservationsByProviderResponse is the response for the ReservationsByProvider RPC.",
       "properties": {
         "pagination": {
           "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
@@ -10574,12 +11049,48 @@
       "title": "MsgAssignRoleResponse is the response for MsgAssignRole",
       "type": "object"
     },
+    "virtengine.roles.v1.MsgConfirmSanctionResponse": {
+      "title": "MsgConfirmSanctionResponse is the response for MsgConfirmSanction",
+      "type": "object"
+    },
+    "virtengine.roles.v1.MsgImposeSanctionResponse": {
+      "properties": {
+        "sanction_id": {
+          "title": "SanctionID is the ID of the recorded sanction record",
+          "type": "string"
+        },
+        "status": {
+          "title": "Status is the recorded status; \"pending_review\" means no effect yet",
+          "type": "string"
+        }
+      },
+      "title": "MsgImposeSanctionResponse is the response for MsgImposeSanction",
+      "type": "object"
+    },
     "virtengine.roles.v1.MsgNominateAdminResponse": {
       "title": "MsgNominateAdminResponse is the response for MsgNominateAdmin",
       "type": "object"
     },
+    "virtengine.roles.v1.MsgOpenSanctionAppealResponse": {
+      "properties": {
+        "appeal_id": {
+          "title": "AppealID is the ID of the recorded appeal record",
+          "type": "string"
+        }
+      },
+      "title": "MsgOpenSanctionAppealResponse is the response for MsgOpenSanctionAppeal",
+      "type": "object"
+    },
+    "virtengine.roles.v1.MsgResolveSanctionAppealResponse": {
+      "title": "MsgResolveSanctionAppealResponse is the response for MsgResolveSanctionAppeal",
+      "type": "object"
+    },
     "virtengine.roles.v1.MsgRevokeRoleResponse": {
       "title": "MsgRevokeRoleResponse is the response for MsgRevokeRole",
+      "type": "object"
+    },
+    "virtengine.roles.v1.MsgRevokeSanctionResponse": {
+      "title": "MsgRevokeSanctionResponse is the response for MsgRevokeSanction",
       "type": "object"
     },
     "virtengine.roles.v1.MsgSetAccountStateResponse": {
@@ -10917,7 +11428,7 @@
     },
     "virtengine.settlement.v1.FiatConversionObservationStage": {
       "default": "FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED",
-      "description": "FiatConversionObservationStage is the legal external execution vocabulary.",
+      "description": "FiatConversionObservationStage is the legal external execution vocabulary.\n\n - FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED: FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED marks an absent stage.\n - FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED: FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED is a quoted route accepted.\n - FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED: FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED is a submitted on-chain swap.\n - FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED: FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED is a swap past finality.\n - FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED: FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED is a quoted off-ramp payout.\n - FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED: FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED is a submitted off-ramp payout.\n - FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED: FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED is a settled off-ramp payout.\n - FIAT_CONVERSION_OBSERVATION_STAGE_FAILED: FIAT_CONVERSION_OBSERVATION_STAGE_FAILED is a failed conversion leg.\n - FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED: FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED is a cancelled conversion leg.",
       "enum": [
         "FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED",
         "FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED",
@@ -10933,7 +11444,7 @@
     },
     "virtengine.settlement.v1.FiatConversionProfileState": {
       "default": "FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED",
-      "description": "FiatConversionProfileState distinguishes engineering readiness from real\nexternal production certification. Only CERTIFIED_ENABLED is executable.",
+      "description": "FiatConversionProfileState distinguishes engineering readiness from real\nexternal production certification. Only CERTIFIED_ENABLED is executable.\n\n - FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED: FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED marks an absent profile state.\n - FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED: FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED is not backed by an engine profile.\n - FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE: FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE is still under construction.\n - FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED: FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED is built but externally blocked.\n - FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED: FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED is the only executable state.\n - FIAT_CONVERSION_PROFILE_STATE_PAUSED: FIAT_CONVERSION_PROFILE_STATE_PAUSED is administratively paused.",
       "enum": [
         "FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED",
         "FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED",
@@ -11510,7 +12021,7 @@
     },
     "virtengine.settlement.v1.FinancialCaseStatus": {
       "default": "FINANCIAL_CASE_STATUS_UNSPECIFIED",
-      "description": "FinancialCaseStatus is the canonical dispute lifecycle state.",
+      "description": "FinancialCaseStatus is the canonical dispute lifecycle state.\n\n - FINANCIAL_CASE_STATUS_UNSPECIFIED: FINANCIAL_CASE_STATUS_UNSPECIFIED is the pre-open transition origin.\n - FINANCIAL_CASE_STATUS_OPEN: FINANCIAL_CASE_STATUS_OPEN is a newly opened case awaiting evidence.\n - FINANCIAL_CASE_STATUS_EVIDENCE: FINANCIAL_CASE_STATUS_EVIDENCE is collecting party evidence.\n - FINANCIAL_CASE_STATUS_REVIEW: FINANCIAL_CASE_STATUS_REVIEW is under resolver review.\n - FINANCIAL_CASE_STATUS_ESCALATED: FINANCIAL_CASE_STATUS_ESCALATED has been escalated past review.\n - FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL: FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL is resolved but still appealable.\n - FINANCIAL_CASE_STATUS_FINAL: FINANCIAL_CASE_STATUS_FINAL is a terminal resolution with no appeal left.\n - FINANCIAL_CASE_STATUS_REJECTED: FINANCIAL_CASE_STATUS_REJECTED is a terminal rejection of the claim.\n - FINANCIAL_CASE_STATUS_CANCELLED: FINANCIAL_CASE_STATUS_CANCELLED is a terminal withdrawal by the claimant.\n - FINANCIAL_CASE_STATUS_EXPIRED: FINANCIAL_CASE_STATUS_EXPIRED is a terminal deadline lapse.\n - FINANCIAL_CASE_STATUS_QUARANTINED: FINANCIAL_CASE_STATUS_QUARANTINED is held by authority pending integrity review.",
       "enum": [
         "FINANCIAL_CASE_STATUS_UNSPECIFIED",
         "FINANCIAL_CASE_STATUS_OPEN",
@@ -11609,7 +12120,7 @@
     },
     "virtengine.settlement.v1.FinancialClaimType": {
       "default": "FINANCIAL_CLAIM_TYPE_UNSPECIFIED",
-      "description": "FinancialClaimType identifies a privacy-safe typed allegation or finding.",
+      "description": "FinancialClaimType identifies a privacy-safe typed allegation or finding.\n\n - FINANCIAL_CLAIM_TYPE_UNSPECIFIED: FINANCIAL_CLAIM_TYPE_UNSPECIFIED marks an absent claim type.\n - FINANCIAL_CLAIM_TYPE_BILLING: FINANCIAL_CLAIM_TYPE_BILLING disputes the billed amount.\n - FINANCIAL_CLAIM_TYPE_USAGE: FINANCIAL_CLAIM_TYPE_USAGE disputes metered usage.\n - FINANCIAL_CLAIM_TYPE_SERVICE: FINANCIAL_CLAIM_TYPE_SERVICE disputes the delivered service.\n - FINANCIAL_CLAIM_TYPE_FRAUD: FINANCIAL_CLAIM_TYPE_FRAUD alleges fraudulent conduct.\n - FINANCIAL_CLAIM_TYPE_HPC: FINANCIAL_CLAIM_TYPE_HPC disputes an HPC execution outcome.\n - FINANCIAL_CLAIM_TYPE_REVIEW: FINANCIAL_CLAIM_TYPE_REVIEW is a reviewer assessment.\n - FINANCIAL_CLAIM_TYPE_MODERATION: FINANCIAL_CLAIM_TYPE_MODERATION is a moderation finding.\n - FINANCIAL_CLAIM_TYPE_MIGRATION: FINANCIAL_CLAIM_TYPE_MIGRATION was raised by a state migration.",
       "enum": [
         "FINANCIAL_CLAIM_TYPE_UNSPECIFIED",
         "FINANCIAL_CLAIM_TYPE_BILLING",
@@ -11625,7 +12136,7 @@
     },
     "virtengine.settlement.v1.FinancialEffectStatus": {
       "default": "FINANCIAL_EFFECT_STATUS_UNSPECIFIED",
-      "description": "FinancialEffectStatus identifies durable effect progress.",
+      "description": "FinancialEffectStatus identifies durable effect progress.\n\n - FINANCIAL_EFFECT_STATUS_UNSPECIFIED: FINANCIAL_EFFECT_STATUS_UNSPECIFIED marks an absent effect status.\n - FINANCIAL_EFFECT_STATUS_PENDING: FINANCIAL_EFFECT_STATUS_PENDING is a recorded but unapplied effect.\n - FINANCIAL_EFFECT_STATUS_APPLIED: FINANCIAL_EFFECT_STATUS_APPLIED is a durably applied effect.\n - FINANCIAL_EFFECT_STATUS_FAILED: FINANCIAL_EFFECT_STATUS_FAILED is an effect that exhausted its retries.",
       "enum": [
         "FINANCIAL_EFFECT_STATUS_UNSPECIFIED",
         "FINANCIAL_EFFECT_STATUS_PENDING",
@@ -11636,7 +12147,7 @@
     },
     "virtengine.settlement.v1.FinancialEffectType": {
       "default": "FINANCIAL_EFFECT_TYPE_UNSPECIFIED",
-      "description": "FinancialEffectType identifies an exactly-once terminal side effect.",
+      "description": "FinancialEffectType identifies an exactly-once terminal side effect.\n\n - FINANCIAL_EFFECT_TYPE_UNSPECIFIED: FINANCIAL_EFFECT_TYPE_UNSPECIFIED marks an absent effect kind.\n - FINANCIAL_EFFECT_TYPE_PAYOUT: FINANCIAL_EFFECT_TYPE_PAYOUT moves value to the winning party.\n - FINANCIAL_EFFECT_TYPE_ESCROW: FINANCIAL_EFFECT_TYPE_ESCROW returns or releases escrowed funds.\n - FINANCIAL_EFFECT_TYPE_REWARD: FINANCIAL_EFFECT_TYPE_REWARD adjusts provider rewards.\n - FINANCIAL_EFFECT_TYPE_RESERVATION: FINANCIAL_EFFECT_TYPE_RESERVATION adjusts a resource reservation.\n - FINANCIAL_EFFECT_TYPE_REPUTATION: FINANCIAL_EFFECT_TYPE_REPUTATION adjusts reputation scores.\n - FINANCIAL_EFFECT_TYPE_PROJECTION: FINANCIAL_EFFECT_TYPE_PROJECTION updates derived read models only.",
       "enum": [
         "FINANCIAL_EFFECT_TYPE_UNSPECIFIED",
         "FINANCIAL_EFFECT_TYPE_PAYOUT",
@@ -11692,7 +12203,7 @@
     },
     "virtengine.settlement.v1.FinancialResolutionType": {
       "default": "FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED",
-      "description": "FinancialResolutionType selects the terminal policy applied after appeal.",
+      "description": "FinancialResolutionType selects the terminal policy applied after appeal.\n\n - FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED: FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED marks an absent resolution policy.\n - FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN: FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN awards the dispute to the provider.\n - FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN: FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN awards the dispute to the customer.\n - FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT: FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT splits the allocation between both parties.\n - FINANCIAL_RESOLUTION_TYPE_MUTUAL: FINANCIAL_RESOLUTION_TYPE_MUTUAL records a mutually agreed resolution.\n - FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED: FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED records confirmed fraud.\n - FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT: FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT ends the case without a finding.",
       "enum": [
         "FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED",
         "FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN",
@@ -11742,7 +12253,7 @@
     },
     "virtengine.settlement.v1.FinancialSubjectType": {
       "default": "FINANCIAL_SUBJECT_TYPE_UNSPECIFIED",
-      "description": "FinancialSubjectType identifies the canonical financial lineage root.",
+      "description": "FinancialSubjectType identifies the canonical financial lineage root.\n\n - FINANCIAL_SUBJECT_TYPE_UNSPECIFIED: FINANCIAL_SUBJECT_TYPE_UNSPECIFIED marks an absent lineage root.\n - FINANCIAL_SUBJECT_TYPE_ORDER: FINANCIAL_SUBJECT_TYPE_ORDER roots the case at a marketplace order.\n - FINANCIAL_SUBJECT_TYPE_INVOICE: FINANCIAL_SUBJECT_TYPE_INVOICE roots the case at an issued invoice.\n - FINANCIAL_SUBJECT_TYPE_USAGE: FINANCIAL_SUBJECT_TYPE_USAGE roots the case at a metered usage record.\n - FINANCIAL_SUBJECT_TYPE_HPC_JOB: FINANCIAL_SUBJECT_TYPE_HPC_JOB roots the case at an HPC job.\n - FINANCIAL_SUBJECT_TYPE_SETTLEMENT: FINANCIAL_SUBJECT_TYPE_SETTLEMENT roots the case at a settlement event.",
       "enum": [
         "FINANCIAL_SUBJECT_TYPE_UNSPECIFIED",
         "FINANCIAL_SUBJECT_TYPE_ORDER",
@@ -11777,6 +12288,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.MsgAddFinancialClaimResponse": {
+      "description": "MsgAddFinancialClaimResponse returns the case and the added claim.",
       "properties": {
         "case_id": {
           "type": "string"
@@ -11794,6 +12306,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.MsgAppealFinancialCaseResponse": {
+      "description": "MsgAppealFinancialCaseResponse returns the appeal id and case status.",
       "properties": {
         "appeal_id": {
           "type": "string"
@@ -11805,6 +12318,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.MsgCancelFinancialCaseResponse": {
+      "description": "MsgCancelFinancialCaseResponse returns the resulting case status.",
       "properties": {
         "status": {
           "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
@@ -11849,6 +12363,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.MsgEscalateFinancialCaseResponse": {
+      "description": "MsgEscalateFinancialCaseResponse returns the resulting case status.",
       "properties": {
         "status": {
           "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
@@ -11857,6 +12372,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.MsgFinalizeFinancialCaseResponse": {
+      "description": "MsgFinalizeFinancialCaseResponse returns the applied terminal effects.",
       "properties": {
         "effects": {
           "items": {
@@ -11871,6 +12387,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.MsgOpenFinancialCaseResponse": {
+      "description": "MsgOpenFinancialCaseResponse returns the opened case and first claim.",
       "properties": {
         "case_id": {
           "type": "string"
@@ -11888,6 +12405,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.MsgRecordFiatConversionObservationResponse": {
+      "description": "MsgRecordFiatConversionObservationResponse acknowledges one observation.",
       "properties": {
         "conversion_id": {
           "type": "string"
@@ -11965,6 +12483,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.MsgResolveFinancialCaseResponse": {
+      "description": "MsgResolveFinancialCaseResponse returns the status and appeal deadlines.",
       "properties": {
         "appeal_deadline_height": {
           "format": "int64",
@@ -12003,6 +12522,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.MsgSubmitFinancialCaseForReviewResponse": {
+      "description": "MsgSubmitFinancialCaseForReviewResponse returns the resulting case status.",
       "properties": {
         "status": {
           "$ref": "#/definitions/virtengine.settlement.v1.FinancialCaseStatus"
@@ -12011,6 +12531,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.MsgUpdateParamsResponse": {
+      "description": "MsgUpdateParamsResponse is the empty response to a params update.",
       "type": "object"
     },
     "virtengine.settlement.v1.Params": {
@@ -12431,6 +12952,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.QueryFinancialCaseBySubjectResponse": {
+      "description": "QueryFinancialCaseBySubjectResponse is the response for the FinancialCaseBySubject RPC.",
       "properties": {
         "financial_case": {
           "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
@@ -12439,6 +12961,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.QueryFinancialCaseLineageResponse": {
+      "description": "QueryFinancialCaseLineageResponse is the response for the FinancialCaseLineage RPC.",
       "properties": {
         "claims": {
           "items": {
@@ -12465,6 +12988,7 @@
       "type": "object"
     },
     "virtengine.settlement.v1.QueryFinancialCaseResponse": {
+      "description": "QueryFinancialCaseResponse is the response for the FinancialCase RPC.",
       "properties": {
         "financial_case": {
           "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
@@ -12472,7 +12996,98 @@
       },
       "type": "object"
     },
-    "virtengine.settlement.v1.QueryFinancialCasesResponse": {
+    "virtengine.settlement.v1.QueryFinancialCasesByEscrowResponse": {
+      "description": "QueryFinancialCasesByEscrowResponse is the response for the FinancialCasesByEscrow RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByInvoiceResponse": {
+      "description": "QueryFinancialCasesByInvoiceResponse is the response for the FinancialCasesByInvoice RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByJobResponse": {
+      "description": "QueryFinancialCasesByJobResponse is the response for the FinancialCasesByJob RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByOrderResponse": {
+      "description": "QueryFinancialCasesByOrderResponse is the response for the FinancialCasesByOrder RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByPartyResponse": {
+      "description": "QueryFinancialCasesByPartyResponse is the response for the FinancialCasesByParty RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByStatusResponse": {
+      "description": "QueryFinancialCasesByStatusResponse is the response for the FinancialCasesByStatus RPC.",
+      "properties": {
+        "financial_cases": {
+          "items": {
+            "$ref": "#/definitions/virtengine.settlement.v1.FinancialCase"
+          },
+          "type": "array"
+        },
+        "pagination": {
+          "$ref": "#/definitions/cosmos.base.query.v1beta1.PageResponse"
+        }
+      },
+      "type": "object"
+    },
+    "virtengine.settlement.v1.QueryFinancialCasesByUsageResponse": {
+      "description": "QueryFinancialCasesByUsageResponse is the response for the FinancialCasesByUsage RPC.",
       "properties": {
         "financial_cases": {
           "items": {
@@ -20570,6 +21185,78 @@
         "x-virtengine-proto-source": "virtengine/fraud/v1/query.proto"
       }
     },
+    "/virtengine/fraud/v1/reports/{report_id}/responses": {
+      "get": {
+        "operationId": "virtengine.fraud.v1.Query_FraudResponses",
+        "parameters": [
+          {
+            "description": "ReportID is the fraud report ID whose responses are being queried",
+            "in": "path",
+            "name": "report_id",
+            "required": true,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.fraud.v1.QueryFraudResponsesResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "summary": "FraudResponses returns the responses/rebuttals filed against a report",
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/fraud/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/fraud/v1/query.proto"
+      }
+    },
     "/virtengine/fraud/v1/reports/reported/{reported_party}": {
       "get": {
         "operationId": "virtengine.fraud.v1.Query_FraudReportsByReportedParty",
@@ -23068,6 +23755,114 @@
         "x-virtengine-proto-source": "virtengine/marketplace/v1/query.proto"
       }
     },
+    "/virtengine/marketplace/v1/catalog": {
+      "get": {
+        "operationId": "virtengine.marketplace.v1.Query_Catalog",
+        "parameters": [
+          {
+            "description": "Category filter (empty means any).",
+            "in": "query",
+            "name": "category",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "collectionFormat": "multi",
+            "description": "Region filter (empty means any).",
+            "in": "query",
+            "items": {
+              "type": "string"
+            },
+            "name": "regions",
+            "required": false,
+            "type": "array"
+          },
+          {
+            "collectionFormat": "multi",
+            "description": "Backend allow-list (empty means any).",
+            "in": "query",
+            "items": {
+              "type": "string"
+            },
+            "name": "backends",
+            "required": false,
+            "type": "array"
+          },
+          {
+            "description": "Include unlisted offerings.",
+            "in": "query",
+            "name": "include_unlisted",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "Source filter (\"native\", \"waldur\", empty means any).",
+            "in": "query",
+            "name": "source",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.marketplace.v1.QueryCatalogResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "summary": "Catalog returns active, browsable offerings across supply sources.",
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/marketplace/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/marketplace/v1/query.proto"
+      }
+    },
     "/virtengine/marketplace/v1/offerings/{offering_id}/price": {
       "get": {
         "operationId": "virtengine.marketplace.v1.Query_OfferingPrice",
@@ -23103,6 +23898,85 @@
           }
         },
         "summary": "OfferingPrice calculates pricing for a specific offering.",
+        "tags": [
+          "Query"
+        ],
+        "x-virtengine-proto-fragment": "virtengine/marketplace/v1/query.swagger.json",
+        "x-virtengine-proto-source": "virtengine/marketplace/v1/query.proto"
+      }
+    },
+    "/virtengine/marketplace/v1/waldur-commands": {
+      "get": {
+        "operationId": "virtengine.marketplace.v1.Query_WaldurCommands",
+        "parameters": [
+          {
+            "description": "Waldur instance filter (empty means any).",
+            "in": "query",
+            "name": "instance_id",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "Only return unacknowledged commands.",
+            "in": "query",
+            "name": "pending_only",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "key is a value returned in PageResponse.next_key to begin\nquerying the next page most efficiently. Only one of offset or key\nshould be set.",
+            "format": "byte",
+            "in": "query",
+            "name": "pagination.key",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "offset is a numeric offset that can be used when key is unavailable.\nIt is less efficient than using key. Only one of offset or key should\nbe set.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.offset",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "limit is the total number of results to be returned in the result page.\nIf left empty it will default to a value to be set by each app.",
+            "format": "uint64",
+            "in": "query",
+            "name": "pagination.limit",
+            "required": false,
+            "type": "string"
+          },
+          {
+            "description": "count_total is set to true  to indicate that the result set should include\na count of the total number of items available for pagination in UIs.\ncount_total is only respected when offset is used. It is ignored when key\nis set.",
+            "in": "query",
+            "name": "pagination.count_total",
+            "required": false,
+            "type": "boolean"
+          },
+          {
+            "description": "reverse is set to true if results are to be returned in the descending order.",
+            "in": "query",
+            "name": "pagination.reverse",
+            "required": false,
+            "type": "boolean"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "A successful response.",
+            "schema": {
+              "$ref": "#/definitions/virtengine.marketplace.v1.QueryWaldurCommandsResponse"
+            }
+          },
+          "default": {
+            "description": "An unexpected error response.",
+            "schema": {
+              "$ref": "#/definitions/grpc.gateway.runtime.Error"
+            }
+          }
+        },
+        "summary": "WaldurCommands lists durable commands for off-chain Waldur adapters.",
         "tags": [
           "Query"
         ],
@@ -24167,6 +25041,7 @@
             }
           }
         },
+        "summary": "ProviderSigningKeyEpochs lists every signing key epoch for a provider.",
         "tags": [
           "Query"
         ],
@@ -24212,6 +25087,7 @@
             }
           }
         },
+        "summary": "ProviderSigningKey returns one provider signing key by id or epoch.",
         "tags": [
           "Query"
         ],
@@ -24612,6 +25488,7 @@
             }
           }
         },
+        "summary": "Reservation returns a single reservation by its id.",
         "tags": [
           "Query"
         ],
@@ -24682,6 +25559,7 @@
             }
           }
         },
+        "summary": "ReservationLineage returns a reservation and its ordered event history.",
         "tags": [
           "Query"
         ],
@@ -24704,7 +25582,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationByBidResponse"
             }
           },
           "default": {
@@ -24714,6 +25592,7 @@
             }
           }
         },
+        "summary": "ReservationByBid returns the reservation for a bid.",
         "tags": [
           "Query"
         ],
@@ -24742,7 +25621,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationByConsumerResponse"
             }
           },
           "default": {
@@ -24752,6 +25631,7 @@
             }
           }
         },
+        "summary": "ReservationByConsumer returns the reservation for a typed consumer.",
         "tags": [
           "Query"
         ],
@@ -24774,7 +25654,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationByJobResponse"
             }
           },
           "default": {
@@ -24784,6 +25664,7 @@
             }
           }
         },
+        "summary": "ReservationByJob returns the reservation for an HPC job.",
         "tags": [
           "Query"
         ],
@@ -24806,7 +25687,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationByLeaseResponse"
             }
           },
           "default": {
@@ -24816,6 +25697,7 @@
             }
           }
         },
+        "summary": "ReservationByLease returns the reservation for a lease.",
         "tags": [
           "Query"
         ],
@@ -24838,7 +25720,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationByOrderResponse"
             }
           },
           "default": {
@@ -24848,6 +25730,7 @@
             }
           }
         },
+        "summary": "ReservationByOrder returns the reservation for an order.",
         "tags": [
           "Query"
         ],
@@ -24908,7 +25791,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationsResponse"
+              "$ref": "#/definitions/virtengine.resources.v1.QueryReservationsByProviderResponse"
             }
           },
           "default": {
@@ -24918,6 +25801,7 @@
             }
           }
         },
+        "summary": "ReservationsByProvider lists the reservations held by one provider.",
         "tags": [
           "Query"
         ],
@@ -25581,13 +26465,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-escrow/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-escrow/{escrow_id}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByEscrow",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "escrow_id",
             "required": true,
             "type": "string"
           },
@@ -25634,7 +26518,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByEscrowResponse"
             }
           },
           "default": {
@@ -25651,13 +26535,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-invoice/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-invoice/{invoice_id}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByInvoice",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "invoice_id",
             "required": true,
             "type": "string"
           },
@@ -25704,7 +26588,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByInvoiceResponse"
             }
           },
           "default": {
@@ -25721,13 +26605,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-job/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-job/{job_id}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByJob",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "job_id",
             "required": true,
             "type": "string"
           },
@@ -25774,7 +26658,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByJobResponse"
             }
           },
           "default": {
@@ -25791,13 +26675,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-order/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-order/{order_id}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByOrder",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "order_id",
             "required": true,
             "type": "string"
           },
@@ -25844,7 +26728,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByOrderResponse"
             }
           },
           "default": {
@@ -25861,13 +26745,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-party/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-party/{party}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByParty",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "party",
             "required": true,
             "type": "string"
           },
@@ -25914,7 +26798,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByPartyResponse"
             }
           },
           "default": {
@@ -25931,13 +26815,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-status/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-status/{status}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByStatus",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "status",
             "required": true,
             "type": "string"
           },
@@ -25984,7 +26868,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByStatusResponse"
             }
           },
           "default": {
@@ -26007,6 +26891,7 @@
         "parameters": [
           {
             "default": "FINANCIAL_SUBJECT_TYPE_UNSPECIFIED",
+            "description": " - FINANCIAL_SUBJECT_TYPE_UNSPECIFIED: FINANCIAL_SUBJECT_TYPE_UNSPECIFIED marks an absent lineage root.\n - FINANCIAL_SUBJECT_TYPE_ORDER: FINANCIAL_SUBJECT_TYPE_ORDER roots the case at a marketplace order.\n - FINANCIAL_SUBJECT_TYPE_INVOICE: FINANCIAL_SUBJECT_TYPE_INVOICE roots the case at an issued invoice.\n - FINANCIAL_SUBJECT_TYPE_USAGE: FINANCIAL_SUBJECT_TYPE_USAGE roots the case at a metered usage record.\n - FINANCIAL_SUBJECT_TYPE_HPC_JOB: FINANCIAL_SUBJECT_TYPE_HPC_JOB roots the case at an HPC job.\n - FINANCIAL_SUBJECT_TYPE_SETTLEMENT: FINANCIAL_SUBJECT_TYPE_SETTLEMENT roots the case at a settlement event.",
             "enum": [
               "FINANCIAL_SUBJECT_TYPE_UNSPECIFIED",
               "FINANCIAL_SUBJECT_TYPE_ORDER",
@@ -26096,13 +26981,13 @@
         "x-virtengine-proto-source": "virtengine/settlement/v1/query.proto"
       }
     },
-    "/virtengine/settlement/v1/financial-cases/by-usage/{key}": {
+    "/virtengine/settlement/v1/financial-cases/by-usage/{usage_id}": {
       "get": {
         "operationId": "virtengine.settlement.v1.Query_FinancialCasesByUsage",
         "parameters": [
           {
             "in": "path",
-            "name": "key",
+            "name": "usage_id",
             "required": true,
             "type": "string"
           },
@@ -26149,7 +27034,7 @@
           "200": {
             "description": "A successful response.",
             "schema": {
-              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesResponse"
+              "$ref": "#/definitions/virtengine.settlement.v1.QueryFinancialCasesByUsageResponse"
             }
           },
           "default": {

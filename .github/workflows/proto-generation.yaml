@@ -44,11 +44,18 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+      - name: Install system dependencies
+        # Same libudev requirement as ci.yaml's lint/vet/test-go/integration jobs:
+        # tests/compatibility and tests/gateway compile the whole module with cgo,
+        # and github.com/zondax/hid (via go.mod replace) carries
+        # `#cgo pkg-config: libudev`; without libudev-dev both die at pkg-config
+        # build time with [build failed]. Not on the ubuntu-24.04 runner image.
+        run: sudo apt-get update && sudo apt-get install -y libudev-dev
       - name: Verify modules and checksums
         run: VE_VERIFY_EMPTY_CACHE=1 ./scripts/verify-modules.sh
       - name: Build pinned generation image
@@ -58,7 +65,24 @@ jobs:
       - name: Regenerate all contracts
         run: ./scripts/proto-generate.sh all
       - name: Verify generated drift
-        run: git diff --exit-code -- sdk/go/node sdk/ts/src/generated sdk/artifacts/proto api/openapi/virtengine-proto.swagger.json
+        # The two validators are here because step 7 ALREADY REWRITES THEM:
+        # generate_typescript() ends with `npm --prefix ts run build`
+        # (sdk/generation/generate.sh), whose `compile:validators` writes both
+        # files. They were unreachable from this pathspec only because they live
+        # under sdk/ts/src/sdk/** and sdk/ts/src/sdl/** rather than under
+        # sdk/ts/src/generated, so regeneration could rewrite them and this gate
+        # still reported green -- the blind spot behind virtengine#1234 and
+        # t_1f660be5. Naming the files (not sdk/ts/src/sdk, which is
+        # hand-written SDK source) keeps the blast radius to the exact
+        # generator outputs.
+        run: |
+          git diff --exit-code -- \
+            sdk/go/node \
+            sdk/ts/src/generated \
+            sdk/artifacts/proto \
+            api/openapi/virtengine-proto.swagger.json \
+            sdk/ts/src/sdk/provider/auth/jwt/validateJwtPayload.ts \
+            sdk/ts/src/sdl/SDL/validateSDL/validateSDLInput.ts
       - name: Verify deterministic second run
         run: ./scripts/verify-proto-generation.sh
       - name: Compatibility fixtures
@@ -66,9 +90,44 @@ jobs:
       - name: REST/gRPC gateway boundary
         run: go test -p 1 -tags=e2e.integration ./tests/gateway -run '^TestTask86A' -count=1
       - name: TypeScript SDK
+        # `set -e` is load-bearing, not decoration. The four npm commands below run
+        # inside a `bash -lc` string inside the container, which is a SEPARATE shell
+        # from the one GitHub Actions wraps this step in. Actions' own
+        # `bash --noprofile --norc -e -o pipefail` applies only to the outer
+        # `docker run`; the inner bash does not inherit errexit. Without `set -e`
+        # the step's exit status is whatever the LAST command returned, and
+        # `npm run build` is last -- so a failing `lint` or `test` was silently
+        # discarded and the step reported success.
+        #
+        # Observed on run 36786584581 (sha ef0b319): vitest printed
+        #   Test Suites: 7 failed, 33 passed, 40 total
+        #   Tests:       69 failed, 1306 passed, 1375 total
+        # then `npm run build` succeeded, and the step, the whole job, and the
+        # workflow all reported `success`. That is a green gate over 69 red tests,
+        # which is worse than a red gate: it makes the contract gate untrustworthy.
+        #
+        # `pipefail` is added to match the Actions default so a failure inside a
+        # pipeline (e.g. `npm run lint 2>&1 | tee`) is caught rather than reduced
+        # to tee's exit status.
         run: |
           docker run --rm --volume "$PWD:/src" --workdir /src --entrypoint bash \
             virtengine-proto-gen:1.0.0 -lc '
+              set -euo pipefail
+              # A login shell REBUILDS PATH from /etc/profile, which drops the PATH
+              # set by the image ENV. `buf` is installed by
+              # `go install github.com/bufbuild/buf/cmd/buf`, so it lives in
+              # /go/bin and becomes invisible to this shell and to every child
+              # process it spawns. The "Lint protobuf sources" step above
+              # ("--entrypoint buf ... lint") succeeds because that invocation
+              # never goes through a login shell, which is why the missing
+              # binary was not obvious: the image demonstrably HAS buf.
+              #
+              # Observable as `spawn buf ENOENT` from
+              # sdk/ts/test/helpers/runBufGenerate.ts (the only buf spawn site
+              # in sdk/ts), which took 7 suites / 69 tests red while `npm run
+              # build` - the last command, and the one whose status used to be
+              # the exit status of this step - passed.
+              export PATH="/go/bin:/usr/local/bin:$PATH"
               export NODE_OPTIONS=--max-old-space-size=6144
               npm --prefix sdk/ts ci --ignore-scripts --no-audit --no-fund
               npm --prefix sdk/ts run lint

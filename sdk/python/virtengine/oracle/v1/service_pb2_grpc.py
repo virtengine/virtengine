@@ -5,7 +5,7 @@ import grpc
 from virtengine.oracle.v1 import msgs_pb2 as virtengine_dot_oracle_dot_v1_dot_msgs__pb2
 
 
-class MsgStub(object):
+class MsgStub:
     """Msg defines the oracle Msg service for managing price feeds
     """
 
@@ -27,7 +27,7 @@ class MsgStub(object):
                 _registered_method=True)
 
 
-class MsgServicer(object):
+class MsgServicer:
     """Msg defines the oracle Msg service for managing price feeds
     """
 
@@ -69,7 +69,7 @@ def add_MsgServicer_to_server(servicer, server):
 
 
  # This class is part of an EXPERIMENTAL API.
-class Msg(object):
+class Msg:
     """Msg defines the oracle Msg service for managing price feeds
     """
 

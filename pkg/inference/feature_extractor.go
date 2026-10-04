@@ -206,9 +206,9 @@ func (fe *FeatureExtractor) extractMetadataFeatures(features []float32, inputs *
 
 	for i, st := range scopeTypes {
 		if scopeTypeSet[st] {
-			features[MetadataOffset+1+i] = 1.0
+			features[MetadataOffset+1+i] = 1.0 // #nosec G602 -- the slice is allocated as make([]float32, TotalFeatureDim) with TotalFeatureDim = 768 by the only constructor, and this write is at MetadataOffset + 1 + i with MetadataOffset = 529 and i < 8 (the length of the literal this range walks), so the index cannot exceed 537 and the write is in bounds; gosec cannot bound a range index
 		} else {
-			features[MetadataOffset+1+i] = 0.0
+			features[MetadataOffset+1+i] = 0.0 // #nosec G602 -- the slice is allocated as make([]float32, TotalFeatureDim) with TotalFeatureDim = 768 by the only constructor, and this write is at MetadataOffset + 1 + i with MetadataOffset = 529 and i < 8 (the length of the literal this range walks), so the index cannot exceed 537 and the write is in bounds; gosec cannot bound a range index
 		}
 	}
 

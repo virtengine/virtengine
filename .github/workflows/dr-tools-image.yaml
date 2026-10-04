@@ -1,7 +1,8 @@
 # VirtEngine DR tools image build/publish
 #
-# Closes the gap found in t_46de26f7: infra/kubernetes/dr/backup-cronjobs.yaml
-# pins ghcr.io/virtengine/dr-tools by digest, but no Dockerfile existed and no
+# Closes the gap found in PR #900 (the original task id quoted here, t_46de26f7,
+# exists on no board): infra/kubernetes/dr/backup-cronjobs.yaml pins
+# ghcr.io/virtengine/dr-tools by digest, but no Dockerfile existed and no
 # workflow ever built or published it, so all three DR CronJobs were
 # permanently ImagePullBackOff.
 #
@@ -29,8 +30,12 @@
 #                    dr-tools has never been published it reports
 #                    bootstrap-not-performed and passes; once the tag exists it
 #                    enforces that the pinned digest resolves. Also reports
-#                    anonymous pullability, because the CronJob pods mount no
-#                    imagePullSecrets and so can only pull a public package.
+#                    anonymous pullability. Since #1161 the CronJob pods DO
+#                    mount imagePullSecrets (dr-tools-ghcr-pull), so a non-200
+#                    anonymous probe is not by itself an outage; what the probe
+#                    reports is which side of the pair holds, and
+#                    .github/tests/test_ghcr_image_pull_credential_policy.py
+#                    asserts the pair in both directions.
 #                    That probe is self-tested against a known-public control on
 #                    every run: the success branch otherwise could not print
 #                    before the package exists, so it could rot into a dead
@@ -121,10 +126,10 @@ jobs:
       packages: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@v4
 
       - name: Determine publish mode
         id: mode
@@ -140,7 +145,7 @@ jobs:
 
       - name: Log in to GHCR
         if: steps.mode.outputs.publish == 'true'
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -149,7 +154,7 @@ jobs:
       - name: Build (validation only, loaded into the runner daemon)
         id: local
         if: steps.mode.outputs.publish != 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: _build/Dockerfile.dr-tools
@@ -166,7 +171,7 @@ jobs:
       - name: Build and push
         id: push
         if: steps.mode.outputs.publish == 'true'
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@v7
         with:
           context: .
           file: _build/Dockerfile.dr-tools
@@ -205,10 +210,10 @@ jobs:
       packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -241,7 +246,7 @@ jobs:
       pull-requests: write
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Re-pin the digest
         env:
@@ -261,20 +266,45 @@ jobs:
           print(f"re-pinned {n} reference(s) to {digest}")
           PY
 
+      # The download MUST land outside the workspace. `create-pull-request`
+      # commits EVERY change in the workspace, so a binary dropped in the repo
+      # root is published to a PR by default — which is how a 49.7 MB,
+      # single-platform `kubectl` reached PR #1023 and made it unmergeable.
+      # $RUNNER_TEMP is wiped with the runner and is never part of a commit.
       - name: Install pinned kubectl
         shell: bash
+        env:
+          KUBECTL_DIR: ${{ runner.temp }}/kubectl-bin
         run: |
           set -euo pipefail
-          curl -fsSLo kubectl "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
-          echo "${KUBECTL_SHA256}  kubectl" | sha256sum --check --strict
-          chmod +x kubectl
-          sudo install -m 0755 kubectl /usr/local/bin/kubectl
+          mkdir -p "$KUBECTL_DIR"
+          curl -fsSLo "$KUBECTL_DIR/kubectl" "https://dl.k8s.io/release/v${KUBECTL_VERSION}/bin/linux/amd64/kubectl"
+          echo "${KUBECTL_SHA256}  $KUBECTL_DIR/kubectl" | sha256sum --check --strict
+          chmod +x "$KUBECTL_DIR/kubectl"
+          sudo install -m 0755 "$KUBECTL_DIR/kubectl" /usr/local/bin/kubectl
+          kubectl version --client=true
 
       - name: Validate the manifest still satisfies policy
         run: node scripts/task85c-validate-kubernetes.mjs
 
+      # Catch-all: the re-pin PR must carry the manifest change and NOTHING
+      # else. Without this, any future step that writes an artefact into the
+      # workspace is silently published again.
+      - name: Assert only the manifest changed (no stray artefacts)
+        shell: bash
+        run: |
+          set -euo pipefail
+          git status --porcelain
+          stray="$(git status --porcelain | awk '{print $2}' | grep -vxF "$CRONJOB_MANIFEST" || true)"
+          if [ -n "$stray" ]; then
+            echo "::error::unexpected path(s) in the re-pin workspace — these would be committed and pushed to a PR:"
+            printf '%s\n' "$stray"
+            exit 1
+          fi
+          echo "workspace contains only ${CRONJOB_MANIFEST}"
+
       - name: Open re-pin PR
-        uses: peter-evans/create-pull-request@v6
+        uses: peter-evans/create-pull-request@v8
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           commit-message: "fix(dr): re-pin dr-tools to published digest ${{ needs.build.outputs.digest }}"
@@ -292,19 +322,36 @@ jobs:
               was confirmed present and executable inside it.
 
             This PR updates the pinned digest in
-            `infra/kubernetes/dr/backup-cronjobs.yaml`. Merging it is what makes
-            the DR CronJobs pullable.
+            `infra/kubernetes/dr/backup-cronjobs.yaml`. Merging it makes the
+            pin correct — nothing more. It does not make the image pullable.
 
             **Still required for the pods to actually start:** the GHCR package
-            must be pullable from the cluster. `dr-backup-sa` carries no
-            `imagePullSecrets`, so if `ghcr.io/virtengine/dr-tools` is private
-            the CronJobs stay in ImagePullBackOff even with this digest merged —
-            either make the package public or add a pull secret.
+            must be pullable from the cluster. Since #1161 `dr-backup-sa`
+            carries `imagePullSecrets: dr-tools-ghcr-pull`, so a private package
+            is fine PROVIDED that Secret exists in namespace `virtengine` (it is
+            provisioned out of band; see the manifest for the kubectl command).
+            The pull fails only if the Secret is missing — a non-200 from the
+            anonymous probe in the log means "not anonymously readable", not
+            "no credential path".
+
+            "Pulled back by digest" above means an *authenticated* pull from CI.
+            That proves the image exists and its `command:` contract holds; it is
+            not evidence the Secret was provisioned in the cluster.
 
             ---
             *Automatically generated by the DR Tools Image workflow.*
-          branch: dr-tools/repin-${{ github.sha }}
+          # The branch MUST be a stable name, not one per commit. With a per-SHA
+          # branch every publish mints a *separate* PR, so N builds leave N open
+          # re-pins each carrying a progressively older digest; merging them out
+          # of order regresses the pin (observed 2026-10-02: #1092 pinned a digest
+          # older than the one #1140 had already landed, and #1131 was byte-for-
+          # byte identical to develop). A fixed branch makes the action UPDATE the
+          # single open PR instead, so there is exactly one re-pin and it always
+          # carries the newest digest. An unchanged digest still commits nothing,
+          # so the rewrite stays a no-op when the pin is already current.
+          branch: dr-tools/repin
           base: main
+          delete-branch: true
           labels: |
             dr
             automated
@@ -317,10 +364,10 @@ jobs:
       packages: read
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Log in to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -352,11 +399,13 @@ jobs:
           echo "::warning::ghcr.io/virtengine/dr-tools has not been published yet."
           echo "The DR CronJobs cannot pull until the DR Tools Image workflow runs"
           echo "(push to main, or workflow_dispatch with publish=true) and its"
-          echo "re-pin PR is merged. Tracked by t_46de26f7."
+          echo "re-pin PR is merged. Tracked on PR #900."
 
       # Cluster-side reachability, which the digest check above cannot see: the
-      # CronJob pods authenticate with dr-backup-sa and mount no imagePullSecrets,
-      # so they can only succeed if the package is anonymously pullable.
+      # CronJob pods authenticate with dr-backup-sa and, since #1161, mount an
+      # imagePullSecrets entry, so a non-200 anonymous probe is not by itself an
+      # outage. The paired invariant is asserted by
+      # .github/tests/test_ghcr_image_pull_credential_policy.py.
       #
       # The probe lives in a script rather than inline because it has to be
       # executable in a self-test mode: see the step below.

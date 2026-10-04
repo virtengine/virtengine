@@ -449,7 +449,7 @@ func (s *OfferingPublicationService) PublishOffering(ctx context.Context, waldur
 	pub.LastError = ""
 	s.state.SetPublication(pub)
 
-	log.Printf("[offering-publication] published offering %s → %s", waldurUUID, chainOfferingID)
+	log.Printf("[offering-publication] published offering %s → %s", sanitizeLogValue(waldurUUID), sanitizeLogValue(chainOfferingID))
 	return nil
 }
 
@@ -474,7 +474,7 @@ func (s *OfferingPublicationService) PauseOffering(ctx context.Context, waldurUU
 	pub.ChainState = chainStatePaused
 	s.state.SetPublication(pub)
 
-	log.Printf("[offering-publication] paused offering %s", waldurUUID)
+	log.Printf("[offering-publication] paused offering %s", sanitizeLogValue(waldurUUID))
 	return nil
 }
 
@@ -493,7 +493,7 @@ func (s *OfferingPublicationService) ActivateOffering(ctx context.Context, waldu
 	pub.ChainState = chainStateActive
 	s.state.SetPublication(pub)
 
-	log.Printf("[offering-publication] activated offering %s", waldurUUID)
+	log.Printf("[offering-publication] activated offering %s", sanitizeLogValue(waldurUUID))
 	return nil
 }
 
@@ -516,7 +516,7 @@ func (s *OfferingPublicationService) DeprecateOffering(ctx context.Context, wald
 	pub.ChainState = "deprecated"
 	s.state.SetPublication(pub)
 
-	log.Printf("[offering-publication] deprecated offering %s", waldurUUID)
+	log.Printf("[offering-publication] deprecated offering %s", sanitizeLogValue(waldurUUID))
 	return nil
 }
 
@@ -546,7 +546,7 @@ func (s *OfferingPublicationService) UpdatePricing(ctx context.Context, waldurUU
 		pub.LastSyncedAt = &now
 	}
 
-	log.Printf("[offering-publication] updated pricing for %s", waldurUUID)
+	log.Printf("[offering-publication] updated pricing for %s", sanitizeLogValue(waldurUUID))
 	return nil
 }
 

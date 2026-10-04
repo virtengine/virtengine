@@ -37,7 +37,7 @@ func (q *QueryServer) QueryLogEntries(goCtx context.Context, req *types.QueryLog
 	limit := int64(0)
 	if req.Pagination != nil && req.Pagination.Limit > 0 {
 		// Safe conversion: pagination limit is always reasonable
-		limit = int64(req.Pagination.Limit) //nolint:gosec
+		limit = int64(req.Pagination.Limit) /* #nosec G115 -- int64(req.Pagination.Limit) is a non-negative chain height/count that fits int64 */ //nolint:gosec
 	}
 
 	// Query logs

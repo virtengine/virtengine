@@ -88,7 +88,7 @@ func GetTxDeploymentCreateCmd() *cobra.Command {
 					return fmt.Errorf("cannot generate DSEQ from last block height. node is catching up")
 				}
 
-				id.DSeq = uint64(syncInfo.LatestBlockHeight) // nolint: gosec
+				id.DSeq = uint64(syncInfo.LatestBlockHeight) /* #nosec G115 -- uint64(syncInfo.LatestBlockHeight) is a non-negative counter/height bounded well below 2^63 */ //nolint:gosec
 			}
 
 			version, err := sdlManifest.Version()

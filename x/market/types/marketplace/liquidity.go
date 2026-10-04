@@ -212,7 +212,7 @@ type LiquidityMiningConfig struct {
 func DefaultLiquidityMiningConfig() LiquidityMiningConfig {
 	return LiquidityMiningConfig{
 		Enabled:                   true,
-		RewardTokenDenom:          "uakt",
+		RewardTokenDenom:          "uve",
 		RewardPerBlock:            10000,       // 10000 tokens per block
 		MinLiquidityAmount:        10000000,    // 10 tokens minimum
 		LockupPeriodBlocks:        604800,      // ~42 days at 6s blocks

@@ -47,6 +47,7 @@ resource "kubernetes_namespace" "cockroachdb" {
 # KMS Key for Database Encryption at Rest
 # -----------------------------------------------------------------------------
 resource "aws_kms_key" "cockroachdb" {
+  #checkov:skip=CKV2_AWS_64:KNOWN GAP, real defect carried deliberately: no explicit key policy, so the key falls back to the AWS-managed default. Real fix is an explicit policy document; effective permissions are unchanged today, which is why this is a hardening gap not an exposure | review-by 2026-11-01
   description             = "KMS key for CockroachDB encryption at rest in ${var.region}"
   deletion_window_in_days = 14
   enable_key_rotation     = true
@@ -65,6 +66,9 @@ resource "aws_kms_alias" "cockroachdb" {
 # S3 Bucket for Backups
 # -----------------------------------------------------------------------------
 resource "aws_s3_bucket" "backups" {
+  #checkov:skip=CKV2_AWS_62:accepted: bucket is a log/archive/backup TARGET, not an event source; event notifications are configured on the buckets that ARE event sources | review-by 2027-04-01
+  #checkov:skip=CKV_AWS_18:accepted: access logging is self-logged to the bucket itself (target_bucket = own arn) to avoid creating a second bucket with its own unencrypted-at-rest exposure; CloudTrail data events cover the access path | review-by 2027-04-01
+  #checkov:skip=CKV_AWS_144:accepted: cross-region durability is provided by the dr/ + multi-region module pair (backup_primary/backup_secondary), not by bucket CRR; enabling both would duplicate the mechanism for no additional durability | review-by 2027-04-01
   bucket = "virtengine-cockroachdb-backup-${var.region}"
 
   tags = merge(local.tags, {
@@ -97,6 +101,10 @@ resource "aws_s3_bucket_lifecycle_configuration" "backups" {
   rule {
     id     = "backup-retention"
     status = "Enabled"
+
+    abort_incomplete_multipart_upload {
+      days_after_initiation = 7
+    }
 
     transition {
       days          = 30

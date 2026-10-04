@@ -159,7 +159,7 @@ func (m *LedgerID) GetSequence() int64 {
 
 // CollateralRatio represents the current collateral ratio
 type CollateralRatio struct {
-	// ratio is CR = (VaultAKT * Price) / OutstandingACT
+	// ratio is CR = (VaultNative * Price) / OutstandingVCC
 	Ratio cosmossdk_io_math.LegacyDec `protobuf:"bytes,1,opt,name=ratio,proto3,customtype=cosmossdk.io/math.LegacyDec" json:"ratio"`
 	// status indicates the current circuit breaker status
 	Status MintStatus `protobuf:"varint,2,opt,name=status,proto3,enum=virtengine.bme.v1.MintStatus" json:"status,omitempty"`
@@ -468,7 +468,7 @@ type LedgerPendingRecord struct {
 	// owner source of the coins to be burned
 	Owner string `protobuf:"bytes,1,opt,name=owner,proto3" json:"owner" yaml:"owner"`
 	// to destination of the minted coins.
-	// if minted coin is ACT, "to" must be same as signer
+	// if minted coin is VCC, "to" must be same as signer
 	To string `protobuf:"bytes,2,opt,name=to,proto3" json:"to" yaml:"to"`
 	// coins_to_burn
 	CoinsToBurn types.Coin `protobuf:"bytes,3,opt,name=coins_to_burn,json=coinsToBurn,proto3" json:"coins_to_burn" yaml:"coins_to_burn"`

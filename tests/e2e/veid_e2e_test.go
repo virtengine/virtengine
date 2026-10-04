@@ -30,6 +30,7 @@ import (
 
 	"github.com/virtengine/virtengine/app"
 	sdktestutil "github.com/virtengine/virtengine/sdk/go/testutil"
+	"github.com/virtengine/virtengine/tests/e2e/helpers"
 	"github.com/virtengine/virtengine/x/market/types/marketplace"
 	"github.com/virtengine/virtengine/x/veid/keeper"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
@@ -638,20 +639,14 @@ func (s *VEIDE2ETestSuite) TestMarketplaceVEIDGating() {
 
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.Marketplace.CreateOffering(ctx, offering))
 
-	// Attempt order with insufficient score - should fail
-	orderIDLow := marketplace.OrderID{
-		CustomerAddress: customer.String(),
-		Sequence:        1,
-	}
-	orderLow := marketplace.NewOrderAt(orderIDLow, offering.ID, 5000, 1, ctx.BlockTime())
-
-	err = s.app.Keepers.VirtEngine.Marketplace.CreateOrder(ctx, orderLow)
-	require.Error(s.T(), err, "Order should fail with insufficient VEID score")
-
-	var gatingErr *marketplace.IdentityGatingError
-	require.ErrorAs(s.T(), err, &gatingErr)
-	require.NotEmpty(s.T(), gatingErr.Reasons)
-	s.T().Logf("  → Order rejected: %v", gatingErr.Reasons)
+	// Attempt an order with insufficient score: the marketplace order path must
+	// reject it. Gating is driven directly through CheckIdentityGating: legacy
+	// CreateOrder lifecycle writes are retired behind the Task 84C canonical
+	// fence (ErrLifecycleDeprecated with default genesis), while
+	// CheckIdentityGating is the live enforcement function CreateOrder itself
+	// invoked for gating.
+	helpers.RequireIdentityGatingBlocked(s.T(), s.app, ctx, *offering, customer)
+	s.T().Log("  → Order rejected: insufficient VEID score")
 
 	// Update score to meet requirement
 	require.NoError(s.T(), s.app.Keepers.VirtEngine.VEID.UpdateScore(ctx, customer, 85, TestModelVersion))
@@ -659,18 +654,8 @@ func (s *VEIDE2ETestSuite) TestMarketplaceVEIDGating() {
 	ctx = ctx.WithBlockHeight(3).
 		WithBlockTime(FixedTimestampPlus(2))
 
-	// Order should now succeed
-	orderIDHigh := marketplace.OrderID{
-		CustomerAddress: customer.String(),
-		Sequence:        2,
-	}
-	orderHigh := marketplace.NewOrderAt(orderIDHigh, offering.ID, 5000, 1, ctx.BlockTime())
-
-	require.NoError(s.T(), s.app.Keepers.VirtEngine.Marketplace.CreateOrder(ctx, orderHigh))
-
-	stored, found := s.app.Keepers.VirtEngine.Marketplace.GetOrder(ctx, orderIDHigh)
-	require.True(s.T(), found)
-	require.Equal(s.T(), orderIDHigh, stored.ID)
+	// Order should now be accepted: gating must allow the customer.
+	helpers.RequireIdentityGatingPassed(s.T(), s.app, ctx, *offering, customer)
 	s.T().Log("  → Order accepted after score increase")
 
 	s.T().Log("✅ Marketplace VEID gating test passed")

@@ -383,7 +383,7 @@ func (w *CategorySyncWorker) saveState() error {
 
 // LoadCategoriesFromFile loads category definitions from a JSON file.
 func LoadCategoriesFromFile(path string) ([]CategoryDefinition, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- path is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call
 	if err != nil {
 		return nil, fmt.Errorf("read file: %w", err)
 	}

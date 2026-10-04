@@ -33,7 +33,7 @@ type providerHPCQueryClient interface {
 
 type providerResourcesQueryClient interface {
 	AllocationsByProvider(context.Context, *resourcesv1.QueryAllocationsByProviderRequest, ...grpc.CallOption) (*resourcesv1.QueryAllocationsByProviderResponse, error)
-	ReservationsByProvider(context.Context, *resourcesv1.QueryReservationsByProviderRequest, ...grpc.CallOption) (*resourcesv1.QueryReservationsResponse, error)
+	ReservationsByProvider(context.Context, *resourcesv1.QueryReservationsByProviderRequest, ...grpc.CallOption) (*resourcesv1.QueryReservationsByProviderResponse, error)
 }
 
 type providerStoreQueryClient interface {
@@ -643,7 +643,7 @@ func deriveConfigVersion(
 		return version
 	}
 	if !lastUpdated.IsZero() && lastUpdated.Unix() > 0 {
-		return uint64(lastUpdated.Unix()) //nolint:gosec // G115: timestamp is guaranteed non-negative here
+		return uint64(lastUpdated.Unix()) /* #nosec G115 -- timestamp is guaranteed non-negative here */ //nolint:gosec
 	}
 	return 1
 }

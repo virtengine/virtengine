@@ -7,6 +7,7 @@ Welcome to the VirtEngine API documentation. This comprehensive guide covers all
 | Guide | Description |
 |-------|-------------|
 | [Getting Started](./guides/getting-started.md) | Quick start guide for new developers |
+| [Acquisition Pathways](../acquisition-pathways.md) | How capacity is acquired: browse-and-buy vs. bidding, supply options, and fulfilment backends |
 | [Authentication](./guides/authentication.md) | API keys, wallet signatures, and MFA |
 | [API Versioning](./guides/versioning.md) | Version strategy and migration |
 | [Rate Limits & Quotas](./guides/rate-limits.md) | Rate limiting policies and quotas |

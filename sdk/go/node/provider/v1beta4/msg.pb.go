@@ -933,6 +933,7 @@ func (m *MsgSetProviderSigningKey) GetKeyType() string {
 	return ""
 }
 
+// MsgSetProviderSigningKeyResponse returns the activated key id and epoch.
 type MsgSetProviderSigningKeyResponse struct {
 	KeyId             string `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
 	Epoch             uint64 `protobuf:"varint,2,opt,name=epoch,proto3" json:"epoch,omitempty"`
@@ -1070,6 +1071,7 @@ func (m *MsgRotateProviderSigningKey) GetSignatureVersion() uint32 {
 	return 0
 }
 
+// MsgRotateProviderSigningKeyResponse returns the activated key id and epoch.
 type MsgRotateProviderSigningKeyResponse struct {
 	KeyId             string `protobuf:"bytes,1,opt,name=key_id,json=keyId,proto3" json:"key_id,omitempty"`
 	Epoch             uint64 `protobuf:"varint,2,opt,name=epoch,proto3" json:"epoch,omitempty"`
@@ -1183,6 +1185,7 @@ func (m *MsgRevokeProviderSigningKey) GetKeyId() string {
 	return ""
 }
 
+// MsgRevokeProviderSigningKeyResponse returns the revocation height.
 type MsgRevokeProviderSigningKeyResponse struct {
 	RevokedAtHeight int64 `protobuf:"varint,1,opt,name=revoked_at_height,json=revokedAtHeight,proto3" json:"revoked_at_height,omitempty"`
 }

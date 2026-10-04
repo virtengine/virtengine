@@ -18,6 +18,50 @@ metadata:
   namespace: virtengine
   annotations:
     eks.amazonaws.com/role-arn: "${DR_BACKUP_IAM_ROLE_ARN}"
+# ghcr.io/virtengine/dr-tools is a PRIVATE package: an anonymous GHCR token
+# exchange for it is refused (UNAUTHORIZED / DENIED), while the public package
+# virtengine/virtengine returns a token. Without a credential here, every
+# CronJob below sits in ImagePullBackOff from its first schedule onward --
+# `imagePullPolicy: IfNotPresent` cannot help, the image is simply unfetchable.
+#
+# NOTE this is NOT fixable by re-pinning the digest. The pin is proven correct
+# by an AUTHENTICATED pull in CI, and that proves nothing about pod
+# pullability: the cluster pulls with no credentials of its own.
+#
+# The secret VALUE is deliberately not in this repository. Provision it out of
+# band in namespace `virtengine`, exactly as `dr-backup-signing-key` and
+# `dr-secrets` are already provisioned (by name only, never committed), then
+# re-apply this manifest:
+#
+#   kubectl -n virtengine create secret docker-registry dr-tools-ghcr-pull \
+#     --docker-server=ghcr.io \
+#     --docker-username='<principal with read:packages on dr-tools>' \
+#     --docker-password='<token>'
+#
+# `dr-tools-ghcr-pull` is the name this manifest now references, and it follows
+# the one convention this tree uses for a plain (non-Helm) manifest: one
+# read-only pull secret per ghcr.io/virtengine package, named
+# `<package>-ghcr-pull`. The four deploy/kubernetes/base workloads follow the
+# same shape (virtengine-node-ghcr-pull, provider-daemon-ghcr-pull,
+# tee-enclave-ghcr-pull, veid-inference-ghcr-pull).
+#
+# The OTHER convention in the repo -- deploy/slurm/slurm-cluster
+# `global.imagePullSecrets`, consumed by the five *-statefulset.yaml templates
+# -- is Helm-only: it renders into a pod spec and cannot set the
+# `imagePullSecrets` field on a plain ServiceAccount like the one above. That
+# is why a plain secret name is correct here rather than a divergence from it.
+#
+# If your cluster already names this secret differently, change this reference
+# to that name rather than creating a second secret. Use a read-only
+# credential: this Secret is mounted into an unattended DR pod and the token
+# outlives the manifest.
+#
+# The IRSA annotation above does NOT authenticate these pulls. IRSA grants the
+# POD AWS API access; the image pull is performed by the NODE's kubelet against
+# ghcr.io, which is not AWS's own registry, so the node's
+# ecr:GetAuthorizationToken permissions cannot help.
+imagePullSecrets:
+  - name: dr-tools-ghcr-pull
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
@@ -81,7 +125,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: backup
-              image: ghcr.io/virtengine/dr-tools@sha256:85c0d1f6e31b4f77a9c2db9af5082e8c43c29f7a8be77a2a1e764ec67e05985c
+              image: ghcr.io/virtengine/dr-tools@sha256:48c95a64d0d5b796c6a06c2f398907aecae499e1684bb632ea1b1fe7930c9e92
               imagePullPolicy: IfNotPresent
               command: ["/scripts/dr/backup-chain-state.sh"]
               env:
@@ -167,7 +211,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: backup
-              image: ghcr.io/virtengine/dr-tools@sha256:85c0d1f6e31b4f77a9c2db9af5082e8c43c29f7a8be77a2a1e764ec67e05985c
+              image: ghcr.io/virtengine/dr-tools@sha256:48c95a64d0d5b796c6a06c2f398907aecae499e1684bb632ea1b1fe7930c9e92
               imagePullPolicy: IfNotPresent
               command: ["/scripts/dr/backup-provider-state.sh"]
               env:
@@ -281,7 +325,7 @@ spec:
               type: RuntimeDefault
           containers:
             - name: test
-              image: ghcr.io/virtengine/dr-tools@sha256:85c0d1f6e31b4f77a9c2db9af5082e8c43c29f7a8be77a2a1e764ec67e05985c
+              image: ghcr.io/virtengine/dr-tools@sha256:48c95a64d0d5b796c6a06c2f398907aecae499e1684bb632ea1b1fe7930c9e92
               imagePullPolicy: IfNotPresent
               command: ["/scripts/dr/dr-test.sh", "--report", "--notify"]
               env:

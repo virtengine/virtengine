@@ -21,8 +21,8 @@ func GetTxBMECmd() *cobra.Command {
 
 	cmd.AddCommand(
 		GetTxBMEBurnMintCmd(),
-		GetTxBMEMintVACTCmd(),
-		GetTxBMEBurnVACTCmd(),
+		GetTxBMEMintVCCCmd(),
+		GetTxBMEBurnVCCCmd(),
 	)
 
 	return cmd
@@ -34,11 +34,11 @@ func GetTxBMEBurnMintCmd() *cobra.Command {
 		Use:   "burn-mint [coins-to-burn] [denom-to-mint]",
 		Short: "Burn tokens to mint another denomination",
 		Long: `Burn tokens to mint another denomination.
-This allows burning VE to mint vACT, or burning unused vACT back to VE.
+This allows burning VE to mint VCC, or burning unused VCC back to VE.
 
 Example:
-  $ virtengine tx bme burn-mint 1000000uve uvact --from mykey
-  $ virtengine tx bme burn-mint 500000uvact uve --from mykey`,
+  $ virtengine tx bme burn-mint 1000000uve uvcc --from mykey
+  $ virtengine tx bme burn-mint 500000uvcc uve --from mykey`,
 		Args:              cobra.ExactArgs(2),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -86,14 +86,14 @@ Example:
 	return cmd
 }
 
-// GetTxBMEMintVACTCmd returns the command to burn VE tokens to mint vACT
-func GetTxBMEMintVACTCmd() *cobra.Command {
+// GetTxBMEMintVCCCmd returns the command to burn VE tokens to mint VCC
+func GetTxBMEMintVCCCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "mint-vact [coins-to-burn]",
-		Short: "Mint vACT by burning VE",
+		Use:   "mint-vcc [coins-to-burn]",
+		Short: "Mint VCC by burning VE",
 		Long: `
 Example:
-  $ virtengine tx bme mint-vact 500000uve --from mykey`,
+  $ virtengine tx bme mint-vcc 500000uve --from mykey`,
 		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -114,7 +114,7 @@ Example:
 
 			fromAddr := cctx.GetFromAddress().String()
 
-			msg := &types.MsgMintACT{
+			msg := &types.MsgMintVCC{
 				Owner:       fromAddr,
 				To:          fromAddr,
 				CoinsToBurn: coinsToBurn,
@@ -134,14 +134,14 @@ Example:
 	return cmd
 }
 
-// GetTxBMEBurnVACTCmd returns the command to burn vACT tokens to mint/remint VE
-func GetTxBMEBurnVACTCmd() *cobra.Command {
+// GetTxBMEBurnVCCCmd returns the command to burn VCC tokens to mint/remint VE
+func GetTxBMEBurnVCCCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "burn-vact [coins-to-burn]",
-		Short: "Burn vACT tokens to mint/remint VE",
+		Use:   "burn-vcc [coins-to-burn]",
+		Short: "Burn VCC tokens to mint/remint VE",
 		Long: `
 Example:
-  $ virtengine tx bme burn-vact 500000uvact --from mykey`,
+  $ virtengine tx bme burn-vcc 500000uvcc --from mykey`,
 		Args:              cobra.ExactArgs(1),
 		PersistentPreRunE: TxPersistentPreRunE,
 		RunE: func(cmd *cobra.Command, args []string) error {
@@ -162,7 +162,7 @@ Example:
 
 			fromAddr := cctx.GetFromAddress().String()
 
-			msg := &types.MsgBurnACT{
+			msg := &types.MsgBurnVCC{
 				Owner:       fromAddr,
 				To:          fromAddr,
 				CoinsToBurn: coinsToBurn,

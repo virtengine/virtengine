@@ -22,7 +22,7 @@ export interface Params {
    * Stored as basis points * 100 (e.g., 9000 = 0.90)
    */
   circuitBreakerHaltThreshold: number;
-  /** min_epoch_blocks is the minimum amount of blocks required for ACT mints */
+  /** min_epoch_blocks is the minimum amount of blocks required for VCC mints */
   minEpochBlocks: Long;
   /**
    * epoch_blocks_backoff increase of runway_blocks in % during warn threshold
@@ -38,7 +38,7 @@ export interface Params {
    */
   epochBlocksBackoff: number;
   /**
-   * mint_spread_bps is the spread in basis points applied during ACT mint
+   * mint_spread_bps is the spread in basis points applied during VCC mint
    * (default: 25 bps = 0.25%)
    */
   mintSpreadBps: number;

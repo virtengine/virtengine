@@ -54,13 +54,21 @@ jobs:
       STAGING_E2E_TEST_PATTERN: ${{ inputs.test_pattern || github.event.inputs.test_pattern || 'TestFullLifecycleE2E|TestFullLifecycleWithFailures|TestIdentityOrderProvisionPayoutE2E' }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+
+      - name: Install build dependencies for cgo packages
+        # github.com/zondax/hid (via go.mod replace) carries `#cgo pkg-config: libudev`;
+        # without libudev-dev the packages below die at pkg-config build time and
+        # `go build`/`go test` never run. Not present on the ubuntu-latest image.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Download dependencies
         run: go mod download
@@ -77,7 +85,7 @@ jobs:
 
       - name: Upload staging E2E logs
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: staging-e2e-logs
           path: staging-e2e-output.txt

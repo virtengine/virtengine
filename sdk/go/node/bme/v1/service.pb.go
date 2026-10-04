@@ -40,13 +40,13 @@ var fileDescriptor_c48ee668371d75ba = []byte{
 	0x0a, 0x3d, 0xdf, 0xe2, 0x74, 0x64, 0x35, 0x52, 0x5a, 0x84, 0xd5, 0x04, 0xa5, 0x16, 0x17, 0xe4,
 	0xe7, 0x15, 0xa7, 0x0a, 0x05, 0x71, 0x71, 0x38, 0x95, 0x16, 0xe5, 0xf9, 0x66, 0xe6, 0x95, 0x08,
 	0xc9, 0x61, 0xd7, 0x07, 0x93, 0x97, 0x52, 0xc3, 0x2f, 0x0f, 0x37, 0xd3, 0x9f, 0x8b, 0x1d, 0xc4,
-	0x77, 0x74, 0x0e, 0x11, 0x92, 0xc5, 0xae, 0x05, 0x2a, 0x2d, 0xa5, 0x8a, 0x57, 0x1a, 0xd9, 0x40,
+	0x0f, 0x73, 0x76, 0x16, 0x92, 0xc5, 0xae, 0x05, 0x2a, 0x2d, 0xa5, 0x8a, 0x57, 0x1a, 0xd9, 0x40,
 	0x90, 0x25, 0x78, 0x0c, 0x84, 0x4a, 0xe3, 0x32, 0x10, 0x2a, 0x0d, 0x33, 0x50, 0x8a, 0xb5, 0xe1,
 	0xf9, 0x06, 0x2d, 0x46, 0x27, 0xdf, 0x13, 0x8f, 0xe4, 0x18, 0x2f, 0x3c, 0x92, 0x63, 0x7c, 0xf0,
 	0x48, 0x8e, 0x71, 0xc2, 0x63, 0x39, 0x86, 0x0b, 0x8f, 0xe5, 0x18, 0x6e, 0x3c, 0x96, 0x63, 0x88,
 	0x32, 0x4e, 0xcf, 0x2c, 0xc9, 0x28, 0x4d, 0xd2, 0x4b, 0xce, 0xcf, 0xd5, 0x47, 0x8a, 0x27, 0x24,
 	0x66, 0x71, 0x4a, 0xb6, 0x7e, 0x7a, 0xbe, 0x7e, 0x5e, 0x7e, 0x0a, 0x2c, 0xfa, 0x92, 0xd8, 0xc0,
-	0x51, 0x67, 0x0c, 0x08, 0x00, 0x00, 0xff, 0xff, 0x4e, 0x59, 0x53, 0x36, 0x27, 0x02, 0x00, 0x00,
+	0x51, 0x67, 0x0c, 0x08, 0x00, 0x00, 0xff, 0xff, 0xfd, 0xca, 0xaf, 0x93, 0x27, 0x02, 0x00, 0x00,
 }
 
 // Reference imports to suppress errors if they are not otherwise used.
@@ -65,17 +65,17 @@ type MsgClient interface {
 	// This operation can only be performed through governance proposals.
 	UpdateParams(ctx context.Context, in *MsgUpdateParams, opts ...grpc.CallOption) (*MsgUpdateParamsResponse, error)
 	// BurnMint allows users to burn one token and mint another at current oracle prices.
-	// Typically used to burn unused ACT tokens back to AKT.
+	// Typically used to burn unused VCC tokens back to VE.
 	// The operation may be delayed or rejected based on circuit breaker status.
 	BurnMint(ctx context.Context, in *MsgBurnMint, opts ...grpc.CallOption) (*MsgBurnMintResponse, error)
-	// MintACT mints ACT tokens by burning the specified source token.
+	// MintVCC mints VCC tokens by burning the specified source token.
 	// The mint amount is calculated based on current oracle prices and
 	// the collateral ratio. May be halted if circuit breaker is triggered.
-	MintACT(ctx context.Context, in *MsgMintACT, opts ...grpc.CallOption) (*MsgMintACTResponse, error)
-	// BurnACT burns ACT tokens and mints the specified destination token.
+	MintVCC(ctx context.Context, in *MsgMintVCC, opts ...grpc.CallOption) (*MsgMintVCCResponse, error)
+	// BurnVCC burns VCC tokens and mints the specified destination token.
 	// The burn operation uses remint credits when available, otherwise
 	// requires adequate collateral backing based on oracle prices.
-	BurnACT(ctx context.Context, in *MsgBurnACT, opts ...grpc.CallOption) (*MsgBurnACTResponse, error)
+	BurnVCC(ctx context.Context, in *MsgBurnVCC, opts ...grpc.CallOption) (*MsgBurnVCCResponse, error)
 }
 
 type msgClient struct {
@@ -104,18 +104,18 @@ func (c *msgClient) BurnMint(ctx context.Context, in *MsgBurnMint, opts ...grpc.
 	return out, nil
 }
 
-func (c *msgClient) MintACT(ctx context.Context, in *MsgMintACT, opts ...grpc.CallOption) (*MsgMintACTResponse, error) {
-	out := new(MsgMintACTResponse)
-	err := c.cc.Invoke(ctx, "/virtengine.bme.v1.Msg/MintACT", in, out, opts...)
+func (c *msgClient) MintVCC(ctx context.Context, in *MsgMintVCC, opts ...grpc.CallOption) (*MsgMintVCCResponse, error) {
+	out := new(MsgMintVCCResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.bme.v1.Msg/MintVCC", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
 	return out, nil
 }
 
-func (c *msgClient) BurnACT(ctx context.Context, in *MsgBurnACT, opts ...grpc.CallOption) (*MsgBurnACTResponse, error) {
-	out := new(MsgBurnACTResponse)
-	err := c.cc.Invoke(ctx, "/virtengine.bme.v1.Msg/BurnACT", in, out, opts...)
+func (c *msgClient) BurnVCC(ctx context.Context, in *MsgBurnVCC, opts ...grpc.CallOption) (*MsgBurnVCCResponse, error) {
+	out := new(MsgBurnVCCResponse)
+	err := c.cc.Invoke(ctx, "/virtengine.bme.v1.Msg/BurnVCC", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -128,17 +128,17 @@ type MsgServer interface {
 	// This operation can only be performed through governance proposals.
 	UpdateParams(context.Context, *MsgUpdateParams) (*MsgUpdateParamsResponse, error)
 	// BurnMint allows users to burn one token and mint another at current oracle prices.
-	// Typically used to burn unused ACT tokens back to AKT.
+	// Typically used to burn unused VCC tokens back to VE.
 	// The operation may be delayed or rejected based on circuit breaker status.
 	BurnMint(context.Context, *MsgBurnMint) (*MsgBurnMintResponse, error)
-	// MintACT mints ACT tokens by burning the specified source token.
+	// MintVCC mints VCC tokens by burning the specified source token.
 	// The mint amount is calculated based on current oracle prices and
 	// the collateral ratio. May be halted if circuit breaker is triggered.
-	MintACT(context.Context, *MsgMintACT) (*MsgMintACTResponse, error)
-	// BurnACT burns ACT tokens and mints the specified destination token.
+	MintVCC(context.Context, *MsgMintVCC) (*MsgMintVCCResponse, error)
+	// BurnVCC burns VCC tokens and mints the specified destination token.
 	// The burn operation uses remint credits when available, otherwise
 	// requires adequate collateral backing based on oracle prices.
-	BurnACT(context.Context, *MsgBurnACT) (*MsgBurnACTResponse, error)
+	BurnVCC(context.Context, *MsgBurnVCC) (*MsgBurnVCCResponse, error)
 }
 
 // UnimplementedMsgServer can be embedded to have forward compatible implementations.
@@ -151,11 +151,11 @@ func (*UnimplementedMsgServer) UpdateParams(ctx context.Context, req *MsgUpdateP
 func (*UnimplementedMsgServer) BurnMint(ctx context.Context, req *MsgBurnMint) (*MsgBurnMintResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method BurnMint not implemented")
 }
-func (*UnimplementedMsgServer) MintACT(ctx context.Context, req *MsgMintACT) (*MsgMintACTResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method MintACT not implemented")
+func (*UnimplementedMsgServer) MintVCC(ctx context.Context, req *MsgMintVCC) (*MsgMintVCCResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method MintVCC not implemented")
 }
-func (*UnimplementedMsgServer) BurnACT(ctx context.Context, req *MsgBurnACT) (*MsgBurnACTResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method BurnACT not implemented")
+func (*UnimplementedMsgServer) BurnVCC(ctx context.Context, req *MsgBurnVCC) (*MsgBurnVCCResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method BurnVCC not implemented")
 }
 
 func RegisterMsgServer(s grpc1.Server, srv MsgServer) {
@@ -198,38 +198,38 @@ func _Msg_BurnMint_Handler(srv interface{}, ctx context.Context, dec func(interf
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Msg_MintACT_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgMintACT)
+func _Msg_MintVCC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgMintVCC)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MsgServer).MintACT(ctx, in)
+		return srv.(MsgServer).MintVCC(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/virtengine.bme.v1.Msg/MintACT",
+		FullMethod: "/virtengine.bme.v1.Msg/MintVCC",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).MintACT(ctx, req.(*MsgMintACT))
+		return srv.(MsgServer).MintVCC(ctx, req.(*MsgMintVCC))
 	}
 	return interceptor(ctx, in, info, handler)
 }
 
-func _Msg_BurnACT_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(MsgBurnACT)
+func _Msg_BurnVCC_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(MsgBurnVCC)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(MsgServer).BurnACT(ctx, in)
+		return srv.(MsgServer).BurnVCC(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: "/virtengine.bme.v1.Msg/BurnACT",
+		FullMethod: "/virtengine.bme.v1.Msg/BurnVCC",
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(MsgServer).BurnACT(ctx, req.(*MsgBurnACT))
+		return srv.(MsgServer).BurnVCC(ctx, req.(*MsgBurnVCC))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -248,12 +248,12 @@ var _Msg_serviceDesc = grpc.ServiceDesc{
 			Handler:    _Msg_BurnMint_Handler,
 		},
 		{
-			MethodName: "MintACT",
-			Handler:    _Msg_MintACT_Handler,
+			MethodName: "MintVCC",
+			Handler:    _Msg_MintVCC_Handler,
 		},
 		{
-			MethodName: "BurnACT",
-			Handler:    _Msg_BurnACT_Handler,
+			MethodName: "BurnVCC",
+			Handler:    _Msg_BurnVCC_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

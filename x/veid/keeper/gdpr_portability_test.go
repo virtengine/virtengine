@@ -162,7 +162,7 @@ func TestGDPRPortabilityExportPackageIncludesCrossModuleData(t *testing.T) {
 	require.NoError(t, k.SetWallet(ctx, wallet))
 
 	scope := &types.IdentityScope{
-		ScopeID:    "scope-1",
+		ScopeID:    testScopeID1,
 		ScopeType:  types.ScopeTypeIDDocument,
 		Status:     types.VerificationStatusVerified,
 		UploadedAt: ctx.BlockTime(),
@@ -193,12 +193,12 @@ func TestGDPRPortabilityExportPackageIncludesCrossModuleData(t *testing.T) {
 
 	escrowKeeper := stubEscrowKeeper{
 		accounts: []etypes.Account{
-			{ID: escrowid.Account{Scope: escrowid.ScopeDeployment, XID: "scope-1"}, State: etypes.AccountState{Owner: subject.String(), State: etypes.StateOpen}},
-			{ID: escrowid.Account{Scope: escrowid.ScopeDeployment, XID: "scope-2"}, State: etypes.AccountState{Owner: other.String(), State: etypes.StateOpen}},
+			{ID: escrowid.Account{Scope: escrowid.ScopeDeployment, XID: testScopeID1}, State: etypes.AccountState{Owner: subject.String(), State: etypes.StateOpen}},
+			{ID: escrowid.Account{Scope: escrowid.ScopeDeployment, XID: testScopeID2}, State: etypes.AccountState{Owner: other.String(), State: etypes.StateOpen}},
 		},
 		payments: []etypes.Payment{
-			{ID: escrowid.Payment{AID: escrowid.Account{Scope: escrowid.ScopeDeployment, XID: "scope-1"}, XID: "pay-1"}, State: etypes.PaymentState{Owner: subject.String(), State: etypes.StateOpen}},
-			{ID: escrowid.Payment{AID: escrowid.Account{Scope: escrowid.ScopeDeployment, XID: "scope-2"}, XID: "pay-2"}, State: etypes.PaymentState{Owner: other.String(), State: etypes.StateOpen}},
+			{ID: escrowid.Payment{AID: escrowid.Account{Scope: escrowid.ScopeDeployment, XID: testScopeID1}, XID: "pay-1"}, State: etypes.PaymentState{Owner: subject.String(), State: etypes.StateOpen}},
+			{ID: escrowid.Payment{AID: escrowid.Account{Scope: escrowid.ScopeDeployment, XID: testScopeID2}, XID: "pay-2"}, State: etypes.PaymentState{Owner: other.String(), State: etypes.StateOpen}},
 		},
 	}
 

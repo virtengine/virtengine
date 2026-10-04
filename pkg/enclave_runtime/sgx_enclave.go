@@ -1104,7 +1104,7 @@ func (s *SGXEnclaveServiceImpl) simulateEnclaveScoring(request *ScoringRequest) 
 func (s *SGXEnclaveServiceImpl) computeSigningPayload(requestID string, score uint32, status string, inputHash []byte) []byte {
 	h := sha256.New()
 	h.Write([]byte(requestID))
-	h.Write([]byte{byte(score >> 24), byte(score >> 16), byte(score >> 8), byte(score)})
+	h.Write([]byte{byte(score >> 24), byte(score >> 16), byte(score >> 8), byte(score)}) // #nosec G115 -- each shift extracts one byte of a uint32 score written in big-endian order
 	h.Write([]byte(status))
 	h.Write(inputHash)
 	h.Write(s.mrEnclave[:])
@@ -1152,8 +1152,8 @@ func (s *SGXEnclaveServiceImpl) simulateDCAPQuoteGeneration(reportData []byte) (
 	quote := make([]byte, 0, 1024)
 
 	// Header
-	quote = append(quote, byte(header.Version), byte(header.Version>>8))
-	quote = append(quote, byte(header.AttKeyType), byte(header.AttKeyType>>8))
+	quote = append(quote, byte(header.Version), byte(header.Version>>8))       // #nosec G115 -- the SGX header version is a 16-bit field; both bytes are encoded explicitly
+	quote = append(quote, byte(header.AttKeyType), byte(header.AttKeyType>>8)) // #nosec G115 -- the SGX attribute key type is a 16-bit field; both bytes are encoded explicitly
 	quote = binary.LittleEndian.AppendUint32(quote, header.TEEType)
 	quote = binary.LittleEndian.AppendUint32(quote, header.Reserved)
 	quote = append(quote, header.QEVendorID[:]...)
@@ -1171,7 +1171,7 @@ func (s *SGXEnclaveServiceImpl) simulateDCAPQuoteGeneration(reportData []byte) (
 	sigPayload := sha256.Sum256(quote)
 	signature := s.signInsideEnclave(sigPayload[:])
 	//nolint:gosec // G115: signature length is bounded by signing algorithm
-	quote = binary.LittleEndian.AppendUint32(quote, uint32(len(signature)))
+	quote = binary.LittleEndian.AppendUint32(quote, uint32(len(signature))) // #nosec G115 -- the signature length is bounded by the SGX quote buffer (< 2^32)
 	quote = append(quote, signature...)
 
 	return quote, nil

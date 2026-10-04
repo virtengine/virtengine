@@ -457,7 +457,7 @@ func checkedMarketProduct(value, count uint64) (int64, error) {
 	if count > 0 && value > uint64(math.MaxInt64)/count {
 		return 0, fmt.Errorf("resource capacity overflow")
 	}
-	return int64(value * count), nil //nolint:gosec // bounded above
+	return int64(value * count), nil /* #nosec G115 -- bounded above */ //nolint:gosec
 }
 
 func checkedMarketProductUint(value, count uint64) (uint64, error) {

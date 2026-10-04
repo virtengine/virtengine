@@ -124,6 +124,22 @@ message EncryptedProviderSecrets {
   repeated string recipient_key_ids = 3 [(gogoproto.jsontag) = "recipient_key_ids,omitempty", (gogoproto.moretags) = "yaml:\"recipient_key_ids\""];
 }
 
+// WaldurOfferingRef links an on-chain offering to its Waldur source
+message WaldurOfferingRef {
+  // Waldur instance identifier.
+  string instance_id = 1 [(gogoproto.jsontag) = "instance_id", (gogoproto.moretags) = "yaml:\"instance_id\""];
+  // Waldur offering UUID.
+  string offering_uuid = 2 [(gogoproto.jsontag) = "offering_uuid", (gogoproto.moretags) = "yaml:\"offering_uuid\""];
+  // Waldur customer UUID (provider organization).
+  string customer_uuid = 3 [(gogoproto.jsontag) = "customer_uuid,omitempty", (gogoproto.moretags) = "yaml:\"customer_uuid\""];
+  // Backend type.
+  string backend_type = 4 [(gogoproto.jsontag) = "backend_type,omitempty", (gogoproto.moretags) = "yaml:\"backend_type\""];
+  // Snapshot hash.
+  string snapshot_hash = 5 [(gogoproto.jsontag) = "snapshot_hash,omitempty", (gogoproto.moretags) = "yaml:\"snapshot_hash\""];
+  // Monotonic Waldur revision.
+  uint64 snapshot_height = 6 [(gogoproto.jsontag) = "snapshot_height,omitempty", (gogoproto.moretags) = "yaml:\"snapshot_height\""];
+}
+
 // Offering represents a marketplace offering from a provider
 message Offering {
   OfferingID id = 1 [(gogoproto.jsontag) = "id", (gogoproto.moretags) = "yaml:\"id\""];
@@ -150,4 +166,16 @@ message Offering {
   repeated PriceComponent prices = 22 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "prices,omitempty", (gogoproto.moretags) = "yaml:\"prices\""];
   bool allow_bidding = 23 [(gogoproto.jsontag) = "allow_bidding", (gogoproto.moretags) = "yaml:\"allow_bidding\""];
   cosmos.base.v1beta1.Coin min_bid = 24 [(gogoproto.nullable) = false, (gogoproto.jsontag) = "min_bid,omitempty", (gogoproto.moretags) = "yaml:\"min_bid\""];
+  // Supply origin: "native" or "waldur" (empty means native).
+  string source = 25 [(gogoproto.jsontag) = "source,omitempty", (gogoproto.moretags) = "yaml:\"source\""];
+  // Catalogue visibility: "public", "unlisted", or "private".
+  string visibility = 26 [(gogoproto.jsontag) = "visibility,omitempty", (gogoproto.moretags) = "yaml:\"visibility\""];
+  // Waldur source reference (set when source is "waldur").
+  WaldurOfferingRef waldur = 27 [(gogoproto.jsontag) = "waldur,omitempty", (gogoproto.moretags) = "yaml:\"waldur\""];
+  // Supported acquisition modes ("direct", "bid").
+  repeated string acquisition_modes = 28 [(gogoproto.jsontag) = "acquisition_modes,omitempty", (gogoproto.moretags) = "yaml:\"acquisition_modes\""];
+  // Provider execution backend.
+  string backend_type = 29 [(gogoproto.jsontag) = "backend_type,omitempty", (gogoproto.moretags) = "yaml:\"backend_type\""];
+  // Metering component profile.
+  string metering_profile = 30 [(gogoproto.jsontag) = "metering_profile,omitempty", (gogoproto.moretags) = "yaml:\"metering_profile\""];
 }

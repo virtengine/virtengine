@@ -26,7 +26,7 @@ func TestGenesisInit(t *testing.T) {
 		},
 		State: types.GenesisVaultState{
 			TotalBurned:   sdk.NewCoins(sdk.NewCoin("uve", math.NewInt(100))),
-			TotalMinted:   sdk.NewCoins(sdk.NewCoin("uvact", math.NewInt(90))),
+			TotalMinted:   sdk.NewCoins(sdk.NewCoin("uvcc", math.NewInt(90))),
 			RemintCredits: sdk.NewCoins(),
 		},
 		Ledger: &types.GenesisLedgerState{
@@ -67,7 +67,7 @@ func TestGenesisExport(t *testing.T) {
 	customState := types.State{
 		Balances:      sdk.NewCoins(sdk.NewCoin("uve", math.NewInt(500))),
 		TotalBurned:   sdk.NewCoins(sdk.NewCoin("uve", math.NewInt(50))),
-		TotalMinted:   sdk.NewCoins(sdk.NewCoin("uvact", math.NewInt(45))),
+		TotalMinted:   sdk.NewCoins(sdk.NewCoin("uvcc", math.NewInt(45))),
 		RemintCredits: sdk.NewCoins(),
 	}
 	err = k.SetState(ctx, customState)
@@ -96,7 +96,7 @@ func TestGenesisRoundTrip(t *testing.T) {
 		},
 		State: types.GenesisVaultState{
 			TotalBurned:   sdk.NewCoins(sdk.NewCoin("uve", math.NewInt(500))),
-			TotalMinted:   sdk.NewCoins(sdk.NewCoin("uvact", math.NewInt(450))),
+			TotalMinted:   sdk.NewCoins(sdk.NewCoin("uvcc", math.NewInt(450))),
 			RemintCredits: sdk.NewCoins(sdk.NewCoin("uve", math.NewInt(100))),
 		},
 		Ledger: &types.GenesisLedgerState{

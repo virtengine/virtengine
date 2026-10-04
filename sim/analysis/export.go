@@ -15,10 +15,10 @@ import (
 
 // WriteJSON writes a JSON payload to disk.
 func WriteJSON(path string, v interface{}) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
-	file, err := os.Create(path)
+	file, err := os.Create(path) // #nosec G304 -- the path is an output location supplied by the operator running the simulation
 	if err != nil {
 		return err
 	}
@@ -31,10 +31,10 @@ func WriteJSON(path string, v interface{}) error {
 
 // WriteMonteCarloCSV exports Monte Carlo metrics into CSV.
 func WriteMonteCarloCSV(path string, results map[string]MonteCarloResult) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
-	file, err := os.Create(path)
+	file, err := os.Create(path) // #nosec G304 -- the path is an output location supplied by the operator running the simulation
 	if err != nil {
 		return err
 	}
@@ -66,10 +66,10 @@ func WriteMonteCarloCSV(path string, results map[string]MonteCarloResult) error 
 
 // WriteMonteCarloJSON writes Monte Carlo results with deterministic ordering.
 func WriteMonteCarloJSON(path string, results map[string]MonteCarloResult) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
-	file, err := os.Create(path)
+	file, err := os.Create(path) // #nosec G304 -- the path is an output location supplied by the operator running the simulation
 	if err != nil {
 		return err
 	}
@@ -116,7 +116,7 @@ func WriteMonteCarloJSON(path string, results map[string]MonteCarloResult) error
 
 // WriteDashboardHTML renders a static dashboard HTML file with embedded data.
 func WriteDashboardHTML(path string, results map[string]MonteCarloResult, sensitivity *SensitivityResult) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
 		return err
 	}
 	orderedResults := orderedMonteCarloResults(results)
@@ -130,22 +130,26 @@ func WriteDashboardHTML(path string, results map[string]MonteCarloResult, sensit
 		GeneratedAt: time.Unix(0, 0).UTC(),
 	}
 
-	file, err := os.Create(path)
+	file, err := os.Create(path) // #nosec G304 -- the path is an output location supplied by the operator running the simulation
 	if err != nil {
 		return err
 	}
 	defer file.Close()
 
+	// toJSON returns the JSON encoding as a plain string: html/template then
+	// escapes it as a JS string literal in the <script> context. Returning
+	// template.JS here would bypass that escaping (gosec G203) and let a value
+	// containing "</script>" break out of the script block.
 	tmpl := template.Must(template.New("dashboard").Funcs(template.FuncMap{
-		"toJSON": func(v interface{}) template.JS {
+		"toJSON": func(v interface{}) string {
 			if v == nil {
-				return template.JS("null")
+				return "null"
 			}
 			bz, err := json.Marshal(v)
 			if err != nil {
-				return template.JS("null")
+				return "null"
 			}
-			return template.JS(bz)
+			return string(bz)
 		},
 	}).Parse(exportTemplate))
 	return tmpl.Execute(file, payload)
@@ -232,15 +236,25 @@ const exportTemplate = `<!DOCTYPE html>
   </div>
 
   <script>
-    const results = {{ .Results | toJSON }};
-    const sensitivity = {{ .Sensitivity | toJSON }};
+    const results = JSON.parse({{ .Results | toJSON }});
+    const sensitivity = JSON.parse({{ .Sensitivity | toJSON }});
+
+    function cell(text) {
+      const td = document.createElement("td");
+      td.textContent = text;
+      return td;
+    }
 
     function renderMonteCarlo() {
       const tbody = document.querySelector("#mc-table tbody");
       if (!tbody || !Array.isArray(results)) return;
       results.forEach(function(metric) {
         const row = document.createElement("tr");
-        row.innerHTML = "<td>" + metric.Metric + "</td><td>" + metric.Mean.toFixed(3) + "</td><td>" + metric.StdDev.toFixed(3) + "</td><td>" + metric.Median.toFixed(3) + "</td><td>" + metric.Percentile5.toFixed(3) + " - " + metric.Percentile95.toFixed(3) + "</td>";
+        row.appendChild(cell(metric.Metric));
+        row.appendChild(cell(metric.Mean.toFixed(3)));
+        row.appendChild(cell(metric.StdDev.toFixed(3)));
+        row.appendChild(cell(metric.Median.toFixed(3)));
+        row.appendChild(cell(metric.Percentile5.toFixed(3) + " - " + metric.Percentile95.toFixed(3)));
         tbody.appendChild(row);
       });
     }
@@ -249,7 +263,9 @@ const exportTemplate = `<!DOCTYPE html>
       const tbody = document.querySelector("#sens-table tbody");
       if (!tbody || !sensitivity || !sensitivity.Param) return;
       const row = document.createElement("tr");
-      row.innerHTML = "<td>" + sensitivity.Param + "</td><td>" + sensitivity.Elastic.toFixed(3) + "</td><td>" + sensitivity.Points.length + "</td>";
+      row.appendChild(cell(sensitivity.Param));
+      row.appendChild(cell(sensitivity.Elastic.toFixed(3)));
+      row.appendChild(cell(sensitivity.Points.length));
       tbody.appendChild(row);
     }
 

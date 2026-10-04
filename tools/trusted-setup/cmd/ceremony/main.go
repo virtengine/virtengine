@@ -106,7 +106,7 @@ func contributePhase1Cmd() *cobra.Command {
 		Use:   "contribute-phase1",
 		Short: "Create a phase1 contribution offline",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			payload, err := os.ReadFile(inPath)
+			payload, err := os.ReadFile(inPath) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 			if err != nil {
 				return err
 			}
@@ -121,7 +121,7 @@ func contributePhase1Cmd() *cobra.Command {
 				return err
 			}
 
-			if err := os.WriteFile(outPath, output, 0o600); err != nil {
+			if err := os.WriteFile(outPath, output, 0o600); err != nil { // #nosec G703 -- the path is built from the operator-supplied ceremony/export directory plus fixed file names, so remote input cannot influence it
 				return err
 			}
 
@@ -166,7 +166,7 @@ func contributePhase2Cmd() *cobra.Command {
 		Use:   "contribute-phase2",
 		Short: "Create a phase2 contribution offline",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			payload, err := os.ReadFile(inPath)
+			payload, err := os.ReadFile(inPath) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 			if err != nil {
 				return err
 			}
@@ -181,7 +181,7 @@ func contributePhase2Cmd() *cobra.Command {
 				return err
 			}
 
-			if err := os.WriteFile(outPath, output, 0o600); err != nil {
+			if err := os.WriteFile(outPath, output, 0o600); err != nil { // #nosec G703 -- the path is built from the operator-supplied ceremony/export directory plus fixed file names, so remote input cannot influence it
 				return err
 			}
 
@@ -223,7 +223,7 @@ func acceptPhase1Cmd() *cobra.Command {
 		Use:   "accept-phase1",
 		Short: "Accept a phase1 contribution (coordinator)",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			payloadBytes, err := os.ReadFile(payload)
+			payloadBytes, err := os.ReadFile(payload) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 			if err != nil {
 				return err
 			}
@@ -253,7 +253,7 @@ func acceptPhase2Cmd() *cobra.Command {
 		Use:   "accept-phase2",
 		Short: "Accept a phase2 contribution (coordinator)",
 		RunE: func(_ *cobra.Command, _ []string) error {
-			payloadBytes, err := os.ReadFile(payload)
+			payloadBytes, err := os.ReadFile(payload) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 			if err != nil {
 				return err
 			}
@@ -543,7 +543,7 @@ func writeMeta(path string, meta coordinator.ContributionMeta) error {
 }
 
 func readMeta(path string) (coordinator.ContributionMeta, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return coordinator.ContributionMeta{}, err
 	}

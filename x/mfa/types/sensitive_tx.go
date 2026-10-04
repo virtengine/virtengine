@@ -76,7 +76,7 @@ const (
 )
 
 // SensitiveTransactionTypeNames maps transaction types to human-readable names
-var SensitiveTransactionTypeNames = map[SensitiveTransactionType]string{
+var SensitiveTransactionTypeNames = map[SensitiveTransactionType]string{ // #nosec G101 -- a non-secret constant (identifier, key or descriptive label), not a credential
 	SensitiveTxUnspecified:           "unspecified",
 	SensitiveTxAccountRecovery:       "account_recovery",
 	SensitiveTxKeyRotation:           "key_rotation",

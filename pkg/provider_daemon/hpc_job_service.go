@@ -289,8 +289,9 @@ func (s *HPCJobService) SubmitJob(ctx context.Context, job *hpctypes.HPCJob) (*H
 		"cluster_id":             job.ClusterID,
 	}, true)
 
-	// Report status on-chain with decision linkage
-	go s.reportJobStatusWithDecision(context.Background(), jobSnapshot, job.SchedulingDecisionID)
+	// Report status on-chain with decision linkage. The caller's context is
+	// propagated so the report is cancelled with the request that produced it.
+	go s.reportJobStatusWithDecision(ctx, jobSnapshot, job.SchedulingDecisionID)
 
 	return cloneSchedulerJob(jobSnapshot), nil
 }

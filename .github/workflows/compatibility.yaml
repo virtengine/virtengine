@@ -41,7 +41,7 @@ jobs:
     name: Proto Breaking Checks
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -68,13 +68,20 @@ jobs:
           fi
 
           echo "Checking for breaking changes against ${base_ref}"
-          buf breaking --against ".git#ref=${base_ref}"
+          # Run through the sdk module: sdk/buf.yaml is the repo's only buf
+          # config and is where the proto module layout and the BSR deps live.
+          # At the repo root there is no config, so buf built the whole tree
+          # as a single module with an empty dependency list and the 224 files
+          # importing gogoproto/gogo.proto could not resolve (exit 100 on
+          # every run). subdir=sdk reads sdk/buf.yaml on both sides of the
+          # comparison, so the repo-root vendor tree is out of scope already.
+          buf breaking sdk --against ".git#ref=${base_ref},subdir=sdk"
 
   compatibility-tests:
     name: Compatibility Tests
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -89,7 +96,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: compatibility-test-results
           path: |
@@ -101,7 +108,7 @@ jobs:
     name: API Version Check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 0
 
@@ -122,7 +129,9 @@ jobs:
             diff_base="${{ github.event.before || 'HEAD~1' }}"
           fi
 
-          mapfile -t changed_files < <(git diff --name-only "${diff_base}" HEAD -- '*/types/*.go' '*/keeper/*.go' 'api/**' || true)
+          # Exclude _test.go files: test helpers are not public API surface, and
+          # splitting/renaming a test function otherwise reads as a removal.
+          mapfile -t changed_files < <(git diff --name-only "${diff_base}" HEAD -- '*/types/*.go' '*/keeper/*.go' 'api/**' ':(exclude)*_test.go' || true)
           if [ "${#changed_files[@]}" -eq 0 ]; then
             echo "No API surface files changed"
             exit 0
@@ -131,10 +140,32 @@ jobs:
           echo "Changed API files:"
           printf '%s\n' "${changed_files[@]}"
 
-          removed_symbols="$(git diff "${diff_base}" HEAD -- "${changed_files[@]}" | grep -E '^-func ' || true)"
-          if [ -n "${removed_symbols}" ]; then
-            echo "::error::Potential API removals detected:"
-            printf '%s\n' "${removed_symbols}"
+          # A deleted `-func` line is not automatically a removal: a protobuf
+          # response-type split redeclares the same method with a different
+          # return type, which the diff renders as one `-func` and one `+func`
+          # with the same name. Treating that as a removal false-redded
+          # PR #1120 (run 36825740607) for 15 symbols while the PR changed no
+          # API surface at all. api_removals.py pairs each removal with a
+          # same-named addition (or a method that became a free function) and
+          # only fails on what is genuinely gone. See
+          # .github/tests/test_api_removals.py, which pins the real diff.
+          #
+          # Exit codes are load-bearing: 0 = clean, 1 = real removals,
+          # anything else = the tool itself broke. The last case must fail
+          # closed. A bare `|| true` here would turn a broken scanner into a
+          # permanently green gate, which is worse than the false red.
+          set +e
+          git diff "${diff_base}" HEAD -- "${changed_files[@]}" \
+            | python3 .github/scripts/api_removals.py > api_removals.out
+          removals_status=$?
+          set -e
+          cat api_removals.out
+
+          if [ "${removals_status}" -ne 0 ] && [ "${removals_status}" -ne 1 ]; then
+            echo "::error::api_removals.py failed with exit ${removals_status} - failing closed rather than skipping the API removal check"
+            exit 1
+          fi
+          if grep -q '^::error::Potential API removals' api_removals.out; then
             exit 1
           fi
 
@@ -144,7 +175,7 @@ jobs:
     name: Deprecation Compliance
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -169,7 +200,7 @@ jobs:
     name: Version Matrix Validation
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -210,7 +241,7 @@ jobs:
       - deprecation-compliance
       - version-matrix-validation
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       - name: Setup environment
         uses: ./.github/actions/setup-ubuntu
@@ -245,7 +276,7 @@ jobs:
           EOF
 
       - name: Upload compatibility report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: compatibility-report
           path: compatibility-report.md

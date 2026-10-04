@@ -246,7 +246,7 @@ func (b *EnclaveBackend) RecordSuccess(latencyMs int64) {
 	b.Metrics.TotalRequests++
 	b.Metrics.SuccessfulRequests++
 	//nolint:gosec // G115: latencyMs is positive duration in milliseconds
-	b.Metrics.TotalLatencyMs += uint64(latencyMs)
+	b.Metrics.TotalLatencyMs += uint64(latencyMs) // #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
 	b.Metrics.LastRequestTime = time.Now()
 
 	if b.Metrics.TotalRequests > 0 {
@@ -270,7 +270,7 @@ func (b *EnclaveBackend) RecordFailure(latencyMs int64) {
 	b.Metrics.TotalRequests++
 	b.Metrics.FailedRequests++
 	//nolint:gosec // G115: latencyMs is positive duration in milliseconds
-	b.Metrics.TotalLatencyMs += uint64(latencyMs)
+	b.Metrics.TotalLatencyMs += uint64(latencyMs) // #nosec G115 -- value originates from a non-negative quantity (height, timestamp, duration or counter) that always fits the target width
 	b.Metrics.LastRequestTime = time.Now()
 
 	if b.Metrics.TotalRequests > 0 {
@@ -669,7 +669,7 @@ func secureRandomIntn(n int) (int, error) {
 	}
 	r := binary.BigEndian.Uint64(buf[:])
 	//nolint:gosec // G115: n is validated positive, modulo result fits in int
-	return int(r % uint64(n)), nil
+	return int(r % uint64(n)), nil // #nosec G115 -- the value is r % n, so it is always < n <= MaxInt
 }
 
 // selectByLatency returns the backend with the lowest average latency.

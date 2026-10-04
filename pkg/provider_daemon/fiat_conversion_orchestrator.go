@@ -1676,7 +1676,7 @@ func hashEvidence(domain string, parts ...[]byte) []byte {
 	hash := sha256.New()
 	_, _ = hash.Write([]byte(domain))
 	for _, part := range parts {
-		length := []byte{byte(len(part) >> 24), byte(len(part) >> 16), byte(len(part) >> 8), byte(len(part))}
+		length := []byte{byte(len(part) >> 24), byte(len(part) >> 16), byte(len(part) >> 8), byte(len(part))} // #nosec G115 -- len(part) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 		_, _ = hash.Write(length)
 		_, _ = hash.Write(part)
 	}

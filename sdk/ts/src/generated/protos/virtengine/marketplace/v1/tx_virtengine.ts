@@ -1,4 +1,4 @@
-import { MsgAcceptBid, MsgAcceptBidResponse, MsgCreateOffering, MsgCreateOfferingResponse, MsgDeactivateOffering, MsgDeactivateOfferingResponse, MsgPauseAllocation, MsgPauseAllocationResponse, MsgResizeAllocation, MsgResizeAllocationResponse, MsgTerminateAllocation, MsgTerminateAllocationResponse, MsgUpdateOffering, MsgUpdateOfferingResponse, MsgWaldurCallback, MsgWaldurCallbackResponse } from "./tx.ts";
+import { MsgAcceptBid, MsgAcceptBidResponse, MsgAckWaldurCommand, MsgAckWaldurCommandResponse, MsgCreateOffering, MsgCreateOfferingResponse, MsgCreateOrder, MsgCreateOrderResponse, MsgDeactivateOffering, MsgDeactivateOfferingResponse, MsgIngestWaldurOffering, MsgIngestWaldurOfferingResponse, MsgPauseAllocation, MsgPauseAllocationResponse, MsgPlaceBid, MsgPlaceBidResponse, MsgRegisterWaldurSource, MsgRegisterWaldurSourceResponse, MsgResizeAllocation, MsgResizeAllocationResponse, MsgSetOfferingVisibility, MsgSetOfferingVisibilityResponse, MsgTerminateAllocation, MsgTerminateAllocationResponse, MsgUpdateOffering, MsgUpdateOfferingResponse, MsgWaldurCallback, MsgWaldurCallbackResponse, MsgWithdrawBid, MsgWithdrawBidResponse } from "./tx.ts";
 
 export const Msg = {
   typeName: "virtengine.marketplace.v1.Msg",
@@ -49,6 +49,48 @@ export const Msg = {
       name: "WaldurCallback",
       input: MsgWaldurCallback,
       output: MsgWaldurCallbackResponse,
+      get parent() { return Msg; },
+    },
+    createOrder: {
+      name: "CreateOrder",
+      input: MsgCreateOrder,
+      output: MsgCreateOrderResponse,
+      get parent() { return Msg; },
+    },
+    placeBid: {
+      name: "PlaceBid",
+      input: MsgPlaceBid,
+      output: MsgPlaceBidResponse,
+      get parent() { return Msg; },
+    },
+    withdrawBid: {
+      name: "WithdrawBid",
+      input: MsgWithdrawBid,
+      output: MsgWithdrawBidResponse,
+      get parent() { return Msg; },
+    },
+    registerWaldurSource: {
+      name: "RegisterWaldurSource",
+      input: MsgRegisterWaldurSource,
+      output: MsgRegisterWaldurSourceResponse,
+      get parent() { return Msg; },
+    },
+    ingestWaldurOffering: {
+      name: "IngestWaldurOffering",
+      input: MsgIngestWaldurOffering,
+      output: MsgIngestWaldurOfferingResponse,
+      get parent() { return Msg; },
+    },
+    setOfferingVisibility: {
+      name: "SetOfferingVisibility",
+      input: MsgSetOfferingVisibility,
+      output: MsgSetOfferingVisibilityResponse,
+      get parent() { return Msg; },
+    },
+    ackWaldurCommand: {
+      name: "AckWaldurCommand",
+      input: MsgAckWaldurCommand,
+      output: MsgAckWaldurCommandResponse,
       get parent() { return Msg; },
     },
   },

@@ -112,7 +112,7 @@ func ParseCID(cidStr string) (*ParsedCID, error) {
 	return &ParsedCID{
 		Raw: cidStr,
 		//nolint:gosec // G115: CID version is a small bounded value (0 or 1)
-		Version:  int(c.Version()),
+		Version:  int(c.Version()), // #nosec G115 -- c.Version() is a CID version (0 or 1)
 		Codec:    c.Type(),
 		Hash:     c.Hash(),
 		IsStub:   false,

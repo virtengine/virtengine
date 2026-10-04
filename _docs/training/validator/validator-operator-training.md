@@ -45,7 +45,7 @@ Upon completion of this training program, validators will be able to:
 
 ```bash
 # Required software versions
-go version        # Go 1.21.0+
+go version        # Go 1.26.8+
 make --version    # GNU Make 4.0+
 git --version     # Git 2.30+
 docker --version  # Docker 24.0+ (for testing)

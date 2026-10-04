@@ -15,7 +15,7 @@ import (
 const (
 	DefaultWeightMsgUpdateParams int = 100
 
-	OpWeightMsgUpdateParams = "op_weight_msg_update_params" //nolint:gosec // #nosec G101: simulation weight key
+	OpWeightMsgUpdateParams = "op_weight_msg_update_params" /* #nosec G101 -- #nosec G101: simulation weight key */ //nolint:gosec
 )
 
 // ProposalMsgs defines the module weighted proposals' contents
@@ -54,7 +54,8 @@ func SimulateMsgUpdateParams(r *rand.Rand, _ sdk.Context, _ []simtypes.Account) 
 	for _, coin := range coins {
 		params.DenomTakeRates = append(params.DenomTakeRates, types.DenomTakeRate{
 			Denom: coin.Denom,
-			Rate:  uint32(simtypes.RandIntBetween(r, 0, 100)), // nolint gosec
+			// #nosec G115 -- Rate:  uint32(simtypes.RandIntBetween(r, 0, 100)), // nolint gosec is a bounded count/flag that fits uint32
+			Rate: uint32(simtypes.RandIntBetween(r, 0, 100)), // nolint gosec
 		})
 	}
 

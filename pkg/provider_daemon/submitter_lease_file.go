@@ -187,7 +187,7 @@ func validateLeaseArguments(ctx context.Context, name string, ttl time.Duration)
 }
 
 func (l *FileSubmitterLease) loadLocked() (*txSubmissionQueuePathLock, *durableSubmitterLeaseState, error) {
-	if err := os.MkdirAll(filepath.Dir(l.path), 0o700); err != nil {
+	if err := os.MkdirAll(filepath.Dir(l.path), 0o700); err != nil { // #nosec G703 -- the path is derived from the daemon's configured state file (a validated constructor argument or an os.CreateTemp name), not from remote input; the operation targets that file by design
 		return nil, nil, fmt.Errorf("create submitter lease directory: %w", err)
 	}
 	lock, err := claimTxSubmissionQueuePath(l.path)
@@ -195,7 +195,7 @@ func (l *FileSubmitterLease) loadLocked() (*txSubmissionQueuePathLock, *durableS
 		return nil, nil, err
 	}
 	state := &durableSubmitterLeaseState{SchemaVersion: durableSubmitterLeaseSchemaVersion, Leases: make(map[string]*durableSubmitterLeaseRecord)}
-	data, err := os.ReadFile(l.path) // #nosec G304 -- path validated by constructor.
+	data, err := os.ReadFile(l.path) // #nosec G304,G703 -- path validated by constructor.
 	if errors.Is(err, os.ErrNotExist) {
 		return lock, state, nil
 	}

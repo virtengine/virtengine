@@ -67,6 +67,17 @@ export async function mockChainResponses(page: Page, options: MockDataOptions = 
     const providerAddress = providerIndex >= 0 ? segments[providerIndex + 1] : undefined;
     const provider = providerAddress ? providers[providerAddress] : undefined;
 
+    // Collection (discovery) vs detail. The multi-provider client lists the
+    // collection to build its provider table; returning `{provider: null}` here
+    // left it with zero providers and every lifecycle action refused.
+    if (!providerAddress) {
+      await fulfillJson(route, {
+        providers: Object.entries(providers).map(([owner, value]) => ({ ...value, owner })),
+        pagination: { total: Object.keys(providers).length, next_key: null },
+      });
+      return;
+    }
+
     await fulfillJson(route, provider ? { provider } : { provider: null });
   };
 
@@ -182,14 +193,77 @@ export async function mockChainResponses(page: Page, options: MockDataOptions = 
     });
   };
 
+  // Provider daemon surface. Allocation lifecycle actions (terminate) are only
+  // honoured when the provider returns a complete v1 action receipt, so the
+  // deployment lookup and the action endpoint are both mocked here.
+  const handleProviderDaemon = async (route: Route) => {
+    const url = new URL(route.request().url());
+    const path = url.pathname;
+    const actionMatch = path.match(/^\/api\/v1\/deployments\/(.+)\/actions$/);
+    const deploymentMatch = path.match(/^\/api\/v1\/deployments\/([^/]+)$/);
+
+    if (actionMatch) {
+      const deploymentId = decodeURIComponent(actionMatch[1]);
+      const body = (route.request().postDataJSON?.() ?? {}) as { action?: string };
+      const action = body.action ?? 'terminate';
+      const now = new Date().toISOString();
+      await fulfillJson(route, {
+        operationId: `op-${deploymentId}-${action}`,
+        action,
+        deploymentId,
+        providerId: 'virtengine1provider1xyz',
+        status: 'committed',
+        issuedAt: now,
+        completedAt: now,
+        state: action === 'terminate' ? 'terminated' : 'running',
+        // `version` and `revision` are scalar bindings, not objects — the
+        // receipt validator rejects anything that is not a string or number.
+        version: '1.0.0',
+        revision: 'rev-1',
+      });
+      return;
+    }
+
+    if (deploymentMatch) {
+      const deploymentId = decodeURIComponent(deploymentMatch[1]);
+      await fulfillJson(route, {
+        id: deploymentId,
+        status: 'running',
+        createdAt: new Date().toISOString(),
+      });
+      return;
+    }
+
+    if (path === '/api/v1/deployments') {
+      await fulfillJson(route, {
+        deployments: [
+          {
+            id: `${defaultOwner}/1001/1/1/virtengine1provider1xyz`,
+            status: 'running',
+            createdAt: new Date().toISOString(),
+          },
+        ],
+        next_cursor: null,
+      });
+      return;
+    }
+
+    await fulfillJson(route, {});
+  };
+
   await page.route('**/virtengine/market/v1/offerings**', handleOfferings);
   await page.route('**/marketplace/offerings**', handleOfferings);
+  // Provider *discovery* (the collection endpoint the multi-provider client
+  // calls) as well as provider detail. Without the collection route the client
+  // discovers zero providers and every lifecycle action is refused.
+  await page.route('**/virtengine/provider/**/providers**', handleProviders);
   await page.route('**/virtengine/provider/**/providers/**', handleProviders);
   await page.route('**/virtengine/market/v1*/orders**', handleOrders);
   await page.route('**/virtengine/market/v1*/leases**', handleLeases);
   await page.route('**/virtengine/escrow/v1*/accounts**', handleEscrows);
   await page.route('**/cosmos/auth/v1beta1/accounts/**', handleAccounts);
   await page.route('**/cosmos/tx/v1beta1/txs', handleTxs);
+  await page.route('https://provider1.example/**', handleProviderDaemon);
 }
 
 export async function mockKeplr(page: Page, address = 'virtengine1testaddressxyz') {

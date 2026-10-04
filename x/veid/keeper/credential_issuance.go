@@ -23,7 +23,7 @@ import (
 
 // Error message constants
 const (
-	errMsgHashCredentialFailed = "failed to hash credential: %v" //nolint:gosec // #nosec G101: non-secret error text
+	errMsgHashCredentialFailed = "failed to hash credential: %v" /* #nosec G101 -- #nosec G101: non-secret error text */ //nolint:gosec
 )
 
 // ============================================================================

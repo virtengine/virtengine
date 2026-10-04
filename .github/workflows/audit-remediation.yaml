@@ -35,7 +35,7 @@ jobs:
 
       - name: Assign critical findings
         if: steps.severity.outputs.severity == 'critical'
-        uses: actions/github-script@v7
+        uses: actions/github-script@v8
         with:
           script: |
             await github.rest.issues.addAssignees({
@@ -60,7 +60,7 @@ jobs:
     if: needs.triage.result == 'success'
     steps:
       - name: Notify security team
-        uses: slackapi/slack-github-action@v2.1.1
+        uses: slackapi/slack-github-action@v3
         with:
           method: chat.postMessage
           token: ${{ secrets.SLACK_BOT_TOKEN }}

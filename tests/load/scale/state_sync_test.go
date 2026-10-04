@@ -479,12 +479,16 @@ func TestStateSyncBaseline(t *testing.T) {
 		store := populateStateStore(entryCount, valueSize)
 		populateTime := time.Since(start)
 
-		entriesPerSec := float64(entryCount) / populateTime.Seconds()
+		entriesPerSec := perSecond(float64(entryCount), populateTime)
 		t.Logf("Population time: %v (%.0f entries/sec)", populateTime, entriesPerSec)
 
 		require.Equal(t, entryCount, store.Count())
-		require.Greater(t, int64(entriesPerSec), baseline.StateApplyRate/10,
-			"State write rate should be reasonable")
+		if populateTime > 0 {
+			require.Greater(t, int64(entriesPerSec), baseline.StateApplyRate/10,
+				"State write rate should be reasonable")
+		} else {
+			t.Skipf("state population completed within one clock tick (%v); no meaningful rate to floor", populateTime)
+		}
 	})
 
 	// Measure snapshot creation
@@ -498,14 +502,19 @@ func TestStateSyncBaseline(t *testing.T) {
 
 		require.NoError(t, err)
 
-		bytesPerSec := float64(snapshot.TotalSize) / createTime.Seconds()
+		bytesPerSec := perSecond(float64(snapshot.TotalSize), createTime)
 
 		t.Logf("Snapshot creation time: %v", createTime)
 		t.Logf("Snapshot size: %d bytes (%d chunks)", snapshot.TotalSize, snapshot.ChunkCount)
 		t.Logf("Creation rate: %.2f MB/sec", bytesPerSec/1024/1024)
 
-		require.Greater(t, int64(bytesPerSec), baseline.SnapshotCreationRate/10,
-			"Snapshot creation rate should be reasonable")
+		if createTime > 0 {
+			require.Greater(t, int64(bytesPerSec), baseline.SnapshotCreationRate/10,
+				"Snapshot creation rate should be reasonable")
+		} else {
+			t.Skipf("CreateSnapshot completed within one clock tick (%v) over %d chunks; no meaningful rate to floor",
+				createTime, snapshot.ChunkCount)
+		}
 	})
 
 	// Measure snapshot application
@@ -522,7 +531,7 @@ func TestStateSyncBaseline(t *testing.T) {
 
 		require.NoError(t, err)
 
-		bytesPerSec := float64(snapshot.TotalSize) / applyTime.Seconds()
+		bytesPerSec := perSecond(float64(snapshot.TotalSize), applyTime)
 
 		t.Logf("Snapshot apply time: %v", applyTime)
 		t.Logf("Apply rate: %.2f MB/sec", bytesPerSec/1024/1024)

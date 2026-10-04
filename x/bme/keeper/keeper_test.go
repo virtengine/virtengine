@@ -85,7 +85,7 @@ func TestKeeperGetSetState(t *testing.T) {
 	customState := types.State{
 		Balances:      sdk.NewCoins(sdk.NewCoin("uve", math.NewInt(1000))),
 		TotalBurned:   sdk.NewCoins(sdk.NewCoin("uve", math.NewInt(500))),
-		TotalMinted:   sdk.NewCoins(sdk.NewCoin("uvact", math.NewInt(400))),
+		TotalMinted:   sdk.NewCoins(sdk.NewCoin("uvcc", math.NewInt(400))),
 		RemintCredits: sdk.NewCoins(sdk.NewCoin("uve", math.NewInt(100))),
 	}
 	err := k.SetState(ctx, customState)

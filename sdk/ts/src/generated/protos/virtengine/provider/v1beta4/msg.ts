@@ -168,6 +168,7 @@ export interface MsgSetProviderSigningKey {
   keyType: string;
 }
 
+/** MsgSetProviderSigningKeyResponse returns the activated key id and epoch. */
 export interface MsgSetProviderSigningKeyResponse {
   keyId: string;
   epoch: Long;
@@ -183,6 +184,7 @@ export interface MsgRotateProviderSigningKey {
   signatureVersion: number;
 }
 
+/** MsgRotateProviderSigningKeyResponse returns the activated key id and epoch. */
 export interface MsgRotateProviderSigningKeyResponse {
   keyId: string;
   epoch: Long;
@@ -195,6 +197,7 @@ export interface MsgRevokeProviderSigningKey {
   keyId: string;
 }
 
+/** MsgRevokeProviderSigningKeyResponse returns the revocation height. */
 export interface MsgRevokeProviderSigningKeyResponse {
   revokedAtHeight: Long;
 }

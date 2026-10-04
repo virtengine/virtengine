@@ -48,11 +48,11 @@
       "id": "sdk",
       "path_selectors": ["sdk/**", "pnpm-lock.yaml"],
       "required_commands": [
-        { "id": "sdk-install", "kind": "setup", "command": "pnpm --dir sdk/ts install --frozen-lockfile" },
-        { "id": "sdk-build", "kind": "build", "command": "pnpm --dir sdk/ts build" },
-        { "id": "sdk-test", "kind": "test", "command": "pnpm --dir sdk/ts test" }
+        { "id": "sdk-install", "kind": "setup", "command": "npm --prefix sdk/ts ci --ignore-scripts" },
+        { "id": "sdk-build", "kind": "build", "command": "npm --prefix sdk/ts run build" },
+        { "id": "sdk-test", "kind": "test", "command": "npm --prefix sdk/ts test" }
       ],
-      "pinned_tools": [{ "name": "node", "version": "24.12.0", "source": "sdk/ts/package.json volta" }, { "name": "pnpm", "version": "10.28.2", "source": ".github workflow control" }],
+      "pinned_tools": [{ "name": "node", "version": "24.12.0", "source": "sdk/ts/package.json volta" }, { "name": "npm", "version": "11.6.2", "source": "sdk/ts/package.json volta" }],
       "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },
       "failure_semantics": { "nonzero_exit": "fail", "skipped": "fail", "missing_tool": "fail", "cancelled": "fail" },
       "dependencies": [{ "id": "86B", "status": "unavailable" }],
@@ -78,9 +78,9 @@
       "id": "mobile",
       "path_selectors": ["mobile/**", "lib/capture/**", "pnpm-lock.yaml"],
       "required_commands": [
-        { "id": "mobile-install", "kind": "setup", "command": "pnpm --dir mobile/veid-capture-app install --frozen-lockfile" },
-        { "id": "mobile-typecheck", "kind": "build", "command": "pnpm --dir mobile/veid-capture-app typecheck" },
-        { "id": "mobile-test", "kind": "test", "command": "pnpm --dir mobile/veid-capture-app test" }
+        { "id": "mobile-install", "kind": "setup", "command": "pnpm --dir mobile/veid-capture-app --ignore-workspace install --frozen-lockfile" },
+        { "id": "mobile-typecheck", "kind": "build", "command": "pnpm --dir mobile/veid-capture-app --ignore-workspace typecheck" },
+        { "id": "mobile-test", "kind": "test", "command": "pnpm --dir mobile/veid-capture-app --ignore-workspace test" }
       ],
       "pinned_tools": [{ "name": "node", "version": "20.19.4", "source": ".github workflow control" }, { "name": "pnpm", "version": "10.28.2", "source": ".github workflow control" }],
       "zero_test_policy": { "applies_to": "test_commands", "minimum_discovered": 1, "minimum_executed": 1, "empty_selection": "fail" },

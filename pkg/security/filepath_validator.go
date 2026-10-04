@@ -92,45 +92,63 @@ func (v *PathValidator) ValidatePath(path string) error {
 		return fmt.Errorf("cannot resolve path: %w", err)
 	}
 
-	// Resolve symlinks for existing paths so we can enforce allowed directories.
-	if info, err := os.Lstat(absPath); err == nil {
-		if info.Mode()&os.ModeSymlink != 0 {
-			linkTarget, err := os.Readlink(absPath)
-			if err != nil {
-				return fmt.Errorf("%w: %s", ErrInvalidPath, path)
-			}
-			if !filepath.IsAbs(linkTarget) {
-				linkTarget = filepath.Join(filepath.Dir(absPath), linkTarget)
-			}
-			resolved, err := filepath.Abs(filepath.Clean(linkTarget))
-			if err != nil {
-				return fmt.Errorf("%w: %s", ErrInvalidPath, path)
-			}
-			absPath = resolved
-		}
-
-		realPath, err := filepath.EvalSymlinks(absPath)
+	// A symlink at the leaf must be resolved explicitly, even when its target
+	// does not exist. resolveExistingPrefix cannot be used here directly: for a
+	// broken link it would walk up to the parent, drop the link entirely, and
+	// hand back the link's own name — accepting a path that actually points
+	// outside the allowed directories.
+	//
+	// The resolved target must then be canonicalized again. A single Readlink
+	// hop is not enough: a relative target such as "dirlink/secret.txt" is
+	// still textually inside the allowed directory even when "dirlink" is
+	// itself a symlink out of it, and the same applies to a chain of links.
+	// Re-running resolveExistingPrefix on the target collapses the whole
+	// chain; a non-existent tail cannot introduce an escape, since there is
+	// nothing there to follow.
+	//
+	// Any os.Lstat error other than a successful symlink hit falls through to
+	// the branch below, which rejects it (resolveExistingPrefix propagates
+	// non-IsNotExist errors and ValidatePath turns them into ErrInvalidPath).
+	if info, err := os.Lstat(absPath); err == nil && info.Mode()&os.ModeSymlink != 0 {
+		linkTarget, err := os.Readlink(absPath)
 		if err != nil {
 			return fmt.Errorf("%w: %s", ErrInvalidPath, path)
 		}
-		absPath = realPath
+		if !filepath.IsAbs(linkTarget) {
+			linkTarget = filepath.Join(filepath.Dir(absPath), linkTarget)
+		}
+		absPath, err = resolveExistingPrefix(filepath.Clean(linkTarget))
+		if err != nil {
+			return fmt.Errorf("%w: %s", ErrInvalidPath, path)
+		}
+	} else {
+		// Resolve symlinks and short names for the containment check. This must
+		// work for paths that do not exist yet, because the common pattern is
+		// to validate a destination before writing it (see WriteSecureFile and
+		// SafeWriteStateFile). Resolving only the deepest existing ancestor and
+		// re-appending the remainder keeps 8.3 short components expanded on
+		// both sides of the comparison. A non-existent tail cannot introduce a
+		// symlink escape, since there is nothing there to follow.
+		absPath, err = resolveExistingPrefix(absPath)
+		if err != nil {
+			return fmt.Errorf("%w: %s", ErrInvalidPath, path)
+		}
 	}
 
 	// Check if path is within allowed directories
 	if len(v.allowedDirs) > 0 {
 		allowed := false
 		for _, dir := range v.allowedDirs {
-			absDir, err := filepath.Abs(dir)
-			if err != nil {
+			absDir, ok := canonicalDir(dir)
+			if !ok {
 				continue
 			}
-			// Normalize the directory path with separator
-			absDir = filepath.Clean(absDir) + string(filepath.Separator)
-			absPathNorm := filepath.Clean(absPath)
+			absPathNorm := normalizeForCompare(filepath.Clean(absPath))
 
-			// Check if the path is exactly the allowed dir or starts with it
-			if absPathNorm == filepath.Clean(absDir[:len(absDir)-1]) ||
-				strings.HasPrefix(absPathNorm+string(filepath.Separator), absDir) {
+			// Check if the path is exactly the allowed dir or is nested inside it.
+			// Containment is decided with filepath.Rel so a path that merely shares
+			// a name prefix ("/data-secret" vs "/data") cannot pass.
+			if pathWithinDir(absPathNorm, absDir) {
 				allowed = true
 				break
 			}

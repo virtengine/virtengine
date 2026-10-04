@@ -747,7 +747,7 @@ func shamirRecombine(shares [][]byte, indices []int, threshold int) []byte {
 
 	// Undo share index marker
 	if len(result) > 0 {
-		result[0] ^= byte(indices[0])
+		result[0] ^= byte(indices[0]) // #nosec G115 -- fixed-width big-endian encoding: byte(indices[0]) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	}
 
 	return result

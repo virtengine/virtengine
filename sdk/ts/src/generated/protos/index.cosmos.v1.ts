@@ -1,4 +1,4 @@
-import { patched } from "./cosmosPatchMessage.ts";
+import { patched } from "./ibc-goPatchMessage.ts";
 
 export { Module, ModuleAccountPermission } from "./cosmos/auth/module/v1/module.ts";
 export { Module as Module_Module } from "./cosmos/authz/module/v1/module.ts";

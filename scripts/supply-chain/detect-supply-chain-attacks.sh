@@ -390,15 +390,18 @@ check_maintainer_risks() {
             echo "$forks" | diag_detail
 
             # These are the known legitimate forks for VirtEngine.
-            # Triaged 2026-09-22:
+            # Triaged 2026-09-22, ledger entry re-pointed 2026-09-26:
             #   regen-network/protobuf is the Cosmos-ecosystem canonical gogo
             #   fork (regen-network/cosmos-proto is already a direct require);
             #   troian/hid is the maintained hid fork used by the Cosmos ledger
-            #   stack (paired with the virtengine/ledger-go replace).
+            #   stack (paired with the akash-network/ledger-go replace below).
+            # The ledger fork moved from the deleted virtengine/ledger-go repo to
+            # github.com/akash-network/ledger-go (#848 re-pointed both replace
+            # directives: cosmos/ledger-cosmos-go and zondax/ledger-go).
             local known_forks=(
                 "github.com/virtengine/cosmos-sdk"
                 "github.com/virtengine/cometbft"
-                "github.com/virtengine/ledger-go"
+                "github.com/akash-network/ledger-go"
                 "github.com/virtengine/gogoproto"
                 "github.com/cosmos/keyring"
                 "github.com/regen-network/protobuf"

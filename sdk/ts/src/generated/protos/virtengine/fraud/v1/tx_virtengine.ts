@@ -1,4 +1,4 @@
-import { MsgAssignModerator, MsgAssignModeratorResponse, MsgEscalateFraudReport, MsgEscalateFraudReportResponse, MsgRejectFraudReport, MsgRejectFraudReportResponse, MsgResolveFraudReport, MsgResolveFraudReportResponse, MsgSubmitFraudReport, MsgSubmitFraudReportResponse, MsgUpdateParams, MsgUpdateParamsResponse, MsgUpdateReportStatus, MsgUpdateReportStatusResponse } from "./tx.ts";
+import { MsgAssignModerator, MsgAssignModeratorResponse, MsgConfirmFraudResolution, MsgConfirmFraudResolutionResponse, MsgEscalateFraudReport, MsgEscalateFraudReportResponse, MsgRejectFraudReport, MsgRejectFraudReportResponse, MsgResolveFraudReport, MsgResolveFraudReportResponse, MsgSubmitFraudReport, MsgSubmitFraudReportResponse, MsgSubmitFraudResponse, MsgSubmitFraudResponseResponse, MsgUpdateParams, MsgUpdateParamsResponse, MsgUpdateReportStatus, MsgUpdateReportStatusResponse } from "./tx.ts";
 
 export const Msg = {
   typeName: "virtengine.fraud.v1.Msg",
@@ -7,6 +7,12 @@ export const Msg = {
       name: "SubmitFraudReport",
       input: MsgSubmitFraudReport,
       output: MsgSubmitFraudReportResponse,
+      get parent() { return Msg; },
+    },
+    submitFraudResponse: {
+      name: "SubmitFraudResponse",
+      input: MsgSubmitFraudResponse,
+      output: MsgSubmitFraudResponseResponse,
       get parent() { return Msg; },
     },
     assignModerator: {
@@ -25,6 +31,12 @@ export const Msg = {
       name: "ResolveFraudReport",
       input: MsgResolveFraudReport,
       output: MsgResolveFraudReportResponse,
+      get parent() { return Msg; },
+    },
+    confirmFraudResolution: {
+      name: "ConfirmFraudResolution",
+      input: MsgConfirmFraudResolution,
+      output: MsgConfirmFraudResolutionResponse,
       get parent() { return Msg; },
     },
     rejectFraudReport: {

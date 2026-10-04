@@ -210,7 +210,7 @@ sign_sbom() {
     cosign sign-blob \
         --yes \
         --output-signature "${sbom_file}.sig" \
-        --output-certificate "${sbom_file}.sig.cert" \
+        --output-certificate "${sbom_file}.pem" \
         "$sbom_file" 2>/dev/null || {
             log_warning "SBOM signing failed - this is expected in non-CI environments"
             return

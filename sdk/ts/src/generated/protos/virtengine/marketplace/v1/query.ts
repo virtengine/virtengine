@@ -12,6 +12,7 @@ import Long from "long";
 import { PageRequest, PageResponse } from "../../../cosmos/base/query/v1beta1/pagination.ts";
 import { Coin } from "../../../cosmos/base/v1beta1/coin.ts";
 import { Timestamp } from "../../../google/protobuf/timestamp.ts";
+import { Offering } from "./types.ts";
 
 /** AllocationState represents the lifecycle state of an allocation. */
 export enum AllocationState {
@@ -156,6 +157,70 @@ export interface QueryAllocationsByProviderRequest {
 /** QueryAllocationsResponse is the response for allocations queries. */
 export interface QueryAllocationsResponse {
   allocations: Allocation[];
+  pagination: PageResponse | undefined;
+}
+
+/** QueryCatalogRequest is the request for the unified catalogue. */
+export interface QueryCatalogRequest {
+  /** Category filter (empty means any). */
+  category: string;
+  /** Region filter (empty means any). */
+  regions: string[];
+  /** Backend allow-list (empty means any). */
+  backends: string[];
+  /** Include unlisted offerings. */
+  includeUnlisted: boolean;
+  /** Source filter ("native", "waldur", empty means any). */
+  source: string;
+  /** Pagination. */
+  pagination: PageRequest | undefined;
+}
+
+/** QueryCatalogResponse is the response for the catalogue query. */
+export interface QueryCatalogResponse {
+  /** Active, browsable offerings in deterministic order. */
+  offerings: Offering[];
+  /** Pagination. */
+  pagination: PageResponse | undefined;
+}
+
+/** WaldurCommandSummary describes a durable command for an off-chain adapter. */
+export interface WaldurCommandSummary {
+  /** Command identifier. */
+  id: string;
+  /** Command kind. */
+  kind: string;
+  /** Target Waldur instance. */
+  instanceId: string;
+  /** On-chain entity ID. */
+  chainEntityId: string;
+  /** Whether the command was acknowledged. */
+  acked: boolean;
+  /** Creation timestamp. */
+  createdAt:
+    | Date
+    | undefined;
+  /** Target Waldur offering UUID. */
+  waldurOfferingUuid: string;
+  /** Canonical VirtEngine identifier for reconciliation. */
+  backendId: string;
+}
+
+/** QueryWaldurCommandsRequest is the request for durable Waldur commands. */
+export interface QueryWaldurCommandsRequest {
+  /** Waldur instance filter (empty means any). */
+  instanceId: string;
+  /** Only return unacknowledged commands. */
+  pendingOnly: boolean;
+  /** Pagination. */
+  pagination: PageRequest | undefined;
+}
+
+/** QueryWaldurCommandsResponse is the response for durable Waldur commands. */
+export interface QueryWaldurCommandsResponse {
+  /** Durable commands in ID order. */
+  commands: WaldurCommandSummary[];
+  /** Pagination. */
   pagination: PageResponse | undefined;
 }
 
@@ -885,6 +950,581 @@ export const QueryAllocationsResponse: MessageFns<
   fromPartial(object: DeepPartial<QueryAllocationsResponse>): QueryAllocationsResponse {
     const message = createBaseQueryAllocationsResponse();
     message.allocations = object.allocations?.map((e) => Allocation.fromPartial(e)) || [];
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageResponse.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryCatalogRequest(): QueryCatalogRequest {
+  return { category: "", regions: [], backends: [], includeUnlisted: false, source: "", pagination: undefined };
+}
+
+export const QueryCatalogRequest: MessageFns<QueryCatalogRequest, "virtengine.marketplace.v1.QueryCatalogRequest"> = {
+  $type: "virtengine.marketplace.v1.QueryCatalogRequest" as const,
+
+  encode(message: QueryCatalogRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.category !== "") {
+      writer.uint32(10).string(message.category);
+    }
+    for (const v of message.regions) {
+      writer.uint32(18).string(v!);
+    }
+    for (const v of message.backends) {
+      writer.uint32(26).string(v!);
+    }
+    if (message.includeUnlisted !== false) {
+      writer.uint32(32).bool(message.includeUnlisted);
+    }
+    if (message.source !== "") {
+      writer.uint32(42).string(message.source);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(50).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryCatalogRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryCatalogRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.category = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.regions.push(reader.string());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.backends.push(reader.string());
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.includeUnlisted = reader.bool();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.source = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryCatalogRequest {
+    return {
+      category: isSet(object.category) ? globalThis.String(object.category) : "",
+      regions: globalThis.Array.isArray(object?.regions) ? object.regions.map((e: any) => globalThis.String(e)) : [],
+      backends: globalThis.Array.isArray(object?.backends) ? object.backends.map((e: any) => globalThis.String(e)) : [],
+      includeUnlisted: isSet(object.include_unlisted) ? globalThis.Boolean(object.include_unlisted) : false,
+      source: isSet(object.source) ? globalThis.String(object.source) : "",
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryCatalogRequest): unknown {
+    const obj: any = {};
+    if (message.category !== "") {
+      obj.category = message.category;
+    }
+    if (message.regions?.length) {
+      obj.regions = message.regions;
+    }
+    if (message.backends?.length) {
+      obj.backends = message.backends;
+    }
+    if (message.includeUnlisted !== false) {
+      obj.include_unlisted = message.includeUnlisted;
+    }
+    if (message.source !== "") {
+      obj.source = message.source;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryCatalogRequest>): QueryCatalogRequest {
+    const message = createBaseQueryCatalogRequest();
+    message.category = object.category ?? "";
+    message.regions = object.regions?.map((e) => e) || [];
+    message.backends = object.backends?.map((e) => e) || [];
+    message.includeUnlisted = object.includeUnlisted ?? false;
+    message.source = object.source ?? "";
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryCatalogResponse(): QueryCatalogResponse {
+  return { offerings: [], pagination: undefined };
+}
+
+export const QueryCatalogResponse: MessageFns<QueryCatalogResponse, "virtengine.marketplace.v1.QueryCatalogResponse"> =
+  {
+    $type: "virtengine.marketplace.v1.QueryCatalogResponse" as const,
+
+    encode(message: QueryCatalogResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+      for (const v of message.offerings) {
+        Offering.encode(v!, writer.uint32(10).fork()).join();
+      }
+      if (message.pagination !== undefined) {
+        PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+      }
+      return writer;
+    },
+
+    decode(input: BinaryReader | Uint8Array, length?: number): QueryCatalogResponse {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseQueryCatalogResponse();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.offerings.push(Offering.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.pagination = PageResponse.decode(reader, reader.uint32());
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    },
+
+    fromJSON(object: any): QueryCatalogResponse {
+      return {
+        offerings: globalThis.Array.isArray(object?.offerings)
+          ? object.offerings.map((e: any) => Offering.fromJSON(e))
+          : [],
+        pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+      };
+    },
+
+    toJSON(message: QueryCatalogResponse): unknown {
+      const obj: any = {};
+      if (message.offerings?.length) {
+        obj.offerings = message.offerings.map((e) => Offering.toJSON(e));
+      }
+      if (message.pagination !== undefined) {
+        obj.pagination = PageResponse.toJSON(message.pagination);
+      }
+      return obj;
+    },
+    fromPartial(object: DeepPartial<QueryCatalogResponse>): QueryCatalogResponse {
+      const message = createBaseQueryCatalogResponse();
+      message.offerings = object.offerings?.map((e) => Offering.fromPartial(e)) || [];
+      message.pagination = (object.pagination !== undefined && object.pagination !== null)
+        ? PageResponse.fromPartial(object.pagination)
+        : undefined;
+      return message;
+    },
+  };
+
+function createBaseWaldurCommandSummary(): WaldurCommandSummary {
+  return {
+    id: "",
+    kind: "",
+    instanceId: "",
+    chainEntityId: "",
+    acked: false,
+    createdAt: undefined,
+    waldurOfferingUuid: "",
+    backendId: "",
+  };
+}
+
+export const WaldurCommandSummary: MessageFns<WaldurCommandSummary, "virtengine.marketplace.v1.WaldurCommandSummary"> =
+  {
+    $type: "virtengine.marketplace.v1.WaldurCommandSummary" as const,
+
+    encode(message: WaldurCommandSummary, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+      if (message.id !== "") {
+        writer.uint32(10).string(message.id);
+      }
+      if (message.kind !== "") {
+        writer.uint32(18).string(message.kind);
+      }
+      if (message.instanceId !== "") {
+        writer.uint32(26).string(message.instanceId);
+      }
+      if (message.chainEntityId !== "") {
+        writer.uint32(34).string(message.chainEntityId);
+      }
+      if (message.acked !== false) {
+        writer.uint32(40).bool(message.acked);
+      }
+      if (message.createdAt !== undefined) {
+        Timestamp.encode(toTimestamp(message.createdAt), writer.uint32(50).fork()).join();
+      }
+      if (message.waldurOfferingUuid !== "") {
+        writer.uint32(58).string(message.waldurOfferingUuid);
+      }
+      if (message.backendId !== "") {
+        writer.uint32(66).string(message.backendId);
+      }
+      return writer;
+    },
+
+    decode(input: BinaryReader | Uint8Array, length?: number): WaldurCommandSummary {
+      const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+      const end = length === undefined ? reader.len : reader.pos + length;
+      const message = createBaseWaldurCommandSummary();
+      while (reader.pos < end) {
+        const tag = reader.uint32();
+        switch (tag >>> 3) {
+          case 1: {
+            if (tag !== 10) {
+              break;
+            }
+
+            message.id = reader.string();
+            continue;
+          }
+          case 2: {
+            if (tag !== 18) {
+              break;
+            }
+
+            message.kind = reader.string();
+            continue;
+          }
+          case 3: {
+            if (tag !== 26) {
+              break;
+            }
+
+            message.instanceId = reader.string();
+            continue;
+          }
+          case 4: {
+            if (tag !== 34) {
+              break;
+            }
+
+            message.chainEntityId = reader.string();
+            continue;
+          }
+          case 5: {
+            if (tag !== 40) {
+              break;
+            }
+
+            message.acked = reader.bool();
+            continue;
+          }
+          case 6: {
+            if (tag !== 50) {
+              break;
+            }
+
+            message.createdAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+            continue;
+          }
+          case 7: {
+            if (tag !== 58) {
+              break;
+            }
+
+            message.waldurOfferingUuid = reader.string();
+            continue;
+          }
+          case 8: {
+            if (tag !== 66) {
+              break;
+            }
+
+            message.backendId = reader.string();
+            continue;
+          }
+        }
+        if ((tag & 7) === 4 || tag === 0) {
+          break;
+        }
+        reader.skip(tag & 7);
+      }
+      return message;
+    },
+
+    fromJSON(object: any): WaldurCommandSummary {
+      return {
+        id: isSet(object.id) ? globalThis.String(object.id) : "",
+        kind: isSet(object.kind) ? globalThis.String(object.kind) : "",
+        instanceId: isSet(object.instance_id) ? globalThis.String(object.instance_id) : "",
+        chainEntityId: isSet(object.chain_entity_id) ? globalThis.String(object.chain_entity_id) : "",
+        acked: isSet(object.acked) ? globalThis.Boolean(object.acked) : false,
+        createdAt: isSet(object.created_at) ? fromJsonTimestamp(object.created_at) : undefined,
+        waldurOfferingUuid: isSet(object.waldur_offering_uuid) ? globalThis.String(object.waldur_offering_uuid) : "",
+        backendId: isSet(object.backend_id) ? globalThis.String(object.backend_id) : "",
+      };
+    },
+
+    toJSON(message: WaldurCommandSummary): unknown {
+      const obj: any = {};
+      if (message.id !== "") {
+        obj.id = message.id;
+      }
+      if (message.kind !== "") {
+        obj.kind = message.kind;
+      }
+      if (message.instanceId !== "") {
+        obj.instance_id = message.instanceId;
+      }
+      if (message.chainEntityId !== "") {
+        obj.chain_entity_id = message.chainEntityId;
+      }
+      if (message.acked !== false) {
+        obj.acked = message.acked;
+      }
+      if (message.createdAt !== undefined) {
+        obj.created_at = message.createdAt.toISOString();
+      }
+      if (message.waldurOfferingUuid !== "") {
+        obj.waldur_offering_uuid = message.waldurOfferingUuid;
+      }
+      if (message.backendId !== "") {
+        obj.backend_id = message.backendId;
+      }
+      return obj;
+    },
+    fromPartial(object: DeepPartial<WaldurCommandSummary>): WaldurCommandSummary {
+      const message = createBaseWaldurCommandSummary();
+      message.id = object.id ?? "";
+      message.kind = object.kind ?? "";
+      message.instanceId = object.instanceId ?? "";
+      message.chainEntityId = object.chainEntityId ?? "";
+      message.acked = object.acked ?? false;
+      message.createdAt = object.createdAt ?? undefined;
+      message.waldurOfferingUuid = object.waldurOfferingUuid ?? "";
+      message.backendId = object.backendId ?? "";
+      return message;
+    },
+  };
+
+function createBaseQueryWaldurCommandsRequest(): QueryWaldurCommandsRequest {
+  return { instanceId: "", pendingOnly: false, pagination: undefined };
+}
+
+export const QueryWaldurCommandsRequest: MessageFns<
+  QueryWaldurCommandsRequest,
+  "virtengine.marketplace.v1.QueryWaldurCommandsRequest"
+> = {
+  $type: "virtengine.marketplace.v1.QueryWaldurCommandsRequest" as const,
+
+  encode(message: QueryWaldurCommandsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.instanceId !== "") {
+      writer.uint32(10).string(message.instanceId);
+    }
+    if (message.pendingOnly !== false) {
+      writer.uint32(16).bool(message.pendingOnly);
+    }
+    if (message.pagination !== undefined) {
+      PageRequest.encode(message.pagination, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryWaldurCommandsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryWaldurCommandsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.instanceId = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.pendingOnly = reader.bool();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.pagination = PageRequest.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryWaldurCommandsRequest {
+    return {
+      instanceId: isSet(object.instance_id) ? globalThis.String(object.instance_id) : "",
+      pendingOnly: isSet(object.pending_only) ? globalThis.Boolean(object.pending_only) : false,
+      pagination: isSet(object.pagination) ? PageRequest.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryWaldurCommandsRequest): unknown {
+    const obj: any = {};
+    if (message.instanceId !== "") {
+      obj.instance_id = message.instanceId;
+    }
+    if (message.pendingOnly !== false) {
+      obj.pending_only = message.pendingOnly;
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageRequest.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryWaldurCommandsRequest>): QueryWaldurCommandsRequest {
+    const message = createBaseQueryWaldurCommandsRequest();
+    message.instanceId = object.instanceId ?? "";
+    message.pendingOnly = object.pendingOnly ?? false;
+    message.pagination = (object.pagination !== undefined && object.pagination !== null)
+      ? PageRequest.fromPartial(object.pagination)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseQueryWaldurCommandsResponse(): QueryWaldurCommandsResponse {
+  return { commands: [], pagination: undefined };
+}
+
+export const QueryWaldurCommandsResponse: MessageFns<
+  QueryWaldurCommandsResponse,
+  "virtengine.marketplace.v1.QueryWaldurCommandsResponse"
+> = {
+  $type: "virtengine.marketplace.v1.QueryWaldurCommandsResponse" as const,
+
+  encode(message: QueryWaldurCommandsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.commands) {
+      WaldurCommandSummary.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.pagination !== undefined) {
+      PageResponse.encode(message.pagination, writer.uint32(18).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): QueryWaldurCommandsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseQueryWaldurCommandsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.commands.push(WaldurCommandSummary.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.pagination = PageResponse.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): QueryWaldurCommandsResponse {
+    return {
+      commands: globalThis.Array.isArray(object?.commands)
+        ? object.commands.map((e: any) => WaldurCommandSummary.fromJSON(e))
+        : [],
+      pagination: isSet(object.pagination) ? PageResponse.fromJSON(object.pagination) : undefined,
+    };
+  },
+
+  toJSON(message: QueryWaldurCommandsResponse): unknown {
+    const obj: any = {};
+    if (message.commands?.length) {
+      obj.commands = message.commands.map((e) => WaldurCommandSummary.toJSON(e));
+    }
+    if (message.pagination !== undefined) {
+      obj.pagination = PageResponse.toJSON(message.pagination);
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<QueryWaldurCommandsResponse>): QueryWaldurCommandsResponse {
+    const message = createBaseQueryWaldurCommandsResponse();
+    message.commands = object.commands?.map((e) => WaldurCommandSummary.fromPartial(e)) || [];
     message.pagination = (object.pagination !== undefined && object.pagination !== null)
       ? PageResponse.fromPartial(object.pagination)
       : undefined;

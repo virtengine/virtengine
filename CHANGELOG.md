@@ -38,6 +38,18 @@ Ref: https://keepachangelog.com/en/1.0.0/
 
 ## [Unreleased]
 
+### Client Breaking
+
+* (sdk) Replace ACT/vACT conversion commands with `mint-vcc` and `burn-vcc`; wallet credit metadata uses VCC / `uvcc` and native fee/staking metadata uses VE / `uve`.
+
+### API Breaking
+
+* (sdk) Rename BME mint/burn messages and RPCs to VCC, the vault response to `vault_native`, and the oracle parameter to `native_price_feed_id`. Funding-registry and inventory digests change. Old clients, signed requests and digest-bound authorizations require a coordinated upgrade.
+
+### State Machine Breaking
+
+* (market) Use `uve` for native liquidity rewards and require explicit VE oracle-feed configuration. Existing ACT/vACT balances are not migrated to `uvcc`; existing networks need an audited state/configuration migration before adopting these identifiers. Conversion handlers remain pending and the rename creates no peg or redemption guarantee.
+
 * (ibc-go) Use ibc v4.4.0 
 
 ### Improvements

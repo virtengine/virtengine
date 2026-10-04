@@ -18,7 +18,15 @@ var (
 	ParamsKey                = types.ParamsKey
 	SequenceKeyFraudReport   = types.SequenceKeyFraudReport
 	SequenceKeyAuditLog      = types.SequenceKeyAuditLog
+
+	// PendingResolutionPrefix is the prefix for co-signed resolution requests
+	PendingResolutionPrefix = types.PendingResolutionPrefix
 )
+
+// PendingResolutionKey returns the key for a report's pending resolution
+func PendingResolutionKey(reportID string) []byte {
+	return types.GetPendingResolutionKey(reportID)
+}
 
 // FraudReportKey returns the key for a fraud report
 func FraudReportKey(reportID string) []byte {

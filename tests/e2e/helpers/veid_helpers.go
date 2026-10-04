@@ -53,9 +53,6 @@ const (
 
 	// DeterministicSeed for reproducible key generation
 	DeterministicSeed = 42
-
-	// Secp256k1SignatureSize is the expected size of a secp256k1 signature
-	Secp256k1SignatureSize = 65
 )
 
 // ============================================================================
@@ -96,7 +93,7 @@ func (c OnboardingTestClient) ToApprovedClient() veidtypes.ApprovedClient {
 		ClientID:     c.ClientID,
 		Name:         c.Name,
 		PublicKey:    c.PublicKey,
-		Algorithm:    "Ed25519",
+		Algorithm:    keeper.AlgorithmEd25519,
 		Active:       true,
 		RegisteredAt: TestBlockTimeUnix,
 	}
@@ -184,12 +181,23 @@ type ScopeUploadParams struct {
 	CaptureTimestamp  int64
 }
 
+// scopeSalt derives a deterministic 16-byte salt from the scope ID.
+//
+// Salts are replay-protected per app instance (checkSaltUnused): two uploads
+// sharing one salt fail with ErrSaltAlreadyUsed. Deriving from the scope ID
+// keeps salts deterministic while guaranteeing uniqueness across uploads that
+// use distinct scope IDs. 16 bytes satisfies the default SaltMinBytes bound.
+func scopeSalt(scopeID string) []byte {
+	sum := sha256.Sum256([]byte(scopeID))
+	return sum[:16]
+}
+
 // DefaultSelfieUploadParams returns default parameters for selfie scope upload
 func DefaultSelfieUploadParams(scopeID string) ScopeUploadParams {
 	return ScopeUploadParams{
 		ScopeID:           scopeID,
 		ScopeType:         veidtypes.ScopeTypeSelfie,
-		Salt:              bytes.Repeat([]byte{0x1a}, 16),
+		Salt:              scopeSalt(scopeID),
 		DeviceFingerprint: TestDeviceFingerprint,
 		CaptureTimestamp:  TestBlockTimeUnix,
 	}
@@ -200,7 +208,7 @@ func DefaultIDDocUploadParams(scopeID string) ScopeUploadParams {
 	return ScopeUploadParams{
 		ScopeID:           scopeID,
 		ScopeType:         veidtypes.ScopeTypeIDDocument,
-		Salt:              bytes.Repeat([]byte{0x2b}, 16),
+		Salt:              scopeSalt(scopeID),
 		DeviceFingerprint: TestDeviceFingerprint,
 		CaptureTimestamp:  TestBlockTimeUnix,
 	}
@@ -211,7 +219,7 @@ func DefaultFaceVideoUploadParams(scopeID string) ScopeUploadParams {
 	return ScopeUploadParams{
 		ScopeID:           scopeID,
 		ScopeType:         veidtypes.ScopeTypeFaceVideo,
-		Salt:              bytes.Repeat([]byte{0x3c}, 16),
+		Salt:              scopeSalt(scopeID),
 		DeviceFingerprint: TestDeviceFingerprint,
 		CaptureTimestamp:  TestBlockTimeUnix,
 	}
@@ -222,7 +230,7 @@ func DefaultEmailProofUploadParams(scopeID string) ScopeUploadParams {
 	return ScopeUploadParams{
 		ScopeID:           scopeID,
 		ScopeType:         veidtypes.ScopeTypeEmailProof,
-		Salt:              bytes.Repeat([]byte{0x4d}, 16),
+		Salt:              scopeSalt(scopeID),
 		DeviceFingerprint: TestDeviceFingerprint,
 		CaptureTimestamp:  TestBlockTimeUnix,
 	}
@@ -233,7 +241,7 @@ func DefaultDomainVerifyUploadParams(scopeID string) ScopeUploadParams {
 	return ScopeUploadParams{
 		ScopeID:           scopeID,
 		ScopeType:         veidtypes.ScopeTypeDomainVerify,
-		Salt:              bytes.Repeat([]byte{0x5e}, 16),
+		Salt:              scopeSalt(scopeID),
 		DeviceFingerprint: TestDeviceFingerprint,
 		CaptureTimestamp:  TestBlockTimeUnix,
 	}
@@ -263,7 +271,7 @@ func UploadScope(
 	)
 
 	clientSignature := client.Sign(metadata.SigningPayload())
-	userSignature := bytes.Repeat([]byte{0x04}, Secp256k1SignatureSize)
+	userSignature := bytes.Repeat([]byte{0x04}, keeper.Secp256k1SignatureSize)
 
 	msg := veidtypes.NewMsgUploadScope(
 		customer.String(),
@@ -378,6 +386,10 @@ func CreateEncryptedEnvelope(scopeID string) encryptiontypes.EncryptedPayloadEnv
 	envelope.Nonce = bytes.Repeat([]byte{0x02}, encryptiontypes.XSalsa20NonceSize)
 	envelope.Ciphertext = []byte("e2e-encrypted-identity-payload-" + scopeID)
 	envelope.SenderPubKey = bytes.Repeat([]byte{0x03}, encryptiontypes.X25519PublicKeySize)
+	// Envelope validation requires a sender signature (64 bytes covers both
+	// v1 presence and v2 size checks); same deterministic stub as the
+	// tests/integration onboarding suite.
+	envelope.SenderSignature = bytes.Repeat([]byte{0x05}, 64)
 	return *envelope
 }
 
@@ -497,6 +509,14 @@ func CreateOfferingWithVEIDRequirement(
 }
 
 // AttemptCreateOrder attempts to create an order (may fail due to gating)
+//
+// NOTE: legacy marketplace lifecycle writes (CreateOrder and friends) are
+// retired behind the Task 84C canonical fence: with default genesis
+// (CanonicalLifecycleActive: true) CreateOrder returns ErrLifecycleDeprecated
+// before reaching identity gating. Tests that target VEID gating logic should
+// use RequireIdentityGatingBlocked / RequireIdentityGatingPassed below, which
+// drive the live Marketplace.CheckIdentityGating enforcement function
+// directly. AttemptCreateOrder is retained for the tests/e2e lifecycle suites.
 func AttemptCreateOrder(
 	t *testing.T,
 	a *app.VirtEngineApp,
@@ -531,6 +551,46 @@ func AttemptCreateOrder(
 	stored, found := a.Keepers.VirtEngine.Marketplace.GetOrder(ctx, orderID)
 	require.True(t, found, "Order should be stored")
 	return stored
+}
+
+// RequireIdentityGatingBlocked asserts that the marketplace identity gating
+// check rejects customer for offering with an *IdentityGatingError carrying
+// failure reasons.
+//
+// It drives Marketplace.CheckIdentityGating directly instead of CreateOrder:
+// legacy lifecycle writes are retired behind the Task 84C canonical fence
+// (ErrLifecycleDeprecated with default genesis), while CheckIdentityGating is
+// the live enforcement function CreateOrder itself invoked for gating.
+func RequireIdentityGatingBlocked(
+	t *testing.T,
+	a *app.VirtEngineApp,
+	ctx sdk.Context,
+	offering marketplace.Offering,
+	customer sdk.AccAddress,
+) {
+	t.Helper()
+
+	err := a.Keepers.VirtEngine.Marketplace.CheckIdentityGating(ctx, &offering, customer)
+	require.Error(t, err, "identity gating should reject the customer")
+	var gatingErr *marketplace.IdentityGatingError
+	require.ErrorAs(t, err, &gatingErr, "Error should be IdentityGatingError")
+	require.NotEmpty(t, gatingErr.Reasons, "gating error should carry failure reasons")
+}
+
+// RequireIdentityGatingPassed asserts that the marketplace identity gating
+// check allows customer for offering. See RequireIdentityGatingBlocked for why
+// the check is driven directly instead of through the retired CreateOrder path.
+func RequireIdentityGatingPassed(
+	t *testing.T,
+	a *app.VirtEngineApp,
+	ctx sdk.Context,
+	offering marketplace.Offering,
+	customer sdk.AccAddress,
+) {
+	t.Helper()
+
+	err := a.Keepers.VirtEngine.Marketplace.CheckIdentityGating(ctx, &offering, customer)
+	require.NoError(t, err, "identity gating should allow the customer")
 }
 
 // ============================================================================

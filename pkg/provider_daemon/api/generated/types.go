@@ -30,10 +30,10 @@ const (
 
 // Defines values for DeploymentActionRequestAction.
 const (
+	Resize  DeploymentActionRequestAction = "resize"
 	Restart DeploymentActionRequestAction = "restart"
 	Start   DeploymentActionRequestAction = "start"
 	Stop    DeploymentActionRequestAction = "stop"
-	Resize  DeploymentActionRequestAction = "resize"
 )
 
 // Defines values for DeploymentDetailState.
@@ -134,6 +134,14 @@ const (
 	UpdateTicketRequestStatusOpen            UpdateTicketRequestStatus = "open"
 	UpdateTicketRequestStatusResolved        UpdateTicketRequestStatus = "resolved"
 	UpdateTicketRequestStatusWaitingCustomer UpdateTicketRequestStatus = "waiting_customer"
+)
+
+// Defines values for VaultUploadRequestScope.
+const (
+	Audit   VaultUploadRequestScope = "audit"
+	Market  VaultUploadRequestScope = "market"
+	Support VaultUploadRequestScope = "support"
+	Veid    VaultUploadRequestScope = "veid"
 )
 
 // Defines values for ListDeploymentsParamsStatus.
@@ -555,6 +563,77 @@ type UsageSummary struct {
 	TotalCost *string          `json:"total_cost,omitempty"`
 }
 
+// VaultAuditEvent defines model for VaultAuditEvent.
+type VaultAuditEvent struct {
+	BlobId       *string            `json:"blob_id,omitempty"`
+	Error        *string            `json:"error,omitempty"`
+	EventType    *string            `json:"event_type,omitempty"`
+	Hash         *string            `json:"hash,omitempty"`
+	Id           *string            `json:"id,omitempty"`
+	Metadata     *map[string]string `json:"metadata,omitempty"`
+	OrgId        *string            `json:"org_id,omitempty"`
+	PreviousHash *string            `json:"previous_hash,omitempty"`
+	Requester    *string            `json:"requester,omitempty"`
+	Scope        *string            `json:"scope,omitempty"`
+	Success      *bool              `json:"success,omitempty"`
+	Timestamp    *time.Time         `json:"timestamp,omitempty"`
+}
+
+// VaultAuditResponse defines model for VaultAuditResponse.
+type VaultAuditResponse struct {
+	Events *[]VaultAuditEvent `json:"events,omitempty"`
+}
+
+// VaultBlobMetadata defines model for VaultBlobMetadata.
+type VaultBlobMetadata struct {
+	Backend         *string            `json:"backend,omitempty"`
+	BackendRef      *string            `json:"backend_ref,omitempty"`
+	ContentHash     *string            `json:"content_hash,omitempty"`
+	CreatedAt       *time.Time         `json:"created_at,omitempty"`
+	EncryptedSize   *int64             `json:"encrypted_size,omitempty"`
+	ExpiresAt       *time.Time         `json:"expires_at,omitempty"`
+	Id              *string            `json:"id,omitempty"`
+	KeyId           *string            `json:"key_id,omitempty"`
+	KeyVersion      *int64             `json:"key_version,omitempty"`
+	OrgId           *string            `json:"org_id,omitempty"`
+	Owner           *string            `json:"owner,omitempty"`
+	RetentionPolicy *string            `json:"retention_policy,omitempty"`
+	Scope           *string            `json:"scope,omitempty"`
+	Size            *int64             `json:"size,omitempty"`
+	Tags            *map[string]string `json:"tags,omitempty"`
+}
+
+// VaultRetrieveResponse defines model for VaultRetrieveResponse.
+type VaultRetrieveResponse struct {
+	DataBase64 *[]byte            `json:"data_base64,omitempty"`
+	Metadata   *VaultBlobMetadata `json:"metadata,omitempty"`
+}
+
+// VaultUploadRequest defines model for VaultUploadRequest.
+type VaultUploadRequest struct {
+	// ContentBase64 Base64-encoded plaintext payload
+	ContentBase64 *[]byte    `json:"content_base64,omitempty"`
+	ExpiresAt     *time.Time `json:"expires_at,omitempty"`
+	OrgId         *string    `json:"org_id,omitempty"`
+
+	// PayloadBase64 Base64-encoded plaintext payload (legacy alias of content_base64)
+	PayloadBase64   *[]byte                 `json:"payload_base64,omitempty"`
+	RetentionPolicy *string                 `json:"retention_policy,omitempty"`
+	Scope           VaultUploadRequestScope `json:"scope"`
+	Tags            *map[string]string      `json:"tags,omitempty"`
+}
+
+// VaultUploadRequestScope defines model for VaultUploadRequest.Scope.
+type VaultUploadRequestScope string
+
+// VaultUploadResponse defines model for VaultUploadResponse.
+type VaultUploadResponse struct {
+	Metadata *VaultBlobMetadata `json:"metadata,omitempty"`
+}
+
+// VaultBlobId defines model for VaultBlobId.
+type VaultBlobId = string
+
 // AddressParam defines model for addressParam.
 type AddressParam = string
 
@@ -706,6 +785,29 @@ type GetUsageHistoryParams struct {
 	Interval *IntervalParam `form:"interval,omitempty" json:"interval,omitempty"`
 }
 
+// ListVaultAuditEventsParams defines parameters for ListVaultAuditEvents.
+type ListVaultAuditEventsParams struct {
+	BlobId    *string `form:"blob_id,omitempty" json:"blob_id,omitempty"`
+	Scope     *string `form:"scope,omitempty" json:"scope,omitempty"`
+	Requester *string `form:"requester,omitempty" json:"requester,omitempty"`
+	OrgId     *string `form:"org_id,omitempty" json:"org_id,omitempty"`
+	Start     *int64  `form:"start,omitempty" json:"start,omitempty"`
+	End       *int64  `form:"end,omitempty" json:"end,omitempty"`
+	Limit     *int    `form:"limit,omitempty" json:"limit,omitempty"`
+}
+
+// GetVaultBlobParams defines parameters for GetVaultBlob.
+type GetVaultBlobParams struct {
+	OrgId   *string `form:"org_id,omitempty" json:"org_id,omitempty"`
+	Purpose *string `form:"purpose,omitempty" json:"purpose,omitempty"`
+	Reason  *string `form:"reason,omitempty" json:"reason,omitempty"`
+}
+
+// GetVaultBlobMetadataParams defines parameters for GetVaultBlobMetadata.
+type GetVaultBlobMetadataParams struct {
+	OrgId *string `form:"org_id,omitempty" json:"org_id,omitempty"`
+}
+
 // PerformDeploymentActionJSONRequestBody defines body for PerformDeploymentAction for application/json ContentType.
 type PerformDeploymentActionJSONRequestBody = DeploymentActionRequest
 
@@ -723,3 +825,6 @@ type UpdateTicketJSONRequestBody = UpdateTicketRequest
 
 // AddTicketCommentJSONRequestBody defines body for AddTicketComment for application/json ContentType.
 type AddTicketCommentJSONRequestBody = TicketCommentRequest
+
+// UploadVaultBlobJSONRequestBody defines body for UploadVaultBlob for application/json ContentType.
+type UploadVaultBlobJSONRequestBody = VaultUploadRequest

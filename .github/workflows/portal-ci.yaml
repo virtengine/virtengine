@@ -11,6 +11,8 @@ on:
       - "sdk/portal/**"
       - "tests/smoke/portal/**"
       - "scripts/ci/run-portal-smoke.sh"
+      - "scripts/ci/check-portal-export-routes.mjs"
+      - "scripts/ci/check-portal-export-routes.test.mjs"
       - "lib/portal/**"
       - "lib/capture/**"
       - "pnpm-workspace.yaml"
@@ -21,6 +23,8 @@ on:
       - "sdk/portal/**"
       - "tests/smoke/portal/**"
       - "scripts/ci/run-portal-smoke.sh"
+      - "scripts/ci/check-portal-export-routes.mjs"
+      - "scripts/ci/check-portal-export-routes.test.mjs"
       - "lib/portal/**"
       - "lib/capture/**"
       - "pnpm-workspace.yaml"
@@ -40,15 +44,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -71,15 +75,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -101,15 +105,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -124,7 +128,7 @@ jobs:
         run: pnpm -C portal test --coverage
 
       - name: Upload coverage
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v6
         with:
           files: portal/coverage/coverage-final.json
           flags: portal
@@ -135,15 +139,15 @@ jobs:
     needs: [lint, sdk-portal]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -151,6 +155,54 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # REPORTS which App Router /api routes cannot survive `output: 'export'`.
+      # portal-deploy-pages.yaml sets GITHUB_PAGES=true, which makes
+      # next.config.mjs select output:'export'; a route handler without
+      # `export const dynamic = 'force-static'` aborts that build with
+      # "export const dynamic = force-static not configured on route ...".
+      # That workflow has never run green (98 of 98 runs failed), and this
+      # job builds WITHOUT GITHUB_PAGES, so nothing else in CI exercised that
+      # path. The census names every offending route at once instead of the
+      # one Next happens to abort on first.
+      #
+      # `continue-on-error: true` is DELIBERATE and load-bearing. Measured on
+      # develop @ f1ac636d0: this census exits 1 with 15 of 16 routes blocking,
+      # so wired as a hard step it turned the previously-green `Build` job red
+      # (PR #1176 job 111083618665: "Process completed with exit code 1" at this
+      # step) AND starved `test-e2e`, which declares `needs: [build]` plus
+      # `if: ${{ success() }}` -- the failure landed before `Build portal`, so
+      # portal/.next was never produced and the artifact never uploaded.
+      #
+      # The census is a MEASURING INSTRUMENT, and the disposition of those 15
+      # routes is an architecture call (per-route prerender+revalidate, an API
+      # origin outside the static export, or a proxy split) -- not a one-line
+      # `force-static` edit. Adding force-static to a route that does a
+      # per-request `fetch(chainRest, {cache:'no-store'})` evaluates it at
+      # build time and freezes the result; portal/src/hooks/useGovernance.ts:179
+      # and ~20 lib/portal callers depend on those routes at runtime. Since
+      # portal-deploy-pages is 98/98 red, hard-blocking here would trade one
+      # source of ambient noise for another while producing no artifact.
+      #
+      # It runs AFTER the build and AFTER the artifact upload, so a census
+      # failure can never pre-empt `Build portal` or the `portal-build`
+      # artifact that `test-e2e` consumes.
+      #
+      # RE-ENABLING THIS AS A HARD GATE IS A REQUIRED EDIT, NOT A FREE RIDE.
+      # `continue-on-error: true` below is unconditional: it does not read the
+      # exit code, it swallows it. So when the 15 routes are fixed and the
+      # census exits 0 this step passes -- and when a NEW route regresses and
+      # the census exits 1 this step ALSO passes, identically. Nothing in this
+      # file self-arms. Measured on the run that made it non-blocking
+      # (37122958091): job `Build` = success while this step's log carried
+      # "##[error]Process completed with exit code 1."
+      #
+      # So when the disposition tracked in #1189 lands, deleting
+      # `continue-on-error: true` (and `if: always()`, which exists only to
+      # survive the census's own failure) is part of THAT change. It is one
+      # line, but omitting it leaves the census decorative: it will keep
+      # printing the list of broken routes into a collapsed log on an
+      # otherwise-green job, and a route that breaks after re-gating will not
+      # be caught. Do not assume a clean census re-gates itself.
       - name: Build portal
         run: pnpm -C portal build
         env:
@@ -159,13 +211,83 @@ jobs:
           NEXT_PUBLIC_CHAIN_REST: https://api.testnet.virtengine.com
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: portal-build
           path: portal/.next
           include-hidden-files: true
           retention-days: 7
           if-no-files-found: error
+
+      # Deliberately LAST in this job: reporting only, never blocking, and
+      # positioned so it cannot cost the build or its artifact.
+      #
+      # The 15 blocking routes it names are tracked in #1189. It reports but cannot
+      # fail: read it as a to-do list, not as a gate.
+      - name: Check /api routes can be statically exported
+        if: always()
+        continue-on-error: true
+        run: node scripts/ci/check-portal-export-routes.mjs
+
+  # The census above is a REPORTING gate: wired with continue-on-error, it
+  # cannot fail its job, so nothing would notice if the census itself stopped
+  # working. Its own falsification suite is what keeps it honest -- the
+  # additions/force-static/revalidate/empty-tree cases prove it reads the
+  # route tree rather than replaying a fixed list of today's 15. A census that
+  # silently stopped finding routes would report "0 block a static export" and
+  # read as good news, which is the worst direction for this defect.
+  #
+  # Separate job, not an extra step in `build`: this must be observable on every
+  # portal-touching PR even when `build` is skipped or fails, and a red job name
+  # is greppable in the checks list in a way a collapsed step log is not.
+  census-self-test:
+    name: Census self-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      # No setup-node and no pnpm install: the census and its test import only
+      # node: builtins (node:fs/node:path/node:url/node:assert/node:child_process),
+      # so this runs on the runner's default Node with no dependency install.
+      - name: Test the /api export census
+        run: |
+          # Capture the status instead of letting `bash -e` abort on it: the step
+          # below is what decides pass/fail, and it must run AFTER the log is
+          # echoed, or a red run shows an empty step with no assertion detail.
+          #
+          # Run the file DIRECTLY, not under `node --test`. Its harness is
+          # hand-rolled (console.log + process.exit), not node:test, and node's
+          # TAP reporter rewrites console output into `#`-prefixed TAP comments,
+          # so `ok   <name>` arrives as `# ok   <name>` and any grep anchored on
+          # the harness's own output finds nothing. That was a real red here:
+          # run 37133231750 job `Census self-test` reported "did not run any
+          # assertion" while the log it printed showed all 5 passing. This file's
+          # own docstring says to run it directly; do not wrap it.
+          set +e
+          node scripts/ci/check-portal-export-routes.test.mjs > export-routes-tests.log 2>&1
+          test_status=$?
+          set -e
+          cat export-routes-tests.log
+
+          # Verdict is the harness's OWN exit code and its OWN trailer line, not a
+          # reporter's file count: `node --test` counts a hand-rolled harness as
+          # "tests 1" whether 5 assertions ran or the harness threw on line 1.
+          if [ "$test_status" -ne 0 ]; then
+            echo "::error::check-portal-export-routes census self-test reported a failing assertion (exit $test_status)"
+            exit 1
+          fi
+
+          # Fail closed if the harness stops running assertions while still
+          # exiting 0 — e.g. someone replaces it with a bare process.exit(0).
+          # That is the direction that matters: a census that silently stopped
+          # finding routes reads as "0 block a static export", i.e. good news.
+          count=$(grep -cE '^ok   ' export-routes-tests.log || true)
+          if [ -z "${count:-}" ] || [ "$count" -eq 0 ]; then
+            echo "::error::check-portal-export-routes census self-test did not run any assertion"
+            exit 1
+          fi
+          echo "export-routes census self-test ran: $count assertion(s)"
 
   test-e2e:
     name: E2E Tests
@@ -175,15 +297,15 @@ jobs:
     if: ${{ success() }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -192,7 +314,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: portal-build
           path: portal/.next
@@ -206,10 +328,16 @@ jobs:
           ls -la portal/.next
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # Must resolve the workspace-pinned Playwright, not whatever npx fetches
+        # from the registry. `npx playwright install` at the repo root has no
+        # local playwright package to resolve, so npm downloads the newest
+        # release; that installed chromium build 1243 while the locked
+        # @playwright/test 1.58.1 launches build 1208, and every spec failed with
+        # "browserType.launch: Executable doesn't exist".
+        run: pnpm --filter virtengine-portal exec playwright install --with-deps chromium
 
       - name: Run E2E tests
-        uses: nick-fields/retry@v3
+        uses: nick-fields/retry@v4
         with:
           timeout_minutes: 15
           max_attempts: 2
@@ -219,7 +347,7 @@ jobs:
           PLAYWRIGHT_BASE_URL: http://localhost:3000
 
       - name: Upload test results
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         if: failure()
         with:
           name: playwright-report
@@ -234,15 +362,15 @@ jobs:
     if: ${{ success() }}
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -251,7 +379,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Download build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v7
         with:
           name: portal-build
           path: portal/.next

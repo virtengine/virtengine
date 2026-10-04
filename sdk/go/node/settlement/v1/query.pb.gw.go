@@ -1176,11 +1176,11 @@ func local_request_Query_FinancialCaseBySubject_0(ctx context.Context, marshaler
 }
 
 var (
-	filter_Query_FinancialCasesByOrder_0 = &utilities.DoubleArray{Encoding: map[string]int{"key": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_Query_FinancialCasesByOrder_0 = &utilities.DoubleArray{Encoding: map[string]int{"order_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 )
 
 func request_Query_FinancialCasesByOrder_0(ctx context.Context, marshaler runtime.Marshaler, client QueryClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByOrderRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1190,15 +1190,15 @@ func request_Query_FinancialCasesByOrder_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["order_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "order_id")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.OrderId, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "order_id", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1214,7 +1214,7 @@ func request_Query_FinancialCasesByOrder_0(ctx context.Context, marshaler runtim
 }
 
 func local_request_Query_FinancialCasesByOrder_0(ctx context.Context, marshaler runtime.Marshaler, server QueryServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByOrderRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1224,15 +1224,15 @@ func local_request_Query_FinancialCasesByOrder_0(ctx context.Context, marshaler 
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["order_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "order_id")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.OrderId, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "order_id", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1248,11 +1248,11 @@ func local_request_Query_FinancialCasesByOrder_0(ctx context.Context, marshaler 
 }
 
 var (
-	filter_Query_FinancialCasesByInvoice_0 = &utilities.DoubleArray{Encoding: map[string]int{"key": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_Query_FinancialCasesByInvoice_0 = &utilities.DoubleArray{Encoding: map[string]int{"invoice_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 )
 
 func request_Query_FinancialCasesByInvoice_0(ctx context.Context, marshaler runtime.Marshaler, client QueryClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByInvoiceRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1262,15 +1262,15 @@ func request_Query_FinancialCasesByInvoice_0(ctx context.Context, marshaler runt
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["invoice_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "invoice_id")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.InvoiceId, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "invoice_id", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1286,7 +1286,7 @@ func request_Query_FinancialCasesByInvoice_0(ctx context.Context, marshaler runt
 }
 
 func local_request_Query_FinancialCasesByInvoice_0(ctx context.Context, marshaler runtime.Marshaler, server QueryServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByInvoiceRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1296,15 +1296,15 @@ func local_request_Query_FinancialCasesByInvoice_0(ctx context.Context, marshale
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["invoice_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "invoice_id")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.InvoiceId, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "invoice_id", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1320,11 +1320,11 @@ func local_request_Query_FinancialCasesByInvoice_0(ctx context.Context, marshale
 }
 
 var (
-	filter_Query_FinancialCasesByUsage_0 = &utilities.DoubleArray{Encoding: map[string]int{"key": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_Query_FinancialCasesByUsage_0 = &utilities.DoubleArray{Encoding: map[string]int{"usage_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 )
 
 func request_Query_FinancialCasesByUsage_0(ctx context.Context, marshaler runtime.Marshaler, client QueryClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByUsageRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1334,15 +1334,15 @@ func request_Query_FinancialCasesByUsage_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["usage_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "usage_id")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.UsageId, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "usage_id", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1358,7 +1358,7 @@ func request_Query_FinancialCasesByUsage_0(ctx context.Context, marshaler runtim
 }
 
 func local_request_Query_FinancialCasesByUsage_0(ctx context.Context, marshaler runtime.Marshaler, server QueryServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByUsageRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1368,15 +1368,15 @@ func local_request_Query_FinancialCasesByUsage_0(ctx context.Context, marshaler 
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["usage_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "usage_id")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.UsageId, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "usage_id", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1392,11 +1392,11 @@ func local_request_Query_FinancialCasesByUsage_0(ctx context.Context, marshaler 
 }
 
 var (
-	filter_Query_FinancialCasesByJob_0 = &utilities.DoubleArray{Encoding: map[string]int{"key": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_Query_FinancialCasesByJob_0 = &utilities.DoubleArray{Encoding: map[string]int{"job_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 )
 
 func request_Query_FinancialCasesByJob_0(ctx context.Context, marshaler runtime.Marshaler, client QueryClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByJobRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1406,15 +1406,15 @@ func request_Query_FinancialCasesByJob_0(ctx context.Context, marshaler runtime.
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["job_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "job_id")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.JobId, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "job_id", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1430,7 +1430,7 @@ func request_Query_FinancialCasesByJob_0(ctx context.Context, marshaler runtime.
 }
 
 func local_request_Query_FinancialCasesByJob_0(ctx context.Context, marshaler runtime.Marshaler, server QueryServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByJobRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1440,15 +1440,15 @@ func local_request_Query_FinancialCasesByJob_0(ctx context.Context, marshaler ru
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["job_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "job_id")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.JobId, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "job_id", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1464,11 +1464,11 @@ func local_request_Query_FinancialCasesByJob_0(ctx context.Context, marshaler ru
 }
 
 var (
-	filter_Query_FinancialCasesByEscrow_0 = &utilities.DoubleArray{Encoding: map[string]int{"key": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_Query_FinancialCasesByEscrow_0 = &utilities.DoubleArray{Encoding: map[string]int{"escrow_id": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 )
 
 func request_Query_FinancialCasesByEscrow_0(ctx context.Context, marshaler runtime.Marshaler, client QueryClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByEscrowRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1478,15 +1478,15 @@ func request_Query_FinancialCasesByEscrow_0(ctx context.Context, marshaler runti
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["escrow_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "escrow_id")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.EscrowId, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "escrow_id", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1502,7 +1502,7 @@ func request_Query_FinancialCasesByEscrow_0(ctx context.Context, marshaler runti
 }
 
 func local_request_Query_FinancialCasesByEscrow_0(ctx context.Context, marshaler runtime.Marshaler, server QueryServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByEscrowRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1512,15 +1512,15 @@ func local_request_Query_FinancialCasesByEscrow_0(ctx context.Context, marshaler
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["escrow_id"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "escrow_id")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.EscrowId, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "escrow_id", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1536,11 +1536,11 @@ func local_request_Query_FinancialCasesByEscrow_0(ctx context.Context, marshaler
 }
 
 var (
-	filter_Query_FinancialCasesByStatus_0 = &utilities.DoubleArray{Encoding: map[string]int{"key": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_Query_FinancialCasesByStatus_0 = &utilities.DoubleArray{Encoding: map[string]int{"status": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 )
 
 func request_Query_FinancialCasesByStatus_0(ctx context.Context, marshaler runtime.Marshaler, client QueryClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByStatusRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1550,15 +1550,15 @@ func request_Query_FinancialCasesByStatus_0(ctx context.Context, marshaler runti
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["status"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "status")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.Status, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "status", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1574,7 +1574,7 @@ func request_Query_FinancialCasesByStatus_0(ctx context.Context, marshaler runti
 }
 
 func local_request_Query_FinancialCasesByStatus_0(ctx context.Context, marshaler runtime.Marshaler, server QueryServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByStatusRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1584,15 +1584,15 @@ func local_request_Query_FinancialCasesByStatus_0(ctx context.Context, marshaler
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["status"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "status")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.Status, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "status", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1608,11 +1608,11 @@ func local_request_Query_FinancialCasesByStatus_0(ctx context.Context, marshaler
 }
 
 var (
-	filter_Query_FinancialCasesByParty_0 = &utilities.DoubleArray{Encoding: map[string]int{"key": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
+	filter_Query_FinancialCasesByParty_0 = &utilities.DoubleArray{Encoding: map[string]int{"party": 0}, Base: []int{1, 1, 0}, Check: []int{0, 1, 2}}
 )
 
 func request_Query_FinancialCasesByParty_0(ctx context.Context, marshaler runtime.Marshaler, client QueryClient, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByPartyRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1622,15 +1622,15 @@ func request_Query_FinancialCasesByParty_0(ctx context.Context, marshaler runtim
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["party"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "party")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.Party, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "party", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -1646,7 +1646,7 @@ func request_Query_FinancialCasesByParty_0(ctx context.Context, marshaler runtim
 }
 
 func local_request_Query_FinancialCasesByParty_0(ctx context.Context, marshaler runtime.Marshaler, server QueryServer, req *http.Request, pathParams map[string]string) (proto.Message, runtime.ServerMetadata, error) {
-	var protoReq QueryFinancialCasesRequest
+	var protoReq QueryFinancialCasesByPartyRequest
 	var metadata runtime.ServerMetadata
 
 	var (
@@ -1656,15 +1656,15 @@ func local_request_Query_FinancialCasesByParty_0(ctx context.Context, marshaler 
 		_   = err
 	)
 
-	val, ok = pathParams["key"]
+	val, ok = pathParams["party"]
 	if !ok {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "key")
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "missing parameter %s", "party")
 	}
 
-	protoReq.Key, err = runtime.String(val)
+	protoReq.Party, err = runtime.String(val)
 
 	if err != nil {
-		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "key", err)
+		return nil, metadata, status.Errorf(codes.InvalidArgument, "type mismatch, parameter: %s, error: %v", "party", err)
 	}
 
 	if err := req.ParseForm(); err != nil {
@@ -3091,19 +3091,19 @@ var (
 
 	pattern_Query_FinancialCaseBySubject_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-subject"}, "", runtime.AssumeColonVerbOpt(false)))
 
-	pattern_Query_FinancialCasesByOrder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-order", "key"}, "", runtime.AssumeColonVerbOpt(false)))
+	pattern_Query_FinancialCasesByOrder_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-order", "order_id"}, "", runtime.AssumeColonVerbOpt(false)))
 
-	pattern_Query_FinancialCasesByInvoice_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-invoice", "key"}, "", runtime.AssumeColonVerbOpt(false)))
+	pattern_Query_FinancialCasesByInvoice_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-invoice", "invoice_id"}, "", runtime.AssumeColonVerbOpt(false)))
 
-	pattern_Query_FinancialCasesByUsage_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-usage", "key"}, "", runtime.AssumeColonVerbOpt(false)))
+	pattern_Query_FinancialCasesByUsage_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-usage", "usage_id"}, "", runtime.AssumeColonVerbOpt(false)))
 
-	pattern_Query_FinancialCasesByJob_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-job", "key"}, "", runtime.AssumeColonVerbOpt(false)))
+	pattern_Query_FinancialCasesByJob_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-job", "job_id"}, "", runtime.AssumeColonVerbOpt(false)))
 
-	pattern_Query_FinancialCasesByEscrow_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-escrow", "key"}, "", runtime.AssumeColonVerbOpt(false)))
+	pattern_Query_FinancialCasesByEscrow_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-escrow", "escrow_id"}, "", runtime.AssumeColonVerbOpt(false)))
 
-	pattern_Query_FinancialCasesByStatus_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-status", "key"}, "", runtime.AssumeColonVerbOpt(false)))
+	pattern_Query_FinancialCasesByStatus_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-status", "status"}, "", runtime.AssumeColonVerbOpt(false)))
 
-	pattern_Query_FinancialCasesByParty_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-party", "key"}, "", runtime.AssumeColonVerbOpt(false)))
+	pattern_Query_FinancialCasesByParty_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 2, 4, 1, 0, 4, 1, 5, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "by-party", "party"}, "", runtime.AssumeColonVerbOpt(false)))
 
 	pattern_Query_FinancialCaseLineage_0 = runtime.MustPattern(runtime.NewPattern(1, []int{2, 0, 2, 1, 2, 2, 2, 3, 1, 0, 4, 1, 5, 4, 2, 5}, []string{"virtengine", "settlement", "v1", "financial-cases", "case_id", "lineage"}, "", runtime.AssumeColonVerbOpt(false)))
 )

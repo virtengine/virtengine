@@ -243,6 +243,7 @@ message MsgSetProviderSigningKey {
   string key_type = 3;
 }
 
+// MsgSetProviderSigningKeyResponse returns the activated key id and epoch.
 message MsgSetProviderSigningKeyResponse {
   string key_id = 1;
   uint64 epoch = 2;
@@ -260,6 +261,7 @@ message MsgRotateProviderSigningKey {
   uint32 signature_version = 5;
 }
 
+// MsgRotateProviderSigningKeyResponse returns the activated key id and epoch.
 message MsgRotateProviderSigningKeyResponse {
   string key_id = 1;
   uint64 epoch = 2;
@@ -274,6 +276,7 @@ message MsgRevokeProviderSigningKey {
   string key_id = 2;
 }
 
+// MsgRevokeProviderSigningKeyResponse returns the revocation height.
 message MsgRevokeProviderSigningKeyResponse {
   int64 revoked_at_height = 1;
 }

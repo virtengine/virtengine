@@ -163,8 +163,11 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 	// Configure host key callback
 	switch sshConfig.HostKeyCallback {
 	case "ignore":
-		//nolint:gosec // G106: InsecureIgnoreHostKey intentional when HostKeyCallback="ignore"
-		clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+		// Explicit operator opt-in: host key verification is disabled only when
+		// the operator sets HostKeyCallback="ignore". Every other path, including
+		// the default below, fails closed against known_hosts.
+		//nolint:gosec // G106: intentional, explicit opt-in via HostKeyCallback="ignore"
+		clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey() // #nosec G106 -- explicit operator opt-in via HostKeyCallback="ignore"; the default path fails closed
 	case "known_hosts":
 		knownHostsPath := sshConfig.KnownHostsPath
 		if knownHostsPath == "" {
@@ -201,7 +204,9 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 			knownHostsPath = filepath.Join(homeDir, ".ssh", "known_hosts")
 		}
 
-		// If known_hosts exists, use it; otherwise fall back to insecure
+		// Fail closed: a missing known_hosts file must not silently disable
+		// host key verification. Callers that genuinely need to skip
+		// verification must set HostKeyCallback="ignore" explicitly.
 		if _, err := os.Stat(knownHostsPath); err == nil {
 			hostKeyCallback, err := knownhosts.New(knownHostsPath)
 			if err != nil {
@@ -209,9 +214,8 @@ func NewSSHSLURMClient(sshConfig SSHConfig, clusterName, defaultPartition string
 			}
 			clientConfig.HostKeyCallback = hostKeyCallback
 		} else {
-			// Fall back to insecure if no known_hosts file exists
-			//nolint:gosec // G106: InsecureIgnoreHostKey fallback when no known_hosts available
-			clientConfig.HostKeyCallback = ssh.InsecureIgnoreHostKey()
+			return nil, fmt.Errorf("%w: known_hosts file not found at %s (set HostKeyCallback=\"ignore\" to opt out explicitly)",
+				ErrHostKeyVerification, knownHostsPath)
 		}
 	}
 
@@ -277,13 +281,13 @@ func (c *SSHSLURMClient) Connect(ctx context.Context) error {
 	// Test connection with a simple SLURM command
 	session, err := client.NewSession()
 	if err != nil {
-		client.Close()
+		_ = client.Close()
 		return fmt.Errorf("failed to create SSH session: %w", err)
 	}
 	_, err = session.CombinedOutput("squeue --version")
-	session.Close()
+	_ = session.Close()
 	if err != nil {
-		client.Close()
+		_ = client.Close()
 		return fmt.Errorf("failed to verify SLURM: %w", err)
 	}
 
@@ -298,8 +302,10 @@ func (c *SSHSLURMClient) Connect(ctx context.Context) error {
 
 	c.connected = true
 
-	// Start idle connection cleanup goroutine
-	go c.cleanupIdleConnections()
+	// Start idle connection cleanup goroutine. Pass the close channel
+	// explicitly: Disconnect replaces c.poolClose under c.mu, and a goroutine
+	// that re-read the field each loop iteration raced with that write.
+	go c.cleanupIdleConnections(c.poolClose)
 
 	return nil
 }
@@ -399,8 +405,11 @@ func (c *SSHSLURMClient) releaseConnection(client *ssh.Client) {
 	}
 }
 
-// cleanupIdleConnections removes idle connections from the pool
-func (c *SSHSLURMClient) cleanupIdleConnections() {
+// cleanupIdleConnections removes idle connections from the pool until
+// closeCh is closed. The channel is passed in by the caller so this
+// goroutine never reads the mutable c.poolClose field, which Disconnect
+// replaces under c.mu.
+func (c *SSHSLURMClient) cleanupIdleConnections(closeCh <-chan struct{}) {
 	ticker := time.NewTicker(time.Minute)
 	defer ticker.Stop()
 
@@ -411,7 +420,7 @@ func (c *SSHSLURMClient) cleanupIdleConnections() {
 
 	for {
 		select {
-		case <-c.poolClose:
+		case <-closeCh:
 			return
 		case <-ticker.C:
 			c.poolMu.Lock()
@@ -424,7 +433,7 @@ func (c *SSHSLURMClient) cleanupIdleConnections() {
 					keepPool = append(keepPool, pc)
 				} else if pc.client != nil {
 					// Close idle connection
-					pc.client.Close()
+					_ = pc.client.Close()
 				}
 			}
 			c.pool = keepPool
@@ -449,7 +458,7 @@ func (c *SSHSLURMClient) Disconnect() error {
 	c.poolMu.Lock()
 	for _, pc := range c.pool {
 		if pc.client != nil {
-			pc.client.Close()
+			_ = pc.client.Close()
 		}
 	}
 	c.pool = nil
@@ -493,7 +502,7 @@ func (c *SSHSLURMClient) runCommand(ctx context.Context, cmd string) (string, er
 		select {
 		case <-ctx.Done():
 			_ = session.Signal(ssh.SIGTERM)
-			session.Close()
+			_ = session.Close()
 		case <-done:
 		}
 	})
@@ -559,20 +568,43 @@ func (c *SSHSLURMClient) SCPUploadBytes(ctx context.Context, content []byte, rem
 	filename := filepath.Base(remotePath)
 	dir := filepath.Dir(remotePath)
 
-	// Prepare content with SCP protocol
-	verrors.SafeGo("", func() {
-		defer func() {}() // WG Done if needed
-		w, _ := session.StdinPipe()
-		defer w.Close()
-		fmt.Fprintf(w, "C%04o %d %s\n", mode, len(content), filename)
-		_, _ = w.Write(content)
-		fmt.Fprint(w, "\x00")
+	// Establish the SCP stdin pipe on THIS goroutine, before session.Run().
+	// x/crypto/ssh records `stdinpipe` in StdinPipe() and reads it back in
+	// start(), which Run() calls, so creating the pipe from a separate
+	// goroutine is a data race on Session state (seen on CI as
+	// "WARNING: DATA RACE ... session.go:373 ... ssh_client.go:574").
+	stdin, err := session.StdinPipe()
+	if err != nil {
+		return fmt.Errorf("failed to open SCP stdin pipe: %w", err)
+	}
+
+	// The payload can exceed the SSH channel window, so the frame write has to
+	// run concurrently with Run() or it deadlocks waiting for the window to
+	// drain. The deferred close always runs, even if the write panics.
+	writeDone := make(chan struct{})
+	verrors.SafeGo("scp-upload", func() {
+		defer func() {
+			_ = stdin.Close()
+			close(writeDone)
+		}()
+		// The write errors are not actionable and stay discarded, as before:
+		// the remote scp can legitimately close the channel before the trailing
+		// NUL is flushed, and Run() below reports the failure that matters.
+		_, _ = fmt.Fprintf(stdin, "C%04o %d %s\n", mode, len(content), filename)
+		_, _ = stdin.Write(content)
+		_, _ = fmt.Fprint(stdin, "\x00")
 	})
 
 	// Run scp command
 	cmd := fmt.Sprintf("scp -t %s", dir)
-	if err := session.Run(cmd); err != nil {
-		return fmt.Errorf("%w: %v", ErrSCPFailed, err)
+	runErr := session.Run(cmd)
+
+	// Run() cannot return before the writer closed the pipe (the remote scp
+	// exits on EOF), so this is not a wait. Joining also keeps the writer from
+	// touching the session after the deferred session.Close() runs.
+	<-writeDone
+	if runErr != nil {
+		return fmt.Errorf("%w: %v", ErrSCPFailed, runErr)
 	}
 
 	return nil
@@ -594,8 +626,8 @@ func (c *SSHSLURMClient) SCPDownload(ctx context.Context, remotePath, localPath 
 		return err
 	}
 
-	//nolint:gosec // G306: File permissions are intentional for downloaded content
-	return os.WriteFile(cleanPath, content, 0644)
+	// Downloads are written with owner-only permissions (gosec G306).
+	return os.WriteFile(cleanPath, content, 0o600)
 }
 
 // SCPDownloadBytes downloads a file from the remote host as bytes

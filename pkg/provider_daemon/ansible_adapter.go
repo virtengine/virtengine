@@ -522,7 +522,7 @@ func (a *AnsibleAdapter) CheckAnsibleInstalled(ctx context.Context) error {
 		return fmt.Errorf("command validation failed: %w", err)
 	}
 	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
-	cmd := exec.CommandContext(ctx, ansiblePath, "--version")
+	cmd := exec.CommandContext(ctx, ansiblePath, "--version") // #nosec G204 -- the executable is ansiblePath, resolved from daemon configuration / a validated path, and the arguments are built in code rather than from remote input
 	if err := cmd.Run(); err != nil {
 		return ErrAnsibleNotInstalled
 	}
@@ -566,7 +566,7 @@ func (a *AnsibleAdapter) ValidatePlaybook(ctx context.Context, playbook *Playboo
 		return fmt.Errorf("command validation failed: %w", err)
 	}
 	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
-	cmd := exec.CommandContext(ctx, ansiblePath, "--syntax-check", cleanPath)
+	cmd := exec.CommandContext(ctx, ansiblePath, "--syntax-check", cleanPath) // #nosec G204 -- the executable is ansiblePath, resolved from daemon configuration / a validated path, and the arguments are built in code rather than from remote input
 	if output, err := cmd.CombinedOutput(); err != nil {
 		return fmt.Errorf("%w: syntax error: %s", ErrInvalidPlaybook, string(output))
 	}
@@ -703,7 +703,7 @@ func (a *AnsibleAdapter) runPlaybook(ctx context.Context, playbook *Playbook, in
 
 	// Create command (validated above)
 	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
-	cmd := exec.CommandContext(ctx, ansiblePath, args...)
+	cmd := exec.CommandContext(ctx, ansiblePath, args...) // #nosec G204 -- the executable is ansiblePath, resolved from daemon configuration / a validated path, and the arguments are built in code rather than from remote input
 
 	// Set working directory
 	if options.WorkingDir != "" {
@@ -735,7 +735,7 @@ func (a *AnsibleAdapter) runPlaybook(ctx context.Context, playbook *Playbook, in
 			return fmt.Errorf("command validation failed: %w", err)
 		}
 		//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
-		cmd = exec.CommandContext(ctx, ansiblePath, args...)
+		cmd = exec.CommandContext(ctx, ansiblePath, args...) // #nosec G204 -- the executable is ansiblePath, resolved from daemon configuration / a validated path, and the arguments are built in code rather than from remote input
 	} else if options.VaultPasswordFile != "" {
 		// Validate vault password file path
 		cleanVaultPath, vpErr := security.SanitizePath(options.VaultPasswordFile)
@@ -867,10 +867,10 @@ func (a *AnsibleAdapter) writeTemporaryInventory(inventory *Inventory) (string, 
 	if err != nil {
 		return "", err
 	}
-	defer tmpFile.Close()
+	defer func() { _ = tmpFile.Close() }()
 
 	if _, err := tmpFile.WriteString(inventory.ToINI()); err != nil {
-		os.Remove(tmpFile.Name())
+		_ = os.Remove(tmpFile.Name())
 		return "", err
 	}
 
@@ -886,17 +886,17 @@ func (a *AnsibleAdapter) writeTemporaryVaultPassword(password string) (string, e
 
 	// Set restrictive permissions
 	if err := os.Chmod(tmpFile.Name(), 0600); err != nil {
-		os.Remove(tmpFile.Name())
-		tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
+		_ = tmpFile.Close()
 		return "", err
 	}
 
 	if _, err := tmpFile.WriteString(password); err != nil {
-		os.Remove(tmpFile.Name())
-		tmpFile.Close()
+		_ = os.Remove(tmpFile.Name())
+		_ = tmpFile.Close()
 		return "", err
 	}
-	tmpFile.Close()
+	_ = tmpFile.Close()
 
 	return tmpFile.Name(), nil
 }

@@ -430,38 +430,85 @@ func (q GRPCQuerier) FinancialCaseBySubject(ctx context.Context, req *settlement
 	return &settlementv1.QueryFinancialCaseBySubjectResponse{FinancialCase: &financialCase}, nil
 }
 
-func (q GRPCQuerier) FinancialCasesByOrder(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "order", req)
-}
-func (q GRPCQuerier) FinancialCasesByInvoice(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "invoice", req)
-}
-func (q GRPCQuerier) FinancialCasesByUsage(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "usage", req)
-}
-func (q GRPCQuerier) FinancialCasesByJob(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "job", req)
-}
-func (q GRPCQuerier) FinancialCasesByEscrow(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "escrow", req)
-}
-func (q GRPCQuerier) FinancialCasesByStatus(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "status", req)
-}
-func (q GRPCQuerier) FinancialCasesByParty(ctx context.Context, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	return q.financialCases(ctx, "party", req)
+func (q GRPCQuerier) FinancialCasesByOrder(ctx context.Context, req *settlementv1.QueryFinancialCasesByOrderRequest) (*settlementv1.QueryFinancialCasesByOrderResponse, error) {
+	page, err := financialCases(ctx, q, "order", req.GetOrderId(), req.GetPagination())
+	if err != nil {
+		return nil, err
+	}
+	return &settlementv1.QueryFinancialCasesByOrderResponse{FinancialCases: page.cases, Pagination: page.pagination}, nil
 }
 
-func (q GRPCQuerier) financialCases(ctx context.Context, kind string, req *settlementv1.QueryFinancialCasesRequest) (*settlementv1.QueryFinancialCasesResponse, error) {
-	if req == nil || req.Key == "" {
-		return nil, status.Error(codes.InvalidArgument, "key required")
-	}
-	all, err := q.FinancialCasesByIndex(sdk.UnwrapSDKContext(ctx), kind, req.Key)
+func (q GRPCQuerier) FinancialCasesByInvoice(ctx context.Context, req *settlementv1.QueryFinancialCasesByInvoiceRequest) (*settlementv1.QueryFinancialCasesByInvoiceResponse, error) {
+	page, err := financialCases(ctx, q, "invoice", req.GetInvoiceId(), req.GetPagination())
 	if err != nil {
-		return nil, status.Error(codes.Internal, err.Error())
+		return nil, err
 	}
-	start, end, page := financialPageBounds(len(all), req.Pagination)
-	return &settlementv1.QueryFinancialCasesResponse{FinancialCases: all[start:end], Pagination: page}, nil
+	return &settlementv1.QueryFinancialCasesByInvoiceResponse{FinancialCases: page.cases, Pagination: page.pagination}, nil
+}
+
+func (q GRPCQuerier) FinancialCasesByUsage(ctx context.Context, req *settlementv1.QueryFinancialCasesByUsageRequest) (*settlementv1.QueryFinancialCasesByUsageResponse, error) {
+	page, err := financialCases(ctx, q, "usage", req.GetUsageId(), req.GetPagination())
+	if err != nil {
+		return nil, err
+	}
+	return &settlementv1.QueryFinancialCasesByUsageResponse{FinancialCases: page.cases, Pagination: page.pagination}, nil
+}
+
+func (q GRPCQuerier) FinancialCasesByJob(ctx context.Context, req *settlementv1.QueryFinancialCasesByJobRequest) (*settlementv1.QueryFinancialCasesByJobResponse, error) {
+	page, err := financialCases(ctx, q, "job", req.GetJobId(), req.GetPagination())
+	if err != nil {
+		return nil, err
+	}
+	return &settlementv1.QueryFinancialCasesByJobResponse{FinancialCases: page.cases, Pagination: page.pagination}, nil
+}
+
+func (q GRPCQuerier) FinancialCasesByEscrow(ctx context.Context, req *settlementv1.QueryFinancialCasesByEscrowRequest) (*settlementv1.QueryFinancialCasesByEscrowResponse, error) {
+	page, err := financialCases(ctx, q, "escrow", req.GetEscrowId(), req.GetPagination())
+	if err != nil {
+		return nil, err
+	}
+	return &settlementv1.QueryFinancialCasesByEscrowResponse{FinancialCases: page.cases, Pagination: page.pagination}, nil
+}
+
+func (q GRPCQuerier) FinancialCasesByStatus(ctx context.Context, req *settlementv1.QueryFinancialCasesByStatusRequest) (*settlementv1.QueryFinancialCasesByStatusResponse, error) {
+	page, err := financialCases(ctx, q, "status", req.GetStatus(), req.GetPagination())
+	if err != nil {
+		return nil, err
+	}
+	return &settlementv1.QueryFinancialCasesByStatusResponse{FinancialCases: page.cases, Pagination: page.pagination}, nil
+}
+
+func (q GRPCQuerier) FinancialCasesByParty(ctx context.Context, req *settlementv1.QueryFinancialCasesByPartyRequest) (*settlementv1.QueryFinancialCasesByPartyResponse, error) {
+	page, err := financialCases(ctx, q, "party", req.GetParty(), req.GetPagination())
+	if err != nil {
+		return nil, err
+	}
+	return &settlementv1.QueryFinancialCasesByPartyResponse{FinancialCases: page.cases, Pagination: page.pagination}, nil
+}
+
+// financialCasePage is the payload every FinancialCasesBy* RPC resolves for one
+// lineage index key. Each per-RPC response declares the same pair,
+// `repeated FinancialCase financial_cases = 1` plus
+// `PageResponse pagination = 2`, field-identical to the retired shared
+// QueryFinancialCasesResponse, so the split does not change the encoded bytes.
+// Resolving once here keeps key validation and pagination in a single place;
+// each RPC then copies the two fields into its own response type.
+type financialCasePage struct {
+	cases      []settlementv1.FinancialCase
+	pagination *query.PageResponse
+}
+
+// financialCases resolves the paginated case list for one lineage index key.
+func financialCases(ctx context.Context, q GRPCQuerier, kind, key string, pagination *query.PageRequest) (financialCasePage, error) {
+	if key == "" {
+		return financialCasePage{}, status.Error(codes.InvalidArgument, "key required")
+	}
+	all, err := q.FinancialCasesByIndex(sdk.UnwrapSDKContext(ctx), kind, key)
+	if err != nil {
+		return financialCasePage{}, status.Error(codes.Internal, err.Error())
+	}
+	start, end, page := financialPageBounds(len(all), pagination)
+	return financialCasePage{cases: all[start:end], pagination: page}, nil
 }
 
 func (q GRPCQuerier) FinancialCaseLineage(ctx context.Context, req *settlementv1.QueryFinancialCaseLineageRequest) (*settlementv1.QueryFinancialCaseLineageResponse, error) {

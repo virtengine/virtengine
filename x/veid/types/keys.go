@@ -891,14 +891,14 @@ func SaltRegistryKey(saltHash []byte) []byte {
 // encodeInt64 encodes an int64 as big-endian bytes
 func encodeInt64(n int64) []byte {
 	b := make([]byte, 8)
-	b[0] = byte(n >> 56)
-	b[1] = byte(n >> 48)
-	b[2] = byte(n >> 40)
-	b[3] = byte(n >> 32)
-	b[4] = byte(n >> 24)
-	b[5] = byte(n >> 16)
-	b[6] = byte(n >> 8)
-	b[7] = byte(n)
+	b[0] = byte(n >> 56) // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[1] = byte(n >> 48) // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[2] = byte(n >> 40) // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[3] = byte(n >> 32) // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[4] = byte(n >> 24) // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[5] = byte(n >> 16) // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[6] = byte(n >> 8)  // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[7] = byte(n)       // #nosec G115 -- fixed-width big-endian encoding: byte(n) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	return b
 }
 
@@ -1323,14 +1323,14 @@ func ActiveScoringModelKey() []byte {
 func ScoringHistoryKey(address []byte, blockHeight int64) []byte {
 	heightBytes := make([]byte, 8)
 	// Use big-endian for proper ordering
-	heightBytes[0] = byte(blockHeight >> 56)
-	heightBytes[1] = byte(blockHeight >> 48)
-	heightBytes[2] = byte(blockHeight >> 40)
-	heightBytes[3] = byte(blockHeight >> 32)
-	heightBytes[4] = byte(blockHeight >> 24)
-	heightBytes[5] = byte(blockHeight >> 16)
-	heightBytes[6] = byte(blockHeight >> 8)
-	heightBytes[7] = byte(blockHeight)
+	heightBytes[0] = byte(blockHeight >> 56) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[1] = byte(blockHeight >> 48) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[2] = byte(blockHeight >> 40) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[3] = byte(blockHeight >> 32) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[4] = byte(blockHeight >> 24) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[5] = byte(blockHeight >> 16) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[6] = byte(blockHeight >> 8)  // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[7] = byte(blockHeight)       // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 
 	key := make([]byte, 0, len(PrefixScoringHistory)+len(address)+1+8)
 	key = append(key, PrefixScoringHistory...)
@@ -1352,14 +1352,14 @@ func ScoringHistoryPrefixKey(address []byte) []byte {
 // ScoringVersionTransitionKey returns the store key for a version transition record
 func ScoringVersionTransitionKey(address []byte, blockHeight int64) []byte {
 	heightBytes := make([]byte, 8)
-	heightBytes[0] = byte(blockHeight >> 56)
-	heightBytes[1] = byte(blockHeight >> 48)
-	heightBytes[2] = byte(blockHeight >> 40)
-	heightBytes[3] = byte(blockHeight >> 32)
-	heightBytes[4] = byte(blockHeight >> 24)
-	heightBytes[5] = byte(blockHeight >> 16)
-	heightBytes[6] = byte(blockHeight >> 8)
-	heightBytes[7] = byte(blockHeight)
+	heightBytes[0] = byte(blockHeight >> 56) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[1] = byte(blockHeight >> 48) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[2] = byte(blockHeight >> 40) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[3] = byte(blockHeight >> 32) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[4] = byte(blockHeight >> 24) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[5] = byte(blockHeight >> 16) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[6] = byte(blockHeight >> 8)  // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[7] = byte(blockHeight)       // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 
 	key := make([]byte, 0, len(PrefixScoringVersionTransition)+len(address)+1+8)
 	key = append(key, PrefixScoringVersionTransition...)
@@ -1477,14 +1477,14 @@ func ADWalletBindingByAddressKey(walletAddress []byte) []byte {
 // EvidenceSummaryKey returns the store key for an evidence summary
 func EvidenceSummaryKey(address []byte, blockHeight int64) []byte {
 	heightBytes := make([]byte, 8)
-	heightBytes[0] = byte(blockHeight >> 56)
-	heightBytes[1] = byte(blockHeight >> 48)
-	heightBytes[2] = byte(blockHeight >> 40)
-	heightBytes[3] = byte(blockHeight >> 32)
-	heightBytes[4] = byte(blockHeight >> 24)
-	heightBytes[5] = byte(blockHeight >> 16)
-	heightBytes[6] = byte(blockHeight >> 8)
-	heightBytes[7] = byte(blockHeight)
+	heightBytes[0] = byte(blockHeight >> 56) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[1] = byte(blockHeight >> 48) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[2] = byte(blockHeight >> 40) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[3] = byte(blockHeight >> 32) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[4] = byte(blockHeight >> 24) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[5] = byte(blockHeight >> 16) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[6] = byte(blockHeight >> 8)  // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[7] = byte(blockHeight)       // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 
 	key := make([]byte, 0, len(PrefixEvidenceSummary)+len(address)+1+8)
 	key = append(key, PrefixEvidenceSummary...)
@@ -1646,7 +1646,7 @@ func AppealByScopeKey(address []byte, scopeID string, appealNumber uint32) []byt
 	key = append(key, byte('/'))
 	key = append(key, scopeIDBytes...)
 	key = append(key, byte('/'))
-	key = append(key, byte(appealNumber>>24), byte(appealNumber>>16), byte(appealNumber>>8), byte(appealNumber))
+	key = append(key, byte(appealNumber>>24), byte(appealNumber>>16), byte(appealNumber>>8), byte(appealNumber)) // #nosec G115 -- fixed-width big-endian encoding: byte(appealNumber>>24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	return key
 }
 
@@ -1669,8 +1669,8 @@ func PendingAppealKey(submittedAt int64, appealID string) []byte {
 	key = append(key, PrefixPendingAppeals...)
 	// Big-endian timestamp for proper ordering
 	key = append(key,
-		byte(submittedAt>>56), byte(submittedAt>>48), byte(submittedAt>>40), byte(submittedAt>>32),
-		byte(submittedAt>>24), byte(submittedAt>>16), byte(submittedAt>>8), byte(submittedAt),
+		byte(submittedAt>>56), byte(submittedAt>>48), byte(submittedAt>>40), byte(submittedAt>>32), // #nosec G115 -- fixed-width big-endian encoding: byte(submittedAt>>56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(submittedAt>>24), byte(submittedAt>>16), byte(submittedAt>>8), byte(submittedAt), // #nosec G115 -- fixed-width big-endian encoding: byte(submittedAt>>24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	)
 	key = append(key, byte('/'))
 	key = append(key, appealIDBytes...)
@@ -1792,8 +1792,8 @@ func PendingComplianceCheckKey(expiresAt int64, address []byte) []byte {
 	key = append(key, PrefixPendingComplianceCheck...)
 	// Big-endian timestamp for proper ordering
 	key = append(key,
-		byte(expiresAt>>56), byte(expiresAt>>48), byte(expiresAt>>40), byte(expiresAt>>32),
-		byte(expiresAt>>24), byte(expiresAt>>16), byte(expiresAt>>8), byte(expiresAt),
+		byte(expiresAt>>56), byte(expiresAt>>48), byte(expiresAt>>40), byte(expiresAt>>32), // #nosec G115 -- fixed-width big-endian encoding: byte(expiresAt>>56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(expiresAt>>24), byte(expiresAt>>16), byte(expiresAt>>8), byte(expiresAt), // #nosec G115 -- fixed-width big-endian encoding: byte(expiresAt>>24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	)
 	key = append(key, byte('/'))
 	key = append(key, address...)
@@ -2237,7 +2237,7 @@ func GeoPolicyByPriorityKey(priority int32, policyID string) []byte {
 	key := make([]byte, 0, len(PrefixGeoPolicyByPriority)+4+1+len(idBytes))
 	key = append(key, PrefixGeoPolicyByPriority...)
 	// Encode priority as big-endian for proper ordering
-	key = append(key, byte(priority>>24), byte(priority>>16), byte(priority>>8), byte(priority))
+	key = append(key, byte(priority>>24), byte(priority>>16), byte(priority>>8), byte(priority)) // #nosec G115 -- fixed-width big-endian encoding: byte(priority>>24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	key = append(key, byte('/'))
 	key = append(key, idBytes...)
 	return key

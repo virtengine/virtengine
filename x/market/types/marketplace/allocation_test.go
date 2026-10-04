@@ -16,7 +16,7 @@ func TestAllocationState_String(t *testing.T) {
 		state    AllocationState
 		expected string
 	}{
-		{AllocationStateUnspecified, "unspecified"},
+		{AllocationStateUnspecified, unspecifiedName},
 		{AllocationStatePending, "pending"},
 		{AllocationStateAccepted, "accepted"},
 		{AllocationStateProvisioning, "provisioning"},

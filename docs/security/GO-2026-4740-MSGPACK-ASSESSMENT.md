@@ -144,7 +144,7 @@ v0.56.0 work. Those are tracked separately.
 
 ## 5. Review trigger
 
-Re-assess on or before the allowlist expiry (**2026-10-19**), or immediately if any of these change:
+Re-assess on or before the allowlist expiry (**2026-10-26**), or immediately if any of these change:
 
 - wasmvm or wasmd change their `shamaton/msgpack` pin, or publish a release that drops it;
 - VirtEngine mounts the wasm module, instantiates a `wasmvm.VM`, or registers
@@ -169,3 +169,32 @@ govulncheck -show traces ./... 2>&1 | grep -A 20 'GO-2026-4740'
 ```
 
 If step 2 ever produces output, this assessment is void and the exception must be withdrawn.
+
+## 7. Re-verification 2026-09-26 (secops, develop @ `5c860531`)
+
+chain-core's 2026-09-19 assessment was independently re-derived on the develop tip before
+finalising the allowlist entry (removing its provisional status and renewing the 30-day
+window to **2026-10-26**). Toolchain: Go 1.26.8, govulncheck v1.1.4, GOWORK=off. All claims
+held; deltas vs §1–§6:
+
+- OSV `https://vuln.go.dev/ID/GO-2026-4740.json` still shows three `introduced: 0` events, no
+  `fixed` event, and empty `ecosystem_specific` on all three module paths (`msgpack`,
+  `msgpack/v2`, `msgpack/v3`). Upgrading to v3 is still not a fix.
+- Upstream re-checked: wasmd `v0.61.14` go.mod still pins wasmvm/v3 `v3.0.7` with
+  `shamaton/msgpack/v2 v2.2.3 // indirect`; proxy `@latest` for wasmvm/v3 is `v3.0.7`
+  and for msgpack/v2 is `v2.4.2` — no stack upgrade drops or patches the module.
+- Repo still pins `msgpack/v2 v2.2.3 // indirect`; `grep -rn 'shamaton/msgpack'` over
+  `*.go` returns zero first-party files; `go mod why -m` route unchanged
+  (cmd/virtengine → sdk/go/cli → wasmd/x/wasm/types → wasmvm/v3/types → msgpack/v2).
+- `go list -deps ./...` still contains neither `wasmd/x/wasm/keeper` nor
+  `wasmvm/v3/internal/api` (count 0); wasmvm v3.0.2's only non-test call site is still
+  `types/types.go:215` (`UnmarshalMessagePack` → `msgpack.UnmarshalAsArray`), reached only
+  via `internal/api.GetPinnedMetrics` → `VM.GetPinnedMetrics` → wasmd keeper `Collect()`.
+- `govulncheck -show traces ./...` still reports GO-2026-4740 at `v2.2.3` with
+  `Fixed in: N/A`; sampled traces (incl. the `waldur_backend.go:920 PutStream` →
+  `multierr.Error` → `sync.Pool` → `common.init` chain) all terminate in `init` /
+  package-variable symbols. No decode function is reachable.
+
+Falsification rule unchanged: any output from reproduction step 2, or a `fixed` event
+appearing in the OSV record, voids this assessment and the exception must be withdrawn
+in favour of the bump.

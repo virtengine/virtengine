@@ -156,14 +156,14 @@ func prepareExportDir(baseDir, outDir string) error {
 }
 
 func copyFile(src, dst string) error {
-	data, err := os.ReadFile(src)
+	data, err := os.ReadFile(src) // #nosec G304 -- the path is composed from the ceremony state directory (given once by the operator on the command line) plus fixed file names, so remote input cannot influence it
 	if err != nil {
 		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(dst), 0o750); err != nil {
 		return err
 	}
-	return os.WriteFile(dst, data, 0o600)
+	return os.WriteFile(dst, data, 0o600) // #nosec G703 -- the path is built from the operator-supplied ceremony/export directory plus fixed file names, so remote input cannot influence it
 }
 
 func contributorIDs(tr *transcript.Transcript) []string {

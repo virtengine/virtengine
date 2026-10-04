@@ -26,13 +26,13 @@ export interface MsgUpdateParamsResponse {
 }
 
 /**
- * MsgSeedVault defines the message for seeding the BME vault with AKT
+ * MsgSeedVault defines the message for seeding the BME vault with VE
  * This is used to provide an initial volatility buffer
  */
 export interface MsgSeedVault {
   /** authority is the address that controls the module (governance) */
   authority: string;
-  /** amount is the AKT amount to seed the vault with */
+  /** amount is the VE amount to seed the vault with */
   amount:
     | Coin
     | undefined;
@@ -42,20 +42,20 @@ export interface MsgSeedVault {
 
 /** MsgSeedVaultResponse is the response type for MsgSeedVault */
 export interface MsgSeedVaultResponse {
-  /** vault_akt is the new vault AKT balance */
-  vaultAkt: string;
+  /** vault_native is the new vault VE balance */
+  vaultNative: string;
 }
 
 /**
  * MsgBurnMint defines the message for burning one token to mint another
- * Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+ * Allows burning VE to mint VCC, or burning unused VCC back to VE
  */
 export interface MsgBurnMint {
   /** owner source of the coins to be burned */
   owner: string;
   /**
    * to destination of the minted coins.
-   * if minted coin is ACT, "to" must be same as signer
+   * if minted coin is VCC, "to" must be same as signer
    */
   to: string;
   /** coins_to_burn */
@@ -67,15 +67,15 @@ export interface MsgBurnMint {
 }
 
 /**
- * MsgMintACT defines the message for burning one token to mint another
- * Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+ * MsgMintVCC defines the message for burning one token to mint another
+ * Allows burning VE to mint VCC, or burning unused VCC back to VE
  */
-export interface MsgMintACT {
+export interface MsgMintVCC {
   /** owner source of the coins to be burned */
   owner: string;
   /**
    * to destination of the minted coins.
-   * if minted coin is ACT, "to" must be same as signer
+   * if minted coin is VCC, "to" must be same as signer
    */
   to: string;
   /** coins_to_burn */
@@ -83,15 +83,15 @@ export interface MsgMintACT {
 }
 
 /**
- * MsgMintACT defines the message for burning one token to mint another
- * Allows burning AKT to mint ACT, or burning unused ACT back to AKT
+ * MsgMintVCC defines the message for burning one token to mint another
+ * Allows burning VE to mint VCC, or burning unused VCC back to VE
  */
-export interface MsgBurnACT {
+export interface MsgBurnVCC {
   /** owner source of the coins to be burned */
   owner: string;
   /**
    * to destination of the minted coins.
-   * if minted coin is ACT, "to" must be same as signer
+   * if minted coin is VCC, "to" must be same as signer
    */
   to: string;
   /** coins_to_burn */
@@ -105,13 +105,13 @@ export interface MsgBurnMintResponse {
 }
 
 /** MsgBurnMintResponse is the response type for MsgBurnMint */
-export interface MsgMintACTResponse {
+export interface MsgMintVCCResponse {
   id: LedgerRecordID | undefined;
   status: LedgerRecordStatus;
 }
 
 /** MsgBurnMintResponse is the response type for MsgBurnMint */
-export interface MsgBurnACTResponse {
+export interface MsgBurnVCCResponse {
   id: LedgerRecordID | undefined;
   status: LedgerRecordStatus;
 }
@@ -327,15 +327,15 @@ export const MsgSeedVault: MessageFns<MsgSeedVault, "virtengine.bme.v1.MsgSeedVa
 };
 
 function createBaseMsgSeedVaultResponse(): MsgSeedVaultResponse {
-  return { vaultAkt: "" };
+  return { vaultNative: "" };
 }
 
 export const MsgSeedVaultResponse: MessageFns<MsgSeedVaultResponse, "virtengine.bme.v1.MsgSeedVaultResponse"> = {
   $type: "virtengine.bme.v1.MsgSeedVaultResponse" as const,
 
   encode(message: MsgSeedVaultResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.vaultAkt !== "") {
-      writer.uint32(10).string(message.vaultAkt);
+    if (message.vaultNative !== "") {
+      writer.uint32(10).string(message.vaultNative);
     }
     return writer;
   },
@@ -352,7 +352,7 @@ export const MsgSeedVaultResponse: MessageFns<MsgSeedVaultResponse, "virtengine.
             break;
           }
 
-          message.vaultAkt = reader.string();
+          message.vaultNative = reader.string();
           continue;
         }
       }
@@ -365,19 +365,19 @@ export const MsgSeedVaultResponse: MessageFns<MsgSeedVaultResponse, "virtengine.
   },
 
   fromJSON(object: any): MsgSeedVaultResponse {
-    return { vaultAkt: isSet(object.vault_akt) ? globalThis.String(object.vault_akt) : "" };
+    return { vaultNative: isSet(object.vault_native) ? globalThis.String(object.vault_native) : "" };
   },
 
   toJSON(message: MsgSeedVaultResponse): unknown {
     const obj: any = {};
-    if (message.vaultAkt !== "") {
-      obj.vault_akt = message.vaultAkt;
+    if (message.vaultNative !== "") {
+      obj.vault_native = message.vaultNative;
     }
     return obj;
   },
   fromPartial(object: DeepPartial<MsgSeedVaultResponse>): MsgSeedVaultResponse {
     const message = createBaseMsgSeedVaultResponse();
-    message.vaultAkt = object.vaultAkt ?? "";
+    message.vaultNative = object.vaultNative ?? "";
     return message;
   },
 };
@@ -490,14 +490,14 @@ export const MsgBurnMint: MessageFns<MsgBurnMint, "virtengine.bme.v1.MsgBurnMint
   },
 };
 
-function createBaseMsgMintACT(): MsgMintACT {
+function createBaseMsgMintVCC(): MsgMintVCC {
   return { owner: "", to: "", coinsToBurn: undefined };
 }
 
-export const MsgMintACT: MessageFns<MsgMintACT, "virtengine.bme.v1.MsgMintACT"> = {
-  $type: "virtengine.bme.v1.MsgMintACT" as const,
+export const MsgMintVCC: MessageFns<MsgMintVCC, "virtengine.bme.v1.MsgMintVCC"> = {
+  $type: "virtengine.bme.v1.MsgMintVCC" as const,
 
-  encode(message: MsgMintACT, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: MsgMintVCC, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.owner !== "") {
       writer.uint32(10).string(message.owner);
     }
@@ -510,10 +510,10 @@ export const MsgMintACT: MessageFns<MsgMintACT, "virtengine.bme.v1.MsgMintACT"> 
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): MsgMintACT {
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgMintVCC {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseMsgMintACT();
+    const message = createBaseMsgMintVCC();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -550,7 +550,7 @@ export const MsgMintACT: MessageFns<MsgMintACT, "virtengine.bme.v1.MsgMintACT"> 
     return message;
   },
 
-  fromJSON(object: any): MsgMintACT {
+  fromJSON(object: any): MsgMintVCC {
     return {
       owner: isSet(object.owner) ? globalThis.String(object.owner) : "",
       to: isSet(object.to) ? globalThis.String(object.to) : "",
@@ -558,7 +558,7 @@ export const MsgMintACT: MessageFns<MsgMintACT, "virtengine.bme.v1.MsgMintACT"> 
     };
   },
 
-  toJSON(message: MsgMintACT): unknown {
+  toJSON(message: MsgMintVCC): unknown {
     const obj: any = {};
     if (message.owner !== "") {
       obj.owner = message.owner;
@@ -571,8 +571,8 @@ export const MsgMintACT: MessageFns<MsgMintACT, "virtengine.bme.v1.MsgMintACT"> 
     }
     return obj;
   },
-  fromPartial(object: DeepPartial<MsgMintACT>): MsgMintACT {
-    const message = createBaseMsgMintACT();
+  fromPartial(object: DeepPartial<MsgMintVCC>): MsgMintVCC {
+    const message = createBaseMsgMintVCC();
     message.owner = object.owner ?? "";
     message.to = object.to ?? "";
     message.coinsToBurn = (object.coinsToBurn !== undefined && object.coinsToBurn !== null)
@@ -582,14 +582,14 @@ export const MsgMintACT: MessageFns<MsgMintACT, "virtengine.bme.v1.MsgMintACT"> 
   },
 };
 
-function createBaseMsgBurnACT(): MsgBurnACT {
+function createBaseMsgBurnVCC(): MsgBurnVCC {
   return { owner: "", to: "", coinsToBurn: undefined };
 }
 
-export const MsgBurnACT: MessageFns<MsgBurnACT, "virtengine.bme.v1.MsgBurnACT"> = {
-  $type: "virtengine.bme.v1.MsgBurnACT" as const,
+export const MsgBurnVCC: MessageFns<MsgBurnVCC, "virtengine.bme.v1.MsgBurnVCC"> = {
+  $type: "virtengine.bme.v1.MsgBurnVCC" as const,
 
-  encode(message: MsgBurnACT, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: MsgBurnVCC, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.owner !== "") {
       writer.uint32(10).string(message.owner);
     }
@@ -602,10 +602,10 @@ export const MsgBurnACT: MessageFns<MsgBurnACT, "virtengine.bme.v1.MsgBurnACT"> 
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): MsgBurnACT {
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgBurnVCC {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseMsgBurnACT();
+    const message = createBaseMsgBurnVCC();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -642,7 +642,7 @@ export const MsgBurnACT: MessageFns<MsgBurnACT, "virtengine.bme.v1.MsgBurnACT"> 
     return message;
   },
 
-  fromJSON(object: any): MsgBurnACT {
+  fromJSON(object: any): MsgBurnVCC {
     return {
       owner: isSet(object.owner) ? globalThis.String(object.owner) : "",
       to: isSet(object.to) ? globalThis.String(object.to) : "",
@@ -650,7 +650,7 @@ export const MsgBurnACT: MessageFns<MsgBurnACT, "virtengine.bme.v1.MsgBurnACT"> 
     };
   },
 
-  toJSON(message: MsgBurnACT): unknown {
+  toJSON(message: MsgBurnVCC): unknown {
     const obj: any = {};
     if (message.owner !== "") {
       obj.owner = message.owner;
@@ -663,8 +663,8 @@ export const MsgBurnACT: MessageFns<MsgBurnACT, "virtengine.bme.v1.MsgBurnACT"> 
     }
     return obj;
   },
-  fromPartial(object: DeepPartial<MsgBurnACT>): MsgBurnACT {
-    const message = createBaseMsgBurnACT();
+  fromPartial(object: DeepPartial<MsgBurnVCC>): MsgBurnVCC {
+    const message = createBaseMsgBurnVCC();
     message.owner = object.owner ?? "";
     message.to = object.to ?? "";
     message.coinsToBurn = (object.coinsToBurn !== undefined && object.coinsToBurn !== null)
@@ -748,14 +748,14 @@ export const MsgBurnMintResponse: MessageFns<MsgBurnMintResponse, "virtengine.bm
   },
 };
 
-function createBaseMsgMintACTResponse(): MsgMintACTResponse {
+function createBaseMsgMintVCCResponse(): MsgMintVCCResponse {
   return { id: undefined, status: 0 };
 }
 
-export const MsgMintACTResponse: MessageFns<MsgMintACTResponse, "virtengine.bme.v1.MsgMintACTResponse"> = {
-  $type: "virtengine.bme.v1.MsgMintACTResponse" as const,
+export const MsgMintVCCResponse: MessageFns<MsgMintVCCResponse, "virtengine.bme.v1.MsgMintVCCResponse"> = {
+  $type: "virtengine.bme.v1.MsgMintVCCResponse" as const,
 
-  encode(message: MsgMintACTResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: MsgMintVCCResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.id !== undefined) {
       LedgerRecordID.encode(message.id, writer.uint32(10).fork()).join();
     }
@@ -765,10 +765,10 @@ export const MsgMintACTResponse: MessageFns<MsgMintACTResponse, "virtengine.bme.
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): MsgMintACTResponse {
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgMintVCCResponse {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseMsgMintACTResponse();
+    const message = createBaseMsgMintVCCResponse();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -797,14 +797,14 @@ export const MsgMintACTResponse: MessageFns<MsgMintACTResponse, "virtengine.bme.
     return message;
   },
 
-  fromJSON(object: any): MsgMintACTResponse {
+  fromJSON(object: any): MsgMintVCCResponse {
     return {
       id: isSet(object.id) ? LedgerRecordID.fromJSON(object.id) : undefined,
       status: isSet(object.status) ? ledgerRecordStatusFromJSON(object.status) : 0,
     };
   },
 
-  toJSON(message: MsgMintACTResponse): unknown {
+  toJSON(message: MsgMintVCCResponse): unknown {
     const obj: any = {};
     if (message.id !== undefined) {
       obj.id = LedgerRecordID.toJSON(message.id);
@@ -814,22 +814,22 @@ export const MsgMintACTResponse: MessageFns<MsgMintACTResponse, "virtengine.bme.
     }
     return obj;
   },
-  fromPartial(object: DeepPartial<MsgMintACTResponse>): MsgMintACTResponse {
-    const message = createBaseMsgMintACTResponse();
+  fromPartial(object: DeepPartial<MsgMintVCCResponse>): MsgMintVCCResponse {
+    const message = createBaseMsgMintVCCResponse();
     message.id = (object.id !== undefined && object.id !== null) ? LedgerRecordID.fromPartial(object.id) : undefined;
     message.status = object.status ?? 0;
     return message;
   },
 };
 
-function createBaseMsgBurnACTResponse(): MsgBurnACTResponse {
+function createBaseMsgBurnVCCResponse(): MsgBurnVCCResponse {
   return { id: undefined, status: 0 };
 }
 
-export const MsgBurnACTResponse: MessageFns<MsgBurnACTResponse, "virtengine.bme.v1.MsgBurnACTResponse"> = {
-  $type: "virtengine.bme.v1.MsgBurnACTResponse" as const,
+export const MsgBurnVCCResponse: MessageFns<MsgBurnVCCResponse, "virtengine.bme.v1.MsgBurnVCCResponse"> = {
+  $type: "virtengine.bme.v1.MsgBurnVCCResponse" as const,
 
-  encode(message: MsgBurnACTResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+  encode(message: MsgBurnVCCResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
     if (message.id !== undefined) {
       LedgerRecordID.encode(message.id, writer.uint32(10).fork()).join();
     }
@@ -839,10 +839,10 @@ export const MsgBurnACTResponse: MessageFns<MsgBurnACTResponse, "virtengine.bme.
     return writer;
   },
 
-  decode(input: BinaryReader | Uint8Array, length?: number): MsgBurnACTResponse {
+  decode(input: BinaryReader | Uint8Array, length?: number): MsgBurnVCCResponse {
     const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
     const end = length === undefined ? reader.len : reader.pos + length;
-    const message = createBaseMsgBurnACTResponse();
+    const message = createBaseMsgBurnVCCResponse();
     while (reader.pos < end) {
       const tag = reader.uint32();
       switch (tag >>> 3) {
@@ -871,14 +871,14 @@ export const MsgBurnACTResponse: MessageFns<MsgBurnACTResponse, "virtengine.bme.
     return message;
   },
 
-  fromJSON(object: any): MsgBurnACTResponse {
+  fromJSON(object: any): MsgBurnVCCResponse {
     return {
       id: isSet(object.id) ? LedgerRecordID.fromJSON(object.id) : undefined,
       status: isSet(object.status) ? ledgerRecordStatusFromJSON(object.status) : 0,
     };
   },
 
-  toJSON(message: MsgBurnACTResponse): unknown {
+  toJSON(message: MsgBurnVCCResponse): unknown {
     const obj: any = {};
     if (message.id !== undefined) {
       obj.id = LedgerRecordID.toJSON(message.id);
@@ -888,8 +888,8 @@ export const MsgBurnACTResponse: MessageFns<MsgBurnACTResponse, "virtengine.bme.
     }
     return obj;
   },
-  fromPartial(object: DeepPartial<MsgBurnACTResponse>): MsgBurnACTResponse {
-    const message = createBaseMsgBurnACTResponse();
+  fromPartial(object: DeepPartial<MsgBurnVCCResponse>): MsgBurnVCCResponse {
+    const message = createBaseMsgBurnVCCResponse();
     message.id = (object.id !== undefined && object.id !== null) ? LedgerRecordID.fromPartial(object.id) : undefined;
     message.status = object.status ?? 0;
     return message;

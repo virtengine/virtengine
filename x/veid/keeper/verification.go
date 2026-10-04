@@ -315,10 +315,10 @@ func generateEventID(ctx sdk.Context, address sdk.AccAddress, scopeID string) st
 	h := sha256.New()
 	h.Write(address.Bytes())
 	h.Write([]byte(scopeID))
-	h.Write([]byte{byte(ctx.BlockHeight() >> 56), byte(ctx.BlockHeight() >> 48),
-		byte(ctx.BlockHeight() >> 40), byte(ctx.BlockHeight() >> 32),
-		byte(ctx.BlockHeight() >> 24), byte(ctx.BlockHeight() >> 16),
-		byte(ctx.BlockHeight() >> 8), byte(ctx.BlockHeight())})
+	h.Write([]byte{byte(ctx.BlockHeight() >> 56), byte(ctx.BlockHeight() >> 48), // #nosec G115 -- fixed-width big-endian encoding: h.Write([]byte{byte(ctx.BlockHeight() >> 56), byte(ctx.BlockHeight() >> 48), writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(ctx.BlockHeight() >> 40), byte(ctx.BlockHeight() >> 32), // #nosec G115 -- fixed-width big-endian encoding: byte(ctx.BlockHeight() >> 40), byte(ctx.BlockHeight() >> 32), writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(ctx.BlockHeight() >> 24), byte(ctx.BlockHeight() >> 16), // #nosec G115 -- fixed-width big-endian encoding: byte(ctx.BlockHeight() >> 24), byte(ctx.BlockHeight() >> 16), writes a single byte of the shifted value by design and the written byte is never used arithmetically
+		byte(ctx.BlockHeight() >> 8), byte(ctx.BlockHeight())}) // #nosec G115 -- fixed-width big-endian encoding: byte(ctx.BlockHeight() >> 8), byte(ctx.BlockHeight())}) writes a single byte of the shifted value by design and the written byte is never used arithmetically
 	sum := h.Sum(nil)
 	return bytesToHex(sum[:16])
 }

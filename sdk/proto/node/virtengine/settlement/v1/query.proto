@@ -304,69 +304,113 @@ message PayoutRecord {
 
 // FinancialSubjectType identifies the canonical financial lineage root.
 enum FinancialSubjectType {
+  // FINANCIAL_SUBJECT_TYPE_UNSPECIFIED marks an absent lineage root.
   FINANCIAL_SUBJECT_TYPE_UNSPECIFIED = 0;
+  // FINANCIAL_SUBJECT_TYPE_ORDER roots the case at a marketplace order.
   FINANCIAL_SUBJECT_TYPE_ORDER = 1;
+  // FINANCIAL_SUBJECT_TYPE_INVOICE roots the case at an issued invoice.
   FINANCIAL_SUBJECT_TYPE_INVOICE = 2;
+  // FINANCIAL_SUBJECT_TYPE_USAGE roots the case at a metered usage record.
   FINANCIAL_SUBJECT_TYPE_USAGE = 3;
+  // FINANCIAL_SUBJECT_TYPE_HPC_JOB roots the case at an HPC job.
   FINANCIAL_SUBJECT_TYPE_HPC_JOB = 4;
+  // FINANCIAL_SUBJECT_TYPE_SETTLEMENT roots the case at a settlement event.
   FINANCIAL_SUBJECT_TYPE_SETTLEMENT = 5;
 }
 
 // FinancialClaimType identifies a privacy-safe typed allegation or finding.
 enum FinancialClaimType {
+  // FINANCIAL_CLAIM_TYPE_UNSPECIFIED marks an absent claim type.
   FINANCIAL_CLAIM_TYPE_UNSPECIFIED = 0;
+  // FINANCIAL_CLAIM_TYPE_BILLING disputes the billed amount.
   FINANCIAL_CLAIM_TYPE_BILLING = 1;
+  // FINANCIAL_CLAIM_TYPE_USAGE disputes metered usage.
   FINANCIAL_CLAIM_TYPE_USAGE = 2;
+  // FINANCIAL_CLAIM_TYPE_SERVICE disputes the delivered service.
   FINANCIAL_CLAIM_TYPE_SERVICE = 3;
+  // FINANCIAL_CLAIM_TYPE_FRAUD alleges fraudulent conduct.
   FINANCIAL_CLAIM_TYPE_FRAUD = 4;
+  // FINANCIAL_CLAIM_TYPE_HPC disputes an HPC execution outcome.
   FINANCIAL_CLAIM_TYPE_HPC = 5;
+  // FINANCIAL_CLAIM_TYPE_REVIEW is a reviewer assessment.
   FINANCIAL_CLAIM_TYPE_REVIEW = 6;
+  // FINANCIAL_CLAIM_TYPE_MODERATION is a moderation finding.
   FINANCIAL_CLAIM_TYPE_MODERATION = 7;
+  // FINANCIAL_CLAIM_TYPE_MIGRATION was raised by a state migration.
   FINANCIAL_CLAIM_TYPE_MIGRATION = 8;
 }
 
 // FinancialCaseStatus is the canonical dispute lifecycle state.
 enum FinancialCaseStatus {
+  // FINANCIAL_CASE_STATUS_UNSPECIFIED is the pre-open transition origin.
   FINANCIAL_CASE_STATUS_UNSPECIFIED = 0;
+  // FINANCIAL_CASE_STATUS_OPEN is a newly opened case awaiting evidence.
   FINANCIAL_CASE_STATUS_OPEN = 1;
+  // FINANCIAL_CASE_STATUS_EVIDENCE is collecting party evidence.
   FINANCIAL_CASE_STATUS_EVIDENCE = 2;
+  // FINANCIAL_CASE_STATUS_REVIEW is under resolver review.
   FINANCIAL_CASE_STATUS_REVIEW = 3;
+  // FINANCIAL_CASE_STATUS_ESCALATED has been escalated past review.
   FINANCIAL_CASE_STATUS_ESCALATED = 4;
+  // FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL is resolved but still appealable.
   FINANCIAL_CASE_STATUS_RESOLVED_PENDING_APPEAL = 5;
+  // FINANCIAL_CASE_STATUS_FINAL is a terminal resolution with no appeal left.
   FINANCIAL_CASE_STATUS_FINAL = 6;
+  // FINANCIAL_CASE_STATUS_REJECTED is a terminal rejection of the claim.
   FINANCIAL_CASE_STATUS_REJECTED = 7;
+  // FINANCIAL_CASE_STATUS_CANCELLED is a terminal withdrawal by the claimant.
   FINANCIAL_CASE_STATUS_CANCELLED = 8;
+  // FINANCIAL_CASE_STATUS_EXPIRED is a terminal deadline lapse.
   FINANCIAL_CASE_STATUS_EXPIRED = 9;
+  // FINANCIAL_CASE_STATUS_QUARANTINED is held by authority pending integrity review.
   FINANCIAL_CASE_STATUS_QUARANTINED = 10;
 }
 
 // FinancialResolutionType selects the terminal policy applied after appeal.
 enum FinancialResolutionType {
+  // FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED marks an absent resolution policy.
   FINANCIAL_RESOLUTION_TYPE_UNSPECIFIED = 0;
+  // FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN awards the dispute to the provider.
   FINANCIAL_RESOLUTION_TYPE_PROVIDER_WIN = 1;
+  // FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN awards the dispute to the customer.
   FINANCIAL_RESOLUTION_TYPE_CUSTOMER_WIN = 2;
+  // FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT splits the allocation between both parties.
   FINANCIAL_RESOLUTION_TYPE_PARTIAL_SPLIT = 3;
+  // FINANCIAL_RESOLUTION_TYPE_MUTUAL records a mutually agreed resolution.
   FINANCIAL_RESOLUTION_TYPE_MUTUAL = 4;
+  // FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED records confirmed fraud.
   FINANCIAL_RESOLUTION_TYPE_FRAUD_CONFIRMED = 5;
+  // FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT ends the case without a finding.
   FINANCIAL_RESOLUTION_TYPE_INCONCLUSIVE_TIMEOUT = 6;
 }
 
 // FinancialEffectType identifies an exactly-once terminal side effect.
 enum FinancialEffectType {
+  // FINANCIAL_EFFECT_TYPE_UNSPECIFIED marks an absent effect kind.
   FINANCIAL_EFFECT_TYPE_UNSPECIFIED = 0;
+  // FINANCIAL_EFFECT_TYPE_PAYOUT moves value to the winning party.
   FINANCIAL_EFFECT_TYPE_PAYOUT = 1;
+  // FINANCIAL_EFFECT_TYPE_ESCROW returns or releases escrowed funds.
   FINANCIAL_EFFECT_TYPE_ESCROW = 2;
+  // FINANCIAL_EFFECT_TYPE_REWARD adjusts provider rewards.
   FINANCIAL_EFFECT_TYPE_REWARD = 3;
+  // FINANCIAL_EFFECT_TYPE_RESERVATION adjusts a resource reservation.
   FINANCIAL_EFFECT_TYPE_RESERVATION = 4;
+  // FINANCIAL_EFFECT_TYPE_REPUTATION adjusts reputation scores.
   FINANCIAL_EFFECT_TYPE_REPUTATION = 5;
+  // FINANCIAL_EFFECT_TYPE_PROJECTION updates derived read models only.
   FINANCIAL_EFFECT_TYPE_PROJECTION = 6;
 }
 
 // FinancialEffectStatus identifies durable effect progress.
 enum FinancialEffectStatus {
+  // FINANCIAL_EFFECT_STATUS_UNSPECIFIED marks an absent effect status.
   FINANCIAL_EFFECT_STATUS_UNSPECIFIED = 0;
+  // FINANCIAL_EFFECT_STATUS_PENDING is a recorded but unapplied effect.
   FINANCIAL_EFFECT_STATUS_PENDING = 1;
+  // FINANCIAL_EFFECT_STATUS_APPLIED is a durably applied effect.
   FINANCIAL_EFFECT_STATUS_APPLIED = 2;
+  // FINANCIAL_EFFECT_STATUS_FAILED is an effect that exhausted its retries.
   FINANCIAL_EFFECT_STATUS_FAILED = 3;
 }
 
@@ -529,38 +573,63 @@ message FinancialCase {
 
 // Generated financial-case events use bounded, privacy-safe fields only.
 message EventFinancialCaseOpened { string case_id = 1; string subject_key = 2; FinancialCaseStatus status = 3; uint32 hold_count = 4; }
+// EventFinancialClaimAdded is emitted when a claim joins an open case.
 message EventFinancialClaimAdded { string case_id = 1; string claim_id = 2; FinancialClaimType claim_type = 3; string source_module = 4; }
+// EventFinancialCaseHeld is emitted when settlement funds are held.
 message EventFinancialCaseHeld { string case_id = 1; string reference_type = 2; string reference_id = 3; }
+// EventFinancialCaseReviewed is emitted when a case enters review.
 message EventFinancialCaseReviewed { string case_id = 1; FinancialCaseStatus status = 2; }
+// EventFinancialCaseEscalated is emitted when a case is escalated.
 message EventFinancialCaseEscalated { string case_id = 1; FinancialCaseStatus status = 2; }
+// EventFinancialCaseResolved is emitted when a resolver allocates the case.
 message EventFinancialCaseResolved { string case_id = 1; FinancialResolutionType resolution_type = 2; bytes allocation_hash = 3; }
+// EventFinancialCaseAppealed is emitted when a party appeals a resolution.
 message EventFinancialCaseAppealed { string case_id = 1; string appeal_id = 2; uint32 appeal_count = 3; }
+// EventFinancialCaseFinalized is emitted when a case becomes final.
 message EventFinancialCaseFinalized { string case_id = 1; FinancialResolutionType resolution_type = 2; }
+// EventFinancialCaseEffectApplied is emitted for each applied terminal effect.
 message EventFinancialCaseEffectApplied { string case_id = 1; string effect_id = 2; FinancialEffectType effect_type = 3; }
+// EventFinancialCaseQuarantined is emitted when authority quarantines a case.
 message EventFinancialCaseQuarantined { string case_id = 1; bytes reason_hash = 2; }
+// EventFinancialCaseExpired is emitted when a case passes its deadline.
 message EventFinancialCaseExpired { string case_id = 1; FinancialCaseStatus status = 2; }
 
 // FiatConversionProfileState distinguishes engineering readiness from real
 // external production certification. Only CERTIFIED_ENABLED is executable.
 enum FiatConversionProfileState {
+  // FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED marks an absent profile state.
   FIAT_CONVERSION_PROFILE_STATE_UNSPECIFIED = 0;
+  // FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED is not backed by an engine profile.
   FIAT_CONVERSION_PROFILE_STATE_UNSUPPORTED = 1;
+  // FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE is still under construction.
   FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_INCOMPLETE = 2;
+  // FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED is built but externally blocked.
   FIAT_CONVERSION_PROFILE_STATE_ENGINEERING_COMPLETE_EXTERNAL_BLOCKED = 3;
+  // FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED is the only executable state.
   FIAT_CONVERSION_PROFILE_STATE_CERTIFIED_ENABLED = 4;
+  // FIAT_CONVERSION_PROFILE_STATE_PAUSED is administratively paused.
   FIAT_CONVERSION_PROFILE_STATE_PAUSED = 5;
 }
 
 // FiatConversionObservationStage is the legal external execution vocabulary.
 enum FiatConversionObservationStage {
+  // FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED marks an absent stage.
   FIAT_CONVERSION_OBSERVATION_STAGE_UNSPECIFIED = 0;
+  // FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED is a quoted route accepted.
   FIAT_CONVERSION_OBSERVATION_STAGE_QUOTE_ACCEPTED = 1;
+  // FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED is a submitted on-chain swap.
   FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_SUBMITTED = 2;
+  // FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED is a swap past finality.
   FIAT_CONVERSION_OBSERVATION_STAGE_SWAP_FINALIZED = 3;
+  // FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED is a quoted off-ramp payout.
   FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_QUOTED = 4;
+  // FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED is a submitted off-ramp payout.
   FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_SUBMITTED = 5;
+  // FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED is a settled off-ramp payout.
   FIAT_CONVERSION_OBSERVATION_STAGE_PAYOUT_COMPLETED = 6;
+  // FIAT_CONVERSION_OBSERVATION_STAGE_FAILED is a failed conversion leg.
   FIAT_CONVERSION_OBSERVATION_STAGE_FAILED = 7;
+  // FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED is a cancelled conversion leg.
   FIAT_CONVERSION_OBSERVATION_STAGE_CANCELLED = 8;
 }
 
@@ -700,6 +769,7 @@ message EventFiatConversionObservationRecorded {
   bytes observation_digest = 6;
   int64 recorded_height = 7;
 }
+// EventFiatConversionTerminal is emitted when a conversion reaches a terminal stage.
 message EventFiatConversionTerminal {
   string conversion_id = 1;
   string payout_id = 2;
@@ -990,22 +1060,114 @@ message QueryFiatPayoutPreferenceResponse {
   FiatPayoutPreference preference = 1;
 }
 
+// QueryFinancialCaseRequest is the request for the FinancialCase RPC.
 message QueryFinancialCaseRequest { string case_id = 1; }
+// QueryFinancialCaseResponse is the response for the FinancialCase RPC.
 message QueryFinancialCaseResponse { FinancialCase financial_case = 1; }
+// QueryFinancialCaseBySubjectRequest is the request for the FinancialCaseBySubject RPC.
 message QueryFinancialCaseBySubjectRequest { FinancialSubject subject = 1 [(gogoproto.nullable) = false]; }
+// QueryFinancialCaseBySubjectResponse is the response for the FinancialCaseBySubject RPC.
 message QueryFinancialCaseBySubjectResponse { FinancialCase financial_case = 1; }
+// QueryFinancialCasesByOrderRequest is the request for the FinancialCasesByOrder RPC.
+message QueryFinancialCasesByOrderRequest {
+  string order_id = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+// QueryFinancialCasesByOrderResponse is the response for the FinancialCasesByOrder RPC.
+message QueryFinancialCasesByOrderResponse {
+  repeated FinancialCase financial_cases = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+// QueryFinancialCasesByInvoiceRequest is the request for the FinancialCasesByInvoice RPC.
+message QueryFinancialCasesByInvoiceRequest {
+  string invoice_id = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+// QueryFinancialCasesByInvoiceResponse is the response for the FinancialCasesByInvoice RPC.
+message QueryFinancialCasesByInvoiceResponse {
+  repeated FinancialCase financial_cases = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+// QueryFinancialCasesByUsageRequest is the request for the FinancialCasesByUsage RPC.
+message QueryFinancialCasesByUsageRequest {
+  string usage_id = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+// QueryFinancialCasesByUsageResponse is the response for the FinancialCasesByUsage RPC.
+message QueryFinancialCasesByUsageResponse {
+  repeated FinancialCase financial_cases = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+// QueryFinancialCasesByJobRequest is the request for the FinancialCasesByJob RPC.
+message QueryFinancialCasesByJobRequest {
+  string job_id = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+// QueryFinancialCasesByJobResponse is the response for the FinancialCasesByJob RPC.
+message QueryFinancialCasesByJobResponse {
+  repeated FinancialCase financial_cases = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+// QueryFinancialCasesByEscrowRequest is the request for the FinancialCasesByEscrow RPC.
+message QueryFinancialCasesByEscrowRequest {
+  string escrow_id = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+// QueryFinancialCasesByEscrowResponse is the response for the FinancialCasesByEscrow RPC.
+message QueryFinancialCasesByEscrowResponse {
+  repeated FinancialCase financial_cases = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+// QueryFinancialCasesByStatusRequest is the request for the FinancialCasesByStatus RPC.
+message QueryFinancialCasesByStatusRequest {
+  string status = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+// QueryFinancialCasesByStatusResponse is the response for the FinancialCasesByStatus RPC.
+message QueryFinancialCasesByStatusResponse {
+  repeated FinancialCase financial_cases = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+// QueryFinancialCasesByPartyRequest is the request for the FinancialCasesByParty RPC.
+message QueryFinancialCasesByPartyRequest {
+  string party = 1;
+  cosmos.base.query.v1beta1.PageRequest pagination = 2;
+}
+// QueryFinancialCasesByPartyResponse is the response for the FinancialCasesByParty RPC.
+message QueryFinancialCasesByPartyResponse {
+  repeated FinancialCase financial_cases = 1 [(gogoproto.nullable) = false];
+  cosmos.base.query.v1beta1.PageResponse pagination = 2;
+}
+
+// QueryFinancialCasesRequest is the legacy shared request for the
+// FinancialCasesBy* RPCs.
+//
+// Deprecated: no RPC takes this type any more. Each FinancialCasesBy* RPC now
+// takes its own request whose field layout is identical (field 1 is the lookup
+// key, field 2 the pagination), so the encoded bytes are unchanged. It is
+// retained only so existing Go and TypeScript clients keep compiling.
 message QueryFinancialCasesRequest {
   string key = 1;
   cosmos.base.query.v1beta1.PageRequest pagination = 2;
 }
+
+// QueryFinancialCasesResponse is the legacy shared response for the
+// FinancialCasesBy* RPCs.
+//
+// Deprecated: no RPC returns this type any more. Each FinancialCasesBy* RPC now
+// returns its own response whose field layout is identical, so the encoded bytes
+// are unchanged. It is retained only so existing Go and TypeScript clients keep
+// compiling against it.
 message QueryFinancialCasesResponse {
   repeated FinancialCase financial_cases = 1 [(gogoproto.nullable) = false];
   cosmos.base.query.v1beta1.PageResponse pagination = 2;
 }
+// QueryFinancialCaseLineageRequest is the request for the FinancialCaseLineage RPC.
 message QueryFinancialCaseLineageRequest {
   string case_id = 1;
   cosmos.base.query.v1beta1.PageRequest pagination = 2;
 }
+// QueryFinancialCaseLineageResponse is the response for the FinancialCaseLineage RPC.
 message QueryFinancialCaseLineageResponse {
   repeated FinancialCaseTransition transitions = 1 [(gogoproto.nullable) = false];
   repeated FinancialClaim claims = 2 [(gogoproto.nullable) = false];
@@ -1097,26 +1259,26 @@ service Query {
   rpc FinancialCaseBySubject(QueryFinancialCaseBySubjectRequest) returns (QueryFinancialCaseBySubjectResponse) {
     option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-subject";
   }
-  rpc FinancialCasesByOrder(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
-    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-order/{key}";
+  rpc FinancialCasesByOrder(QueryFinancialCasesByOrderRequest) returns (QueryFinancialCasesByOrderResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-order/{order_id}";
   }
-  rpc FinancialCasesByInvoice(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
-    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-invoice/{key}";
+  rpc FinancialCasesByInvoice(QueryFinancialCasesByInvoiceRequest) returns (QueryFinancialCasesByInvoiceResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-invoice/{invoice_id}";
   }
-  rpc FinancialCasesByUsage(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
-    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-usage/{key}";
+  rpc FinancialCasesByUsage(QueryFinancialCasesByUsageRequest) returns (QueryFinancialCasesByUsageResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-usage/{usage_id}";
   }
-  rpc FinancialCasesByJob(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
-    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-job/{key}";
+  rpc FinancialCasesByJob(QueryFinancialCasesByJobRequest) returns (QueryFinancialCasesByJobResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-job/{job_id}";
   }
-  rpc FinancialCasesByEscrow(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
-    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-escrow/{key}";
+  rpc FinancialCasesByEscrow(QueryFinancialCasesByEscrowRequest) returns (QueryFinancialCasesByEscrowResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-escrow/{escrow_id}";
   }
-  rpc FinancialCasesByStatus(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
-    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-status/{key}";
+  rpc FinancialCasesByStatus(QueryFinancialCasesByStatusRequest) returns (QueryFinancialCasesByStatusResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-status/{status}";
   }
-  rpc FinancialCasesByParty(QueryFinancialCasesRequest) returns (QueryFinancialCasesResponse) {
-    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-party/{key}";
+  rpc FinancialCasesByParty(QueryFinancialCasesByPartyRequest) returns (QueryFinancialCasesByPartyResponse) {
+    option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/by-party/{party}";
   }
   rpc FinancialCaseLineage(QueryFinancialCaseLineageRequest) returns (QueryFinancialCaseLineageResponse) {
     option (google.api.http).get = "/virtengine/settlement/v1/financial-cases/{case_id}/lineage";

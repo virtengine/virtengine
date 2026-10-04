@@ -581,6 +581,9 @@ func (app *App) InitNormalKeepers(
 		marketplaceMFA,
 		marketplaceProvider,
 	)
+	// ADR-010: resolved marketplace matches mint canonical x/resources
+	// reservations through the capacity adapter.
+	app.Keepers.VirtEngine.Marketplace.SetCapacityKeeper(newMarketplaceCapacityAdapter(app.Keepers.VirtEngine.Resources))
 
 	// Set MFA keeper on VEID for circular dependency resolution
 	app.Keepers.VirtEngine.VEID.SetMFAKeeper(app.Keepers.VirtEngine.MFA)
@@ -654,6 +657,14 @@ func (app *App) InitNormalKeepers(
 		authtypes.NewModuleAddress(govtypes.ModuleName).String(),
 	)
 	app.Keepers.VirtEngine.Fraud.SetFinancialCaseKeeper(app.Keepers.VirtEngine.Settlement)
+
+	// Wire the market keeper so non-provider (tenant) reports can be verified
+	// against the order they cite. This wiring is REQUIRED, not optional: the
+	// fraud keeper fails closed when no market keeper is set and rejects
+	// order-linked non-provider reports with
+	// fraudtypes.ErrOrderVerificationUnavailable. Never move this after a point
+	// where the fraud keeper can be used, or tenant reporting breaks.
+	app.Keepers.VirtEngine.Fraud.SetMarketKeeper(app.Keepers.VirtEngine.Market)
 
 	app.Keepers.VirtEngine.Review = reviewkeeper.NewKeeper(
 		cdc,

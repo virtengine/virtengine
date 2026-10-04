@@ -20,7 +20,7 @@ Design rules for this module:
   TensorFlow ComputeScore serving path is ML-owner work and exits non-zero
   until it lands (see module docstring reference below).
 
-Standard library only, so the module imports even in the distroless final
+Standard library only, so the module imports even in the minimal final
 stage and on hosts without the pinned ML dependencies installed.
 """
 

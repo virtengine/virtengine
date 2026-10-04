@@ -75,9 +75,9 @@ type ProviderFlowE2ETestSuite struct {
 
 // TestProviderFlowE2E runs the provider flow E2E test suite.
 func TestProviderFlowE2E(t *testing.T) {
-	suite.Run(t, &ProviderFlowE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &ProviderFlowE2ETestSuite{}),
-	})
+	s := &ProviderFlowE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 // SetupSuite runs once before all tests in the suite.

@@ -27,6 +27,11 @@ func RegisterLegacyAminoCodec(cdc *codec.LegacyAmino) {
 	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgSetAccountState{}, "roles/MsgSetAccountState")
 	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgNominateAdmin{}, "roles/MsgNominateAdmin")
 	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgUpdateParams{}, "roles/MsgUpdateParams")
+	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgImposeSanction{}, "roles/MsgImposeSanction")
+	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgConfirmSanction{}, "roles/MsgConfirmSanction")
+	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgRevokeSanction{}, "roles/MsgRevokeSanction")
+	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgOpenSanctionAppeal{}, "roles/MsgOpenSanctionAppeal")
+	legacy.RegisterAminoMsg(cdc, &rolesv1.MsgResolveSanctionAppeal{}, "roles/MsgResolveSanctionAppeal")
 }
 
 // RegisterInterfaces registers the interfaces types with the interface registry.
@@ -37,6 +42,11 @@ func RegisterInterfaces(registry cdctypes.InterfaceRegistry) {
 		&rolesv1.MsgSetAccountState{},
 		&rolesv1.MsgNominateAdmin{},
 		&rolesv1.MsgUpdateParams{},
+		&rolesv1.MsgImposeSanction{},
+		&rolesv1.MsgConfirmSanction{},
+		&rolesv1.MsgRevokeSanction{},
+		&rolesv1.MsgOpenSanctionAppeal{},
+		&rolesv1.MsgResolveSanctionAppeal{},
 	)
 	msgservice.RegisterMsgServiceDesc(registry, &rolesv1.Msg_serviceDesc)
 }

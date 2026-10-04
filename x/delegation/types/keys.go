@@ -128,13 +128,13 @@ func GetDelegatorSlashingEventKey(delegatorAddr string, blockHeight int64, seque
 func uint64ToBytes(n uint64) []byte {
 	b := make([]byte, 8)
 	b[0] = byte(n >> 56)
-	b[1] = byte(n >> 48)
-	b[2] = byte(n >> 40)
-	b[3] = byte(n >> 32)
-	b[4] = byte(n >> 24)
-	b[5] = byte(n >> 16)
-	b[6] = byte(n >> 8)
-	b[7] = byte(n)
+	b[1] = byte(n >> 48) // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[2] = byte(n >> 40) // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[3] = byte(n >> 32) // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[4] = byte(n >> 24) // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[5] = byte(n >> 16) // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[6] = byte(n >> 8)  // #nosec G115 -- fixed-width big-endian encoding: byte(n >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[7] = byte(n)       // #nosec G115 -- fixed-width big-endian encoding: byte(n) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 	return b
 }
 

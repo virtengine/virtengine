@@ -38,7 +38,7 @@
           "old": "github.com/cosmos/cosmos-sdk",
           "oldVersion": "",
           "new": "github.com/virtengine/cosmos-sdk",
-          "version": "v0.53.4-virtengine.1"
+          "version": "v0.53.4-virtengine.2"
         },
         {
           "old": "github.com/cosmos/gogoproto",
@@ -49,8 +49,8 @@
         {
           "old": "github.com/cosmos/ledger-cosmos-go",
           "oldVersion": "",
-          "new": "github.com/virtengine/ledger-go/cosmos",
-          "version": "v0.16.0-virtengine"
+          "new": "github.com/akash-network/ledger-go/cosmos",
+          "version": "v0.16.0"
         },
         {
           "old": "github.com/CosmWasm/wasmd",
@@ -91,8 +91,8 @@
         {
           "old": "github.com/zondax/ledger-go",
           "oldVersion": "",
-          "new": "github.com/virtengine/ledger-go",
-          "version": "v0.16.0-virtengine"
+          "new": "github.com/akash-network/ledger-go",
+          "version": "v0.16.0"
         },
         {
           "old": "golang.org/x/exp",
@@ -111,7 +111,7 @@
     {
       "path": "infra/dr/tests/go.mod",
       "module": "github.com/virtengine/virtengine/infra/dr/tests",
-      "go": "1.25.0",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -119,8 +119,8 @@
     },
     {
       "path": "infra/terraform/tests/go.mod",
-      "module": "github.com/virtengine-network/virtengine/infra/terraform/tests",
-      "go": "1.25.8",
+      "module": "github.com/virtengine/virtengine/infra/terraform/tests",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -129,7 +129,7 @@
     {
       "path": "infra/tests/go.mod",
       "module": "github.com/virtengine/virtengine/infra/tests",
-      "go": "1.25.8",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -138,7 +138,7 @@
     {
       "path": "sdk/generation/go.mod",
       "module": "github.com/virtengine/virtengine/sdk/generation/tools",
-      "go": "1.25.5",
+      "go": "1.26.8",
       "workspace": false,
       "hasGoSum": true,
       "vendorPolicy": "not-checked-in",
@@ -154,11 +154,17 @@
     {
       "path": "sdk/go/go.mod",
       "module": "github.com/virtengine/virtengine/sdk/go",
-      "go": "1.25.8",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": true,
       "vendorPolicy": "generated-and-ignored",
       "replaces": [
+        {
+          "old": "github.com/bytedance/sonic",
+          "oldVersion": "",
+          "new": "github.com/bytedance/sonic",
+          "version": "v1.15.4"
+        },
         {
           "old": "github.com/cometbft/cometbft",
           "oldVersion": "",
@@ -169,19 +175,13 @@
           "old": "github.com/cosmos/cosmos-sdk",
           "oldVersion": "",
           "new": "github.com/virtengine/cosmos-sdk",
-          "version": "v0.53.4-virtengine.1"
+          "version": "v0.53.4-virtengine.2"
         },
         {
           "old": "github.com/cosmos/gogoproto",
           "oldVersion": "",
           "new": "github.com/virtengine/gogoproto",
           "version": "v1.7.0-virtengine.1"
-        },
-        {
-          "old": "github.com/CosmWasm/wasmd",
-          "oldVersion": "",
-          "new": "github.com/CosmWasm/wasmd",
-          "version": "v0.53.4"
         },
         {
           "old": "github.com/gogo/protobuf",
@@ -206,7 +206,7 @@
     {
       "path": "sdk/specs/go.mod",
       "module": "github.com/virtengine/virtengine/sdk/specs",
-      "go": "1.25.5",
+      "go": "1.26.8",
       "workspace": true,
       "hasGoSum": false,
       "vendorPolicy": "not-checked-in",
@@ -219,8 +219,8 @@
       "services": 65,
       "queryServices": 32,
       "msgServices": 29,
-      "methods": 438,
-      "httpBindings": 234
+      "methods": 455,
+      "httpBindings": 237
     },
     "files": [
       {
@@ -812,19 +812,19 @@
                 "http": []
               },
               {
-                "name": "MintACT",
-                "fullName": "virtengine.bme.v1.Msg.MintACT",
-                "grpcPath": "/virtengine.bme.v1.Msg/MintACT",
-                "requestType": "virtengine.bme.v1.MsgMintACT",
-                "responseType": "virtengine.bme.v1.MsgMintACTResponse",
+                "name": "MintVCC",
+                "fullName": "virtengine.bme.v1.Msg.MintVCC",
+                "grpcPath": "/virtengine.bme.v1.Msg/MintVCC",
+                "requestType": "virtengine.bme.v1.MsgMintVCC",
+                "responseType": "virtengine.bme.v1.MsgMintVCCResponse",
                 "http": []
               },
               {
-                "name": "BurnACT",
-                "fullName": "virtengine.bme.v1.Msg.BurnACT",
-                "grpcPath": "/virtengine.bme.v1.Msg/BurnACT",
-                "requestType": "virtengine.bme.v1.MsgBurnACT",
-                "responseType": "virtengine.bme.v1.MsgBurnACTResponse",
+                "name": "BurnVCC",
+                "fullName": "virtengine.bme.v1.Msg.BurnVCC",
+                "grpcPath": "/virtengine.bme.v1.Msg/BurnVCC",
+                "requestType": "virtengine.bme.v1.MsgBurnVCC",
+                "responseType": "virtengine.bme.v1.MsgBurnVCCResponse",
                 "http": []
               }
             ]
@@ -2556,6 +2556,20 @@
                     "path": "/virtengine/fraud/v1/moderator/queue"
                   }
                 ]
+              },
+              {
+                "name": "FraudResponses",
+                "fullName": "virtengine.fraud.v1.Query.FraudResponses",
+                "grpcPath": "/virtengine.fraud.v1.Query/FraudResponses",
+                "requestType": "virtengine.fraud.v1.QueryFraudResponsesRequest",
+                "responseType": "virtengine.fraud.v1.QueryFraudResponsesResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/fraud/v1/reports/{report_id}/responses"
+                  }
+                ]
               }
             ]
           }
@@ -2580,6 +2594,14 @@
                 "http": []
               },
               {
+                "name": "SubmitFraudResponse",
+                "fullName": "virtengine.fraud.v1.Msg.SubmitFraudResponse",
+                "grpcPath": "/virtengine.fraud.v1.Msg/SubmitFraudResponse",
+                "requestType": "virtengine.fraud.v1.MsgSubmitFraudResponse",
+                "responseType": "virtengine.fraud.v1.MsgSubmitFraudResponseResponse",
+                "http": []
+              },
+              {
                 "name": "AssignModerator",
                 "fullName": "virtengine.fraud.v1.Msg.AssignModerator",
                 "grpcPath": "/virtengine.fraud.v1.Msg/AssignModerator",
@@ -2601,6 +2623,14 @@
                 "grpcPath": "/virtengine.fraud.v1.Msg/ResolveFraudReport",
                 "requestType": "virtengine.fraud.v1.MsgResolveFraudReport",
                 "responseType": "virtengine.fraud.v1.MsgResolveFraudReportResponse",
+                "http": []
+              },
+              {
+                "name": "ConfirmFraudResolution",
+                "fullName": "virtengine.fraud.v1.Msg.ConfirmFraudResolution",
+                "grpcPath": "/virtengine.fraud.v1.Msg/ConfirmFraudResolution",
+                "requestType": "virtengine.fraud.v1.MsgConfirmFraudResolution",
+                "responseType": "virtengine.fraud.v1.MsgConfirmFraudResolutionResponse",
                 "http": []
               },
               {
@@ -3658,6 +3688,34 @@
                     "path": "/virtengine/marketplace/v1/allocations/provider/{provider_address}"
                   }
                 ]
+              },
+              {
+                "name": "Catalog",
+                "fullName": "virtengine.marketplace.v1.Query.Catalog",
+                "grpcPath": "/virtengine.marketplace.v1.Query/Catalog",
+                "requestType": "virtengine.marketplace.v1.QueryCatalogRequest",
+                "responseType": "virtengine.marketplace.v1.QueryCatalogResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/marketplace/v1/catalog"
+                  }
+                ]
+              },
+              {
+                "name": "WaldurCommands",
+                "fullName": "virtengine.marketplace.v1.Query.WaldurCommands",
+                "grpcPath": "/virtengine.marketplace.v1.Query/WaldurCommands",
+                "requestType": "virtengine.marketplace.v1.QueryWaldurCommandsRequest",
+                "responseType": "virtengine.marketplace.v1.QueryWaldurCommandsResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/marketplace/v1/waldur-commands"
+                  }
+                ]
               }
             ]
           }
@@ -3735,6 +3793,62 @@
                 "grpcPath": "/virtengine.marketplace.v1.Msg/WaldurCallback",
                 "requestType": "virtengine.marketplace.v1.MsgWaldurCallback",
                 "responseType": "virtengine.marketplace.v1.MsgWaldurCallbackResponse",
+                "http": []
+              },
+              {
+                "name": "CreateOrder",
+                "fullName": "virtengine.marketplace.v1.Msg.CreateOrder",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/CreateOrder",
+                "requestType": "virtengine.marketplace.v1.MsgCreateOrder",
+                "responseType": "virtengine.marketplace.v1.MsgCreateOrderResponse",
+                "http": []
+              },
+              {
+                "name": "PlaceBid",
+                "fullName": "virtengine.marketplace.v1.Msg.PlaceBid",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/PlaceBid",
+                "requestType": "virtengine.marketplace.v1.MsgPlaceBid",
+                "responseType": "virtengine.marketplace.v1.MsgPlaceBidResponse",
+                "http": []
+              },
+              {
+                "name": "WithdrawBid",
+                "fullName": "virtengine.marketplace.v1.Msg.WithdrawBid",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/WithdrawBid",
+                "requestType": "virtengine.marketplace.v1.MsgWithdrawBid",
+                "responseType": "virtengine.marketplace.v1.MsgWithdrawBidResponse",
+                "http": []
+              },
+              {
+                "name": "RegisterWaldurSource",
+                "fullName": "virtengine.marketplace.v1.Msg.RegisterWaldurSource",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/RegisterWaldurSource",
+                "requestType": "virtengine.marketplace.v1.MsgRegisterWaldurSource",
+                "responseType": "virtengine.marketplace.v1.MsgRegisterWaldurSourceResponse",
+                "http": []
+              },
+              {
+                "name": "IngestWaldurOffering",
+                "fullName": "virtengine.marketplace.v1.Msg.IngestWaldurOffering",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/IngestWaldurOffering",
+                "requestType": "virtengine.marketplace.v1.MsgIngestWaldurOffering",
+                "responseType": "virtengine.marketplace.v1.MsgIngestWaldurOfferingResponse",
+                "http": []
+              },
+              {
+                "name": "SetOfferingVisibility",
+                "fullName": "virtengine.marketplace.v1.Msg.SetOfferingVisibility",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/SetOfferingVisibility",
+                "requestType": "virtengine.marketplace.v1.MsgSetOfferingVisibility",
+                "responseType": "virtengine.marketplace.v1.MsgSetOfferingVisibilityResponse",
+                "http": []
+              },
+              {
+                "name": "AckWaldurCommand",
+                "fullName": "virtengine.marketplace.v1.Msg.AckWaldurCommand",
+                "grpcPath": "/virtengine.marketplace.v1.Msg/AckWaldurCommand",
+                "requestType": "virtengine.marketplace.v1.MsgAckWaldurCommand",
+                "responseType": "virtengine.marketplace.v1.MsgAckWaldurCommandResponse",
                 "http": []
               }
             ]
@@ -4494,7 +4608,7 @@
                 "fullName": "virtengine.resources.v1.Query.ReservationByOrder",
                 "grpcPath": "/virtengine.resources.v1.Query/ReservationByOrder",
                 "requestType": "virtengine.resources.v1.QueryReservationByOrderRequest",
-                "responseType": "virtengine.resources.v1.QueryReservationResponse",
+                "responseType": "virtengine.resources.v1.QueryReservationByOrderResponse",
                 "http": [
                   {
                     "body": "",
@@ -4508,7 +4622,7 @@
                 "fullName": "virtengine.resources.v1.Query.ReservationByBid",
                 "grpcPath": "/virtengine.resources.v1.Query/ReservationByBid",
                 "requestType": "virtengine.resources.v1.QueryReservationByBidRequest",
-                "responseType": "virtengine.resources.v1.QueryReservationResponse",
+                "responseType": "virtengine.resources.v1.QueryReservationByBidResponse",
                 "http": [
                   {
                     "body": "",
@@ -4522,7 +4636,7 @@
                 "fullName": "virtengine.resources.v1.Query.ReservationByLease",
                 "grpcPath": "/virtengine.resources.v1.Query/ReservationByLease",
                 "requestType": "virtengine.resources.v1.QueryReservationByLeaseRequest",
-                "responseType": "virtengine.resources.v1.QueryReservationResponse",
+                "responseType": "virtengine.resources.v1.QueryReservationByLeaseResponse",
                 "http": [
                   {
                     "body": "",
@@ -4536,7 +4650,7 @@
                 "fullName": "virtengine.resources.v1.Query.ReservationByJob",
                 "grpcPath": "/virtengine.resources.v1.Query/ReservationByJob",
                 "requestType": "virtengine.resources.v1.QueryReservationByJobRequest",
-                "responseType": "virtengine.resources.v1.QueryReservationResponse",
+                "responseType": "virtengine.resources.v1.QueryReservationByJobResponse",
                 "http": [
                   {
                     "body": "",
@@ -4550,7 +4664,7 @@
                 "fullName": "virtengine.resources.v1.Query.ReservationByConsumer",
                 "grpcPath": "/virtengine.resources.v1.Query/ReservationByConsumer",
                 "requestType": "virtengine.resources.v1.QueryReservationByConsumerRequest",
-                "responseType": "virtengine.resources.v1.QueryReservationResponse",
+                "responseType": "virtengine.resources.v1.QueryReservationByConsumerResponse",
                 "http": [
                   {
                     "body": "",
@@ -4564,7 +4678,7 @@
                 "fullName": "virtengine.resources.v1.Query.ReservationsByProvider",
                 "grpcPath": "/virtengine.resources.v1.Query/ReservationsByProvider",
                 "requestType": "virtengine.resources.v1.QueryReservationsByProviderRequest",
-                "responseType": "virtengine.resources.v1.QueryReservationsResponse",
+                "responseType": "virtengine.resources.v1.QueryReservationsByProviderResponse",
                 "http": [
                   {
                     "body": "",
@@ -4918,6 +5032,46 @@
                 "requestType": "virtengine.roles.v1.MsgUpdateParams",
                 "responseType": "virtengine.roles.v1.MsgUpdateParamsResponse",
                 "http": []
+              },
+              {
+                "name": "ImposeSanction",
+                "fullName": "virtengine.roles.v1.Msg.ImposeSanction",
+                "grpcPath": "/virtengine.roles.v1.Msg/ImposeSanction",
+                "requestType": "virtengine.roles.v1.MsgImposeSanction",
+                "responseType": "virtengine.roles.v1.MsgImposeSanctionResponse",
+                "http": []
+              },
+              {
+                "name": "ConfirmSanction",
+                "fullName": "virtengine.roles.v1.Msg.ConfirmSanction",
+                "grpcPath": "/virtengine.roles.v1.Msg/ConfirmSanction",
+                "requestType": "virtengine.roles.v1.MsgConfirmSanction",
+                "responseType": "virtengine.roles.v1.MsgConfirmSanctionResponse",
+                "http": []
+              },
+              {
+                "name": "RevokeSanction",
+                "fullName": "virtengine.roles.v1.Msg.RevokeSanction",
+                "grpcPath": "/virtengine.roles.v1.Msg/RevokeSanction",
+                "requestType": "virtengine.roles.v1.MsgRevokeSanction",
+                "responseType": "virtengine.roles.v1.MsgRevokeSanctionResponse",
+                "http": []
+              },
+              {
+                "name": "OpenSanctionAppeal",
+                "fullName": "virtengine.roles.v1.Msg.OpenSanctionAppeal",
+                "grpcPath": "/virtengine.roles.v1.Msg/OpenSanctionAppeal",
+                "requestType": "virtengine.roles.v1.MsgOpenSanctionAppeal",
+                "responseType": "virtengine.roles.v1.MsgOpenSanctionAppealResponse",
+                "http": []
+              },
+              {
+                "name": "ResolveSanctionAppeal",
+                "fullName": "virtengine.roles.v1.Msg.ResolveSanctionAppeal",
+                "grpcPath": "/virtengine.roles.v1.Msg/ResolveSanctionAppeal",
+                "requestType": "virtengine.roles.v1.MsgResolveSanctionAppeal",
+                "responseType": "virtengine.roles.v1.MsgResolveSanctionAppealResponse",
+                "http": []
               }
             ]
           }
@@ -5243,13 +5397,13 @@
                 "name": "FinancialCasesByOrder",
                 "fullName": "virtengine.settlement.v1.Query.FinancialCasesByOrder",
                 "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByOrder",
-                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
-                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesByOrderRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesByOrderResponse",
                 "http": [
                   {
                     "body": "",
                     "method": "GET",
-                    "path": "/virtengine/settlement/v1/financial-cases/by-order/{key}"
+                    "path": "/virtengine/settlement/v1/financial-cases/by-order/{order_id}"
                   }
                 ]
               },
@@ -5257,13 +5411,13 @@
                 "name": "FinancialCasesByInvoice",
                 "fullName": "virtengine.settlement.v1.Query.FinancialCasesByInvoice",
                 "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByInvoice",
-                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
-                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesByInvoiceRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesByInvoiceResponse",
                 "http": [
                   {
                     "body": "",
                     "method": "GET",
-                    "path": "/virtengine/settlement/v1/financial-cases/by-invoice/{key}"
+                    "path": "/virtengine/settlement/v1/financial-cases/by-invoice/{invoice_id}"
                   }
                 ]
               },
@@ -5271,13 +5425,13 @@
                 "name": "FinancialCasesByUsage",
                 "fullName": "virtengine.settlement.v1.Query.FinancialCasesByUsage",
                 "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByUsage",
-                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
-                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesByUsageRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesByUsageResponse",
                 "http": [
                   {
                     "body": "",
                     "method": "GET",
-                    "path": "/virtengine/settlement/v1/financial-cases/by-usage/{key}"
+                    "path": "/virtengine/settlement/v1/financial-cases/by-usage/{usage_id}"
                   }
                 ]
               },
@@ -5285,13 +5439,13 @@
                 "name": "FinancialCasesByJob",
                 "fullName": "virtengine.settlement.v1.Query.FinancialCasesByJob",
                 "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByJob",
-                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
-                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesByJobRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesByJobResponse",
                 "http": [
                   {
                     "body": "",
                     "method": "GET",
-                    "path": "/virtengine/settlement/v1/financial-cases/by-job/{key}"
+                    "path": "/virtengine/settlement/v1/financial-cases/by-job/{job_id}"
                   }
                 ]
               },
@@ -5299,13 +5453,13 @@
                 "name": "FinancialCasesByEscrow",
                 "fullName": "virtengine.settlement.v1.Query.FinancialCasesByEscrow",
                 "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByEscrow",
-                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
-                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesByEscrowRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesByEscrowResponse",
                 "http": [
                   {
                     "body": "",
                     "method": "GET",
-                    "path": "/virtengine/settlement/v1/financial-cases/by-escrow/{key}"
+                    "path": "/virtengine/settlement/v1/financial-cases/by-escrow/{escrow_id}"
                   }
                 ]
               },
@@ -5313,13 +5467,13 @@
                 "name": "FinancialCasesByStatus",
                 "fullName": "virtengine.settlement.v1.Query.FinancialCasesByStatus",
                 "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByStatus",
-                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
-                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesByStatusRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesByStatusResponse",
                 "http": [
                   {
                     "body": "",
                     "method": "GET",
-                    "path": "/virtengine/settlement/v1/financial-cases/by-status/{key}"
+                    "path": "/virtengine/settlement/v1/financial-cases/by-status/{status}"
                   }
                 ]
               },
@@ -5327,13 +5481,13 @@
                 "name": "FinancialCasesByParty",
                 "fullName": "virtengine.settlement.v1.Query.FinancialCasesByParty",
                 "grpcPath": "/virtengine.settlement.v1.Query/FinancialCasesByParty",
-                "requestType": "virtengine.settlement.v1.QueryFinancialCasesRequest",
-                "responseType": "virtengine.settlement.v1.QueryFinancialCasesResponse",
+                "requestType": "virtengine.settlement.v1.QueryFinancialCasesByPartyRequest",
+                "responseType": "virtengine.settlement.v1.QueryFinancialCasesByPartyResponse",
                 "http": [
                   {
                     "body": "",
                     "method": "GET",
-                    "path": "/virtengine/settlement/v1/financial-cases/by-party/{key}"
+                    "path": "/virtengine/settlement/v1/financial-cases/by-party/{party}"
                   }
                 ]
               },
@@ -7390,6 +7544,8 @@
       "sdk/ts/src/generated/createProviderSDK.ts",
       "sdk/ts/src/generated/patches/cosmosCustomTypePatches.spec.ts",
       "sdk/ts/src/generated/patches/cosmosCustomTypePatches.ts",
+      "sdk/ts/src/generated/patches/ibc-goCustomTypePatches.spec.ts",
+      "sdk/ts/src/generated/patches/ibc-goCustomTypePatches.ts",
       "sdk/ts/src/generated/patches/nodeCustomTypePatches.spec.ts",
       "sdk/ts/src/generated/patches/nodeCustomTypePatches.ts",
       "sdk/ts/src/generated/protos/amino/amino.ts",
@@ -7598,6 +7754,7 @@
       "sdk/ts/src/generated/protos/gogoproto/gogo.ts",
       "sdk/ts/src/generated/protos/google/api/annotations.ts",
       "sdk/ts/src/generated/protos/google/api/http.ts",
+      "sdk/ts/src/generated/protos/google/api/httpbody.ts",
       "sdk/ts/src/generated/protos/google/protobuf/any.ts",
       "sdk/ts/src/generated/protos/google/protobuf/descriptor.ts",
       "sdk/ts/src/generated/protos/google/protobuf/duration.ts",
@@ -7671,6 +7828,8 @@
       "sdk/ts/src/generated/protos/ibc/lightclients/wasm/v1/tx_virtengine.ts",
       "sdk/ts/src/generated/protos/ibc/lightclients/wasm/v1/tx.ts",
       "sdk/ts/src/generated/protos/ibc/lightclients/wasm/v1/wasm.ts",
+      "sdk/ts/src/generated/protos/ibc-goPatchMessage.ts",
+      "sdk/ts/src/generated/protos/index.cosmos_proto.cosmos_proto.ts",
       "sdk/ts/src/generated/protos/index.cosmos.abci.ts",
       "sdk/ts/src/generated/protos/index.cosmos.ed25519.ts",
       "sdk/ts/src/generated/protos/index.cosmos.multisig.ts",
@@ -7680,6 +7839,7 @@
       "sdk/ts/src/generated/protos/index.cosmos.v1alpha1.ts",
       "sdk/ts/src/generated/protos/index.cosmos.v1beta1.ts",
       "sdk/ts/src/generated/protos/index.cosmos.v2alpha1.ts",
+      "sdk/ts/src/generated/protos/index.google.api.ts",
       "sdk/ts/src/generated/protos/index.ibc.v1.ts",
       "sdk/ts/src/generated/protos/index.ibc.v2.ts",
       "sdk/ts/src/generated/protos/index.ibc.v3.ts",
@@ -8038,6 +8198,6 @@
     "goMessages": 228,
     "gateways": 28,
     "gatewayStubs": 0,
-    "typescript": 637
+    "typescript": 643
   }
 }

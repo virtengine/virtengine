@@ -115,7 +115,7 @@ func (ts *grpcQueryTestSuite) createTestWalletWithScopes(t *testing.T) {
 
 	// Add scope references
 	scopeRef1 := types.ScopeReference{
-		ScopeID:        "scope-1",
+		ScopeID:        testScopeID1,
 		ScopeType:      types.ScopeTypeSelfie,
 		EnvelopeHash:   make([]byte, 32),
 		AddedAt:        ts.ctx.BlockTime(),
@@ -123,7 +123,7 @@ func (ts *grpcQueryTestSuite) createTestWalletWithScopes(t *testing.T) {
 		ConsentGranted: true,
 	}
 	scopeRef2 := types.ScopeReference{
-		ScopeID:        "scope-2",
+		ScopeID:        testScopeID2,
 		ScopeType:      types.ScopeTypeIDDocument,
 		EnvelopeHash:   make([]byte, 32),
 		AddedAt:        ts.ctx.BlockTime(),
@@ -155,7 +155,7 @@ func (ts *grpcQueryTestSuite) createTestWalletWithConsent(t *testing.T) {
 	wallet.ConsentSettings.ShareWithProviders = true
 	wallet.ConsentSettings.ShareForVerification = true
 	wallet.ConsentSettings.AllowDerivedFeatureSharing = true
-	wallet.ConsentSettings.GrantScopeConsentAt("scope-1", "verification", nil, ts.ctx.BlockTime())
+	wallet.ConsentSettings.GrantScopeConsentAt(testScopeID1, "verification", nil, ts.ctx.BlockTime())
 
 	err := ts.keeper.SetWallet(ts.ctx, wallet)
 	require.NoError(t, err)
@@ -205,7 +205,7 @@ func (ts *grpcQueryTestSuite) createTestWalletWithHistory(t *testing.T) {
 			NewScore:         50,
 			PreviousStatus:   types.AccountStatusUnknown,
 			NewStatus:        types.AccountStatusPending,
-			ScopesEvaluated:  []string{"scope-1"},
+			ScopesEvaluated:  []string{testScopeID1},
 			ModelVersion:     "v1.0.0",
 			ValidatorAddress: "validator1",
 		},
@@ -217,7 +217,7 @@ func (ts *grpcQueryTestSuite) createTestWalletWithHistory(t *testing.T) {
 			NewScore:         80,
 			PreviousStatus:   types.AccountStatusPending,
 			NewStatus:        types.AccountStatusVerified,
-			ScopesEvaluated:  []string{"scope-1", "scope-2"},
+			ScopesEvaluated:  []string{testScopeID1, testScopeID2},
 			ModelVersion:     "v1.0.0",
 			ValidatorAddress: "validator1",
 		},
@@ -229,7 +229,7 @@ func (ts *grpcQueryTestSuite) createTestWalletWithHistory(t *testing.T) {
 			NewScore:         90,
 			PreviousStatus:   types.AccountStatusVerified,
 			NewStatus:        types.AccountStatusVerified,
-			ScopesEvaluated:  []string{"scope-1", "scope-2", "scope-3"},
+			ScopesEvaluated:  []string{testScopeID1, testScopeID2, "scope-3"},
 			ModelVersion:     "v1.1.0",
 			ValidatorAddress: "validator2",
 		},
@@ -466,12 +466,12 @@ func TestGRPCQuerier_ConsentSettings_FilterByScope(t *testing.T) {
 
 	resp, err := ts.querier.ConsentSettings(ts.ctx, &types.QueryConsentSettingsRequest{
 		AccountAddress: ts.address.String(),
-		ScopeID:        "scope-1",
+		ScopeID:        testScopeID1,
 	})
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.Len(t, resp.ScopeConsents, 1)
-	require.Equal(t, "scope-1", resp.ScopeConsents[0].ScopeID)
+	require.Equal(t, testScopeID1, resp.ScopeConsents[0].ScopeID)
 }
 
 func TestGRPCQuerier_ConsentSettings_FilterByScopeNotFound(t *testing.T) {
@@ -770,7 +770,7 @@ func TestBuildPublicVerificationEntry(t *testing.T) {
 		NewScore:         85,
 		PreviousStatus:   types.AccountStatusPending,
 		NewStatus:        types.AccountStatusVerified,
-		ScopesEvaluated:  []string{"scope-1", "scope-2", "scope-3"},
+		ScopesEvaluated:  []string{testScopeID1, testScopeID2, "scope-3"},
 		ModelVersion:     "v2.0.0",
 		ValidatorAddress: "validator123",
 		Reason:           "verification complete",

@@ -31,9 +31,9 @@ type HPCSettlementE2ETestSuite struct {
 }
 
 func TestHPCSettlementE2E(t *testing.T) {
-	suite.Run(t, &HPCSettlementE2ETestSuite{
-		NetworkTestSuite: testutil.NewNetworkTestSuite(nil, &HPCSettlementE2ETestSuite{}),
-	})
+	s := &HPCSettlementE2ETestSuite{}
+	s.NetworkTestSuite = testutil.NewNetworkTestSuite(nil, s)
+	suite.Run(t, s)
 }
 
 func (s *HPCSettlementE2ETestSuite) SetupSuite() {

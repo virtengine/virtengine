@@ -16,7 +16,11 @@ export GOBIN="$bin"
 export VE_PROTO_NODE_BIN="$node_root/bin"
 export PATH="$bin:$VE_PROTO_NODE_BIN:$protoc_root/bin:$PATH"
 export BUF_CACHE_DIR="${BUF_CACHE_DIR:-$repo/.cache/proto-generation/buf}"
-export GOMODCACHE="${GOMODCACHE:-$repo/.cache/proto-generation/go-mod}"
+# Keep GOPATH and GOMODCACHE derived from ONE root: modvendor reads GOPATH only
+# (never GOMODCACHE), so a cache placed anywhere except $GOPATH/pkg/mod makes
+# modvendor fail in the container. Mirrors sdk/generation/generate.sh.
+export GOPATH="${GOPATH:-$repo/.cache/proto-generation}"
+export GOMODCACHE="$GOPATH/pkg/mod"
 export GOCACHE="${GOCACHE:-$repo/.cache/proto-generation/go-build}"
 export npm_config_cache="${npm_config_cache:-$repo/.cache/proto-generation/npm}"
 

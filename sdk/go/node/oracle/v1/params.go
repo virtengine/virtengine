@@ -15,8 +15,8 @@ var _ sdk.HasValidateBasic = (*Params)(nil)
 
 // ValidateBasic validates PythContractParams
 func (p *PythContractParams) ValidateBasic() error {
-	if p.AktPriceFeedId == "" {
-		return fmt.Errorf("akt_price_feed_id cannot be empty")
+	if p.NativePriceFeedId == "" {
+		return fmt.Errorf("native_price_feed_id must be explicitly configured for VE")
 	}
 
 	return nil
@@ -33,11 +33,10 @@ func (p *Params) ParamSetPairs() paramtypes.ParamSetPairs {
 	return paramtypes.ParamSetPairs{}
 }
 
-// DefaultPythContractParams returns default Pyth contract params
+// DefaultPythContractParams returns unconfigured Pyth contract params.
+// A valid VE feed must be supplied before this config passes validation.
 func DefaultPythContractParams() *PythContractParams {
-	return &PythContractParams{
-		AktPriceFeedId: "0x1c5d745dc0e0c8a0034b6c3d3a8e5d34e4e9b79c9ab2f4b3e6a8e7f0c9e8a5b4",
-	}
+	return &PythContractParams{}
 }
 
 // DefaultFeedContractsParams returns default feed contract params using Pyth

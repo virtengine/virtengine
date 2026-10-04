@@ -23,7 +23,11 @@ virtengine/
 │   ├── COMPLIANCE_MATRIX.md          # GDPR, SOC2, ISO27001 mappings
 │   ├── ENCRYPTION.md                 # Encryption at rest/in transit
 │   ├── SECURITY_INCIDENT_RESPONSE.md # Security-specific IR plan
-│   └── GO-2026-4740-MSGPACK-ASSESSMENT.md # Reachability assessment for an unfixable advisory
+│   ├── GO-2026-4740-MSGPACK-ASSESSMENT.md  # shamaton/msgpack DoS, no fixed version
+│   ├── GO-2026-4513-MSGPACK-ASSESSMENT.md  # shamaton/msgpack out-of-bounds read, same call path
+│   ├── GO-2026-5932-OPENPGP-ASSESSMENT.md  # x/crypto/openpgp unmaintained
+│   ├── GO-2022-0635-S3CRYPTO-ASSESSMENT.md # aws-sdk-go s3crypto in-band key negotiation
+│   └── GO-2022-0646-S3CRYPTO-ASSESSMENT.md # aws-sdk-go s3crypto CBC padding oracle
 │
 ├── _docs/                            # Internal technical documentation
 │   ├── threat-model.md               # STRIDE threat analysis
@@ -117,7 +121,7 @@ virtengine/
 |----------|-------------|----------|----------|
 | **Penetration Testing Program** | Pentest scope, methodology | Security | [PENETRATION_TESTING_PROGRAM.md](../../PENETRATION_TESTING_PROGRAM.md) |
 | **Package Security Audit** | Dependency security | Security, Dev | [PKG_SECURITY_AUDIT.md](../../PKG_SECURITY_AUDIT.md) |
-| **Dependency Advisory Assessments** | Reachability analysis for advisories with no upstream fix | Security, Dev | [GO-2026-4740-MSGPACK-ASSESSMENT.md](GO-2026-4740-MSGPACK-ASSESSMENT.md) |
+| **Dependency Advisory Assessments** | Reachability analysis for advisories with no upstream fix (GO-2026-4740, GO-2026-4513, GO-2026-5932, GO-2022-0635, GO-2022-0646) | Security, Dev | [GO-2026-4740-MSGPACK-ASSESSMENT.md](GO-2026-4740-MSGPACK-ASSESSMENT.md) |
 | **Frontend Security Audit** | Web security | Security | [docs/FRONTEND_SECURITY_AUDIT.md](../FRONTEND_SECURITY_AUDIT.md) |
 
 ### 7. Business Continuity

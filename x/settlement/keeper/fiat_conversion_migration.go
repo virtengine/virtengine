@@ -241,7 +241,7 @@ func clearPrefixes(store storetypes.KVStore, prefixes ...[]byte) {
 		for ; iter.Valid(); iter.Next() {
 			keys = append(keys, append([]byte(nil), iter.Key()...))
 		}
-		iter.Close()
+		_ = iter.Close()
 		for _, key := range keys {
 			store.Delete(key)
 		}
@@ -414,7 +414,7 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 				broken = append(broken, fmt.Sprintf("contradictory state index %x", iter.Key()))
 			}
 		}
-		iter.Close()
+		_ = iter.Close()
 	}
 	for _, scan := range []struct {
 		name   string
@@ -429,7 +429,7 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 				broken = append(broken, fmt.Sprintf("malformed %s index %x", scan.name, iter.Key()))
 			}
 		}
-		iter.Close()
+		_ = iter.Close()
 	}
 	dailyIter := storetypes.KVStorePrefixIterator(store, types.PrefixFiatDailyTotals)
 	for ; dailyIter.Valid(); dailyIter.Next() {
@@ -442,7 +442,7 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 			broken = append(broken, fmt.Sprintf("malformed daily accounting index %x", dailyIter.Key()))
 		}
 	}
-	dailyIter.Close()
+	_ = dailyIter.Close()
 	requestIter := storetypes.KVStorePrefixIterator(store, types.PrefixFiatConversionRequestDigest)
 	for ; requestIter.Valid(); requestIter.Next() {
 		key := requestIter.Key()[len(types.PrefixFiatConversionRequestDigest):]
@@ -457,7 +457,7 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 			broken = append(broken, fmt.Sprintf("orphan request digest index %x", requestIter.Key()))
 		}
 	}
-	requestIter.Close()
+	_ = requestIter.Close()
 	for _, scan := range []struct {
 		name   string
 		prefix []byte
@@ -492,7 +492,7 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 				broken = append(broken, fmt.Sprintf("unowned %s index %x", scan.name, iter.Key()))
 			}
 		}
-		iter.Close()
+		_ = iter.Close()
 	}
 	dailyOwnerIter := storetypes.KVStorePrefixIterator(store, types.PrefixFiatDailyTotals)
 	for ; dailyOwnerIter.Valid(); dailyOwnerIter.Next() {
@@ -508,7 +508,7 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 			broken = append(broken, fmt.Sprintf("orphan daily accounting index %x", dailyOwnerIter.Key()))
 		}
 	}
-	dailyOwnerIter.Close()
+	_ = dailyOwnerIter.Close()
 	for _, scan := range []struct {
 		name   string
 		prefix []byte
@@ -536,7 +536,7 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 				broken = append(broken, fmt.Sprintf("contradictory %s index %x", scan.name, iter.Key()))
 			}
 		}
-		iter.Close()
+		_ = iter.Close()
 	}
 	ledgerIter := storetypes.KVStorePrefixIterator(store, types.PrefixPayoutLedgerByPayout)
 	for ; ledgerIter.Valid(); ledgerIter.Next() {
@@ -551,7 +551,7 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 			broken = append(broken, fmt.Sprintf("orphan payout ledger index %x", ledgerIter.Key()))
 		}
 	}
-	ledgerIter.Close()
+	_ = ledgerIter.Close()
 	entryIter := storetypes.KVStorePrefixIterator(store, types.PrefixPayoutLedgerEntry)
 	for ; entryIter.Valid(); entryIter.Next() {
 		var entry types.PayoutLedgerEntry
@@ -563,7 +563,7 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 			broken = append(broken, fmt.Sprintf("orphan payout ledger entry %x", entryIter.Key()))
 		}
 	}
-	entryIter.Close()
+	_ = entryIter.Close()
 	broken = append(broken, k.validateCompletedFiatTreasuryAccounting(ctx, payouts)...)
 	actualCustody := k.GetFiatConversionCustodyBalance(ctx)
 	if !actualCustody.Equal(expectedCustody) {
@@ -581,7 +581,7 @@ func (k Keeper) ValidateFiatConversionInvariants(ctx sdk.Context) []string {
 			broken = append(broken, fmt.Sprintf("orphan fiat custody effect %x", custodyIter.Key()))
 		}
 	}
-	custodyIter.Close()
+	_ = custodyIter.Close()
 	return broken
 }
 

@@ -19,7 +19,7 @@
 #   * file targets (the version markers) run $(DEVACHE_GUARD) as their first
 #     recipe line -- a phony prerequisite there would mark the target
 #     permanently out of date and re-install every tool on every run.
-DEVACHE_ERROR = VE_DEVCACHE is empty - run "direnv allow" or export VE_DEVCACHE
+DEVACHE_ERROR = VE_DEVCACHE is empty - run "direnv allow", or export the devcache family (VE_DEVCACHE, VE_DEVCACHE_BIN, VE_DEVCACHE_INCLUDE, VE_DEVCACHE_VERSIONS, VE_DEVCACHE_NODE_MODULES, VE_RUN, VE_RUN_BIN) - exporting VE_DEVCACHE alone is not enough, the recipes use the others
 DEVACHE_GUARD = $(if $(VE_DEVCACHE),@:,$(error $(DEVACHE_ERROR)))
 
 .PHONY: require-devache
@@ -28,9 +28,8 @@ require-devache:
 
 # PowerShell does not understand MSYS-style paths (/c/Users/...): it resolves
 # them relative to the current drive (C:\c\Users\...), creating a stray tree.
-# Convert the cache paths to native form once, at parse time.
+# Convert the cache binary path to native form once, at parse time.
 ifeq ($(OS),Windows_NT)
-VE_DEVCACHE_NATIVE     := $(shell cygpath -w "$(VE_DEVCACHE)" 2>/dev/null || echo "$(VE_DEVCACHE)")
 VE_DEVCACHE_BIN_NATIVE := $(shell cygpath -w "$(VE_DEVCACHE_BIN)" 2>/dev/null || echo "$(VE_DEVCACHE_BIN)")
 endif
 
@@ -46,7 +45,13 @@ $(VE_DEVCACHE):
 	mkdir -p $(VE_RUN_BIN)
 cache: require-devache $(VE_DEVCACHE)
 
-$(GIT_CHGLOG_VERSION_FILE): $(VE_DEVCACHE)
+# The version markers below take the cache directory as an ORDER-ONLY
+# prerequisite (`| $(VE_DEVCACHE)`): it has to exist, but its mtime must never
+# make a marker look stale. As a normal prerequisite it did exactly that -- the
+# gitleaks recipe writes and deletes .cache/gitleaks.zip, bumping .cache's mtime
+# past the five markers that were touched earlier in the same run, so every
+# second `make tools` re-installed all five Go tools.
+$(GIT_CHGLOG_VERSION_FILE): | $(VE_DEVCACHE)
 	$(DEVACHE_GUARD)
 	@echo "installing git-chglog $(GIT_CHGLOG_VERSION) ..."
 	rm -f $(GIT_CHGLOG)
@@ -56,9 +61,22 @@ $(GIT_CHGLOG_VERSION_FILE): $(VE_DEVCACHE)
 	touch $@
 $(GIT_CHGLOG): $(GIT_CHGLOG_VERSION_FILE)
 
+# A module path carrying a major (`github.com/vektra/mockery/v3`, `.../golangci-lint/v2`)
+# derives that major from the tool version via $(SEMVER), which make/init.mk defaults
+# when the environment (i.e. direnv) does not supply it. A SEMVER that exists but does
+# not resolve -- a stale path exported by hand, a script that is not runnable -- still
+# yields an empty major, and `go install` would then fail on a malformed module path
+# (github.com/vektra/mockery/v@v3.5.0) that names neither SEMVER nor the tool. Check it
+# here instead, before the recipe's `rm -f` can remove a working binary.
+# $(1) = tool name, $(2) = derived major.
+define require-module-major
+case "$(2)" in ''|*[!0-9]*) echo "ERROR: $(1): could not resolve the module major from SEMVER='$(SEMVER)' (got '$(2)'). Check that script/semver.sh exists and is runnable." >&2; exit 2;; esac
+endef
+
 MOCKERY_MAJOR=$(shell $(SEMVER) get major $(MOCKERY_VERSION))
-$(MOCKERY_VERSION_FILE): $(VE_DEVCACHE)
+$(MOCKERY_VERSION_FILE): | $(VE_DEVCACHE)
 	$(DEVACHE_GUARD)
+	@$(call require-module-major,mockery,$(MOCKERY_MAJOR))
 	@echo "installing mockery $(MOCKERY_VERSION) ..."
 	rm -f $(MOCKERY)
 	GOBIN=$(VE_DEVCACHE_BIN) go install -ldflags '-s -w -X github.com/vektra/mockery/v$(MOCKERY_MAJOR)/pkg/config.SemVer=$(MOCKERY_VERSION)' github.com/vektra/mockery/v$(MOCKERY_MAJOR)@v$(MOCKERY_VERSION)
@@ -68,8 +86,9 @@ $(MOCKERY_VERSION_FILE): $(VE_DEVCACHE)
 $(MOCKERY): $(MOCKERY_VERSION_FILE)
 
 GOLANGCI_LINT_MAJOR=$(shell $(SEMVER) get major $(GOLANGCI_LINT_VERSION))
-$(GOLANGCI_LINT_VERSION_FILE): $(VE_DEVCACHE)
+$(GOLANGCI_LINT_VERSION_FILE): | $(VE_DEVCACHE)
 	$(DEVACHE_GUARD)
+	@$(call require-module-major,golangci-lint,$(GOLANGCI_LINT_MAJOR))
 	@echo "installing golangci-lint $(GOLANGCI_LINT_VERSION) ..."
 	rm -f $(GOLANGCI_LINT)
 	GOBIN=$(VE_DEVCACHE_BIN) go install github.com/golangci/golangci-lint/v$(GOLANGCI_LINT_MAJOR)/cmd/golangci-lint@$(GOLANGCI_LINT_VERSION)
@@ -78,7 +97,7 @@ $(GOLANGCI_LINT_VERSION_FILE): $(VE_DEVCACHE)
 	touch $@
 $(GOLANGCI_LINT): $(GOLANGCI_LINT_VERSION_FILE)
 
-$(STATIK_VERSION_FILE): $(VE_DEVCACHE)
+$(STATIK_VERSION_FILE): | $(VE_DEVCACHE)
 	$(DEVACHE_GUARD)
 	@echo "Installing statik $(STATIK_VERSION) ..."
 	rm -f $(STATIK)
@@ -88,7 +107,7 @@ $(STATIK_VERSION_FILE): $(VE_DEVCACHE)
 	touch $@
 $(STATIK): $(STATIK_VERSION_FILE)
 
-$(COSMOVISOR_VERSION_FILE): $(VE_DEVCACHE)
+$(COSMOVISOR_VERSION_FILE): | $(VE_DEVCACHE)
 	$(DEVACHE_GUARD)
 	@echo "installing cosmovisor $(COSMOVISOR_VERSION) ..."
 	rm -f $(COSMOVISOR)
@@ -98,7 +117,7 @@ $(COSMOVISOR_VERSION_FILE): $(VE_DEVCACHE)
 	touch $@
 $(COSMOVISOR): $(COSMOVISOR_VERSION_FILE)
 
-$(GITLEAKS_VERSION_FILE): $(VE_DEVCACHE)
+$(GITLEAKS_VERSION_FILE): | $(VE_DEVCACHE)
 	$(DEVACHE_GUARD)
 	@echo "installing gitleaks $(GITLEAKS_VERSION) ..."
 	rm -f $(GITLEAKS)
@@ -107,10 +126,14 @@ ifeq ($(OS),Windows_NT)
 	# PowerShell. With $$url the shell expands the unset $url to empty and
 	# PowerShell receives `= 'https://...'`. Native paths for the same reason:
 	# Invoke-WebRequest/Expand-Archive do not understand /c/Users/...
+	# The archive is staged in $$env:TEMP, not in the cache root: a transient zip
+	# there changed .cache's mtime, which is what used to invalidate every
+	# version marker touched earlier in the same run.
 	powershell -Command "\$$url = 'https://github.com/gitleaks/gitleaks/releases/download/v$(GITLEAKS_VERSION)/gitleaks_$(GITLEAKS_VERSION)_windows_x64.zip'; \
-		Invoke-WebRequest -Uri \$$url -OutFile '$(VE_DEVCACHE_NATIVE)/gitleaks.zip'; \
-		Expand-Archive -Path '$(VE_DEVCACHE_NATIVE)/gitleaks.zip' -DestinationPath '$(VE_DEVCACHE_BIN_NATIVE)' -Force; \
-		Remove-Item '$(VE_DEVCACHE_NATIVE)/gitleaks.zip'"
+		\$$zip = Join-Path \$$env:TEMP 'gitleaks.zip'; \
+		Invoke-WebRequest -Uri \$$url -OutFile \$$zip; \
+		Expand-Archive -Path \$$zip -DestinationPath '$(VE_DEVCACHE_BIN_NATIVE)' -Force; \
+		Remove-Item \$$zip"
 else ifeq ($(UNAME_OS),Darwin)
 	curl -sSfL "https://github.com/gitleaks/gitleaks/releases/download/v$(GITLEAKS_VERSION)/gitleaks_$(GITLEAKS_VERSION)_darwin_$(UNAME_ARCH).tar.gz" | tar -xz -C $(VE_DEVCACHE_BIN) gitleaks
 else

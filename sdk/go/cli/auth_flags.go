@@ -95,7 +95,7 @@ func ReadTxFromFile(ctx client.Context, filename string) (tx sdk.Tx, err error) 
 	if filename == "-" {
 		data, err = io.ReadAll(os.Stdin)
 	} else {
-		data, err = os.ReadFile(filename) //nolint: gosec
+		data, err = os.ReadFile(filename) /* #nosec G304 -- filename is a local path parameter supplied by this function's own caller (a CLI argument, loader parameter or configured state file) and is not derived from a network peer or chain message; opening the caller-nominated file is the purpose of this call */ //nolint:gosec
 	}
 
 	if err != nil {

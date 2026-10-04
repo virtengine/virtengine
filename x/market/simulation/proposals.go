@@ -15,7 +15,7 @@ import (
 const (
 	DefaultWeightMsgUpdateParams int = 100
 
-	OpWeightMsgUpdateParams = "op_weight_msg_update_params" //nolint:gosec // #nosec G101: simulation weight key
+	OpWeightMsgUpdateParams = "op_weight_msg_update_params" /* #nosec G101 -- #nosec G101: simulation weight key */ //nolint:gosec
 )
 
 // ProposalMsgs defines the module weighted proposals' contents
@@ -35,7 +35,7 @@ func SimulateMsgUpdateParams(r *rand.Rand, _ sdk.Context, _ []simtypes.Account) 
 
 	params := types.DefaultParams()
 	params.BidMinDeposit = sdk.NewInt64Coin("uve", int64(simtypes.RandIntBetween(r, 500000, 50000000)))
-	params.OrderMaxBids = uint32(simtypes.RandIntBetween(r, 20, 500)) //nolint:gosec // G404: simulation randomness for parameter fuzzing
+	params.OrderMaxBids = uint32(simtypes.RandIntBetween(r, 20, 500)) /* #nosec G115 -- simulation randomness for parameter fuzzing */ //nolint:gosec
 
 	return &types.MsgUpdateParams{
 		Authority: authority.String(),

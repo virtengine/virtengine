@@ -207,7 +207,7 @@ groups:
 ### Dockerfile
 
 ```dockerfile
-FROM golang:1.21-alpine AS builder
+FROM golang:1.26.8-alpine AS builder
 WORKDIR /app
 COPY . .
 RUN go build -o inference-sidecar ./cmd/inference-sidecar

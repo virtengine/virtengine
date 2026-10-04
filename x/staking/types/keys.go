@@ -104,11 +104,11 @@ func GetInvalidAttestationKey(recordID string) []byte {
 // putUint64BE puts a big-endian uint64 into the slice
 func putUint64BE(b []byte, v uint64) {
 	b[0] = byte(v >> 56)
-	b[1] = byte(v >> 48)
-	b[2] = byte(v >> 40)
-	b[3] = byte(v >> 32)
-	b[4] = byte(v >> 24)
-	b[5] = byte(v >> 16)
-	b[6] = byte(v >> 8)
-	b[7] = byte(v)
+	b[1] = byte(v >> 48) // #nosec G115 -- fixed-width big-endian encoding: byte(v >> 48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[2] = byte(v >> 40) // #nosec G115 -- fixed-width big-endian encoding: byte(v >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[3] = byte(v >> 32) // #nosec G115 -- fixed-width big-endian encoding: byte(v >> 32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[4] = byte(v >> 24) // #nosec G115 -- fixed-width big-endian encoding: byte(v >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[5] = byte(v >> 16) // #nosec G115 -- fixed-width big-endian encoding: byte(v >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[6] = byte(v >> 8)  // #nosec G115 -- fixed-width big-endian encoding: byte(v >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	b[7] = byte(v)       // #nosec G115 -- fixed-width big-endian encoding: byte(v) writes the low byte into the buffer by design; the truncated value is not used arithmetically
 }

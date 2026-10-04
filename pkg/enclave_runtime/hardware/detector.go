@@ -327,7 +327,7 @@ func (d *SGXDetector) readEPCSize() uint64 {
 	}
 
 	for _, path := range paths {
-		if data, err := os.ReadFile(path); err == nil {
+		if data, err := os.ReadFile(path); err == nil { // #nosec G304 -- the path is an operator-configured device or allow-list location (from configuration or a fixed device constant), never untrusted input
 			var size uint64
 			if _, err := fmt.Sscanf(string(data), "%d", &size); err == nil {
 				return size
@@ -486,7 +486,7 @@ func checkDeviceExists(path string) (bool, error) {
 
 // readSysFile reads a value from a sysfs file.
 func readSysFile(path string) (string, error) {
-	data, err := os.ReadFile(path)
+	data, err := os.ReadFile(path) // #nosec G304 -- the path is an operator-configured device or allow-list location (from configuration or a fixed device constant), never untrusted input
 	if err != nil {
 		return "", err
 	}

@@ -36,6 +36,31 @@ func (m *MsgUpdateParams) ProtoMessage()  {}
 func (m *MsgUpdateParams) Reset()         { *m = MsgUpdateParams{} }
 func (m *MsgUpdateParams) String() string { return fmt.Sprintf("%+v", *m) }
 
+// Proto.Message interface for MsgImposeSanction
+func (m *MsgImposeSanction) ProtoMessage()  {}
+func (m *MsgImposeSanction) Reset()         { *m = MsgImposeSanction{} }
+func (m *MsgImposeSanction) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface for MsgConfirmSanction
+func (m *MsgConfirmSanction) ProtoMessage()  {}
+func (m *MsgConfirmSanction) Reset()         { *m = MsgConfirmSanction{} }
+func (m *MsgConfirmSanction) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface for MsgRevokeSanction
+func (m *MsgRevokeSanction) ProtoMessage()  {}
+func (m *MsgRevokeSanction) Reset()         { *m = MsgRevokeSanction{} }
+func (m *MsgRevokeSanction) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface for MsgOpenSanctionAppeal
+func (m *MsgOpenSanctionAppeal) ProtoMessage()  {}
+func (m *MsgOpenSanctionAppeal) Reset()         { *m = MsgOpenSanctionAppeal{} }
+func (m *MsgOpenSanctionAppeal) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface for MsgResolveSanctionAppeal
+func (m *MsgResolveSanctionAppeal) ProtoMessage()  {}
+func (m *MsgResolveSanctionAppeal) Reset()         { *m = MsgResolveSanctionAppeal{} }
+func (m *MsgResolveSanctionAppeal) String() string { return fmt.Sprintf("%+v", *m) }
+
 // ============================================================================
 // Proto.Message Interface Implementations - Response Types
 // ============================================================================
@@ -64,6 +89,31 @@ func (m *MsgNominateAdminResponse) String() string { return fmt.Sprintf("%+v", *
 func (m *MsgUpdateParamsResponse) ProtoMessage()  {}
 func (m *MsgUpdateParamsResponse) Reset()         { *m = MsgUpdateParamsResponse{} }
 func (m *MsgUpdateParamsResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface for MsgImposeSanctionResponse
+func (m *MsgImposeSanctionResponse) ProtoMessage()  {}
+func (m *MsgImposeSanctionResponse) Reset()         { *m = MsgImposeSanctionResponse{} }
+func (m *MsgImposeSanctionResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface for MsgConfirmSanctionResponse
+func (m *MsgConfirmSanctionResponse) ProtoMessage()  {}
+func (m *MsgConfirmSanctionResponse) Reset()         { *m = MsgConfirmSanctionResponse{} }
+func (m *MsgConfirmSanctionResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface for MsgRevokeSanctionResponse
+func (m *MsgRevokeSanctionResponse) ProtoMessage()  {}
+func (m *MsgRevokeSanctionResponse) Reset()         { *m = MsgRevokeSanctionResponse{} }
+func (m *MsgRevokeSanctionResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface for MsgOpenSanctionAppealResponse
+func (m *MsgOpenSanctionAppealResponse) ProtoMessage()  {}
+func (m *MsgOpenSanctionAppealResponse) Reset()         { *m = MsgOpenSanctionAppealResponse{} }
+func (m *MsgOpenSanctionAppealResponse) String() string { return fmt.Sprintf("%+v", *m) }
+
+// Proto.Message interface for MsgResolveSanctionAppealResponse
+func (m *MsgResolveSanctionAppealResponse) ProtoMessage()  {}
+func (m *MsgResolveSanctionAppealResponse) Reset()         { *m = MsgResolveSanctionAppealResponse{} }
+func (m *MsgResolveSanctionAppealResponse) String() string { return fmt.Sprintf("%+v", *m) }
 
 // ============================================================================
 // Proto.Message Interface Implementations - Event Types

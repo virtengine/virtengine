@@ -21,23 +21,39 @@ UPGRADE_FROM            := $(shell cat $(ROOT_DIR)/meta.json | jq -r --arg name 
 GENESIS_BINARY_VERSION  := $(shell cat $(ROOT_DIR)/meta.json | jq -r --arg name $(UPGRADE_TO) '.upgrades[$$name].from_binary' | tr -d '\n')
 UPGRADE_BINARY_VERSION  ?= local
 
-SNAPSHOT_SOURCE         ?= sandbox-2
+# Valid values are mainnet, sandbox and sandbox1 — the same set emitted by
+# `script/upgrades.sh snapshot-source`. The previous default, "sandbox-2", matched
+# no branch and made the $(error) below fire on every invocation of this makefile.
+SNAPSHOT_SOURCE         ?= sandbox
+
+# CHAIN_METADATA_URL points at the per-network chain metadata document used to
+# locate the genesis download for the upgrade test. The previous default,
+# https://raw.githubusercontent.com/virtengine-network/net/master/<net>/meta.json,
+# is retired: the virtengine-network org no longer resolves (404 on
+# raw.githubusercontent.com, `gh repo view` cannot resolve the repository), and no
+# equivalent path exists in this fork. The value is therefore unset by default
+# and must be injected by the caller, e.g.
+#   make test CHAIN_METADATA_URL=https://<host>/<net>/meta.json
+# An empty value leaves the genesis download skipped rather than fetching a URL
+# that cannot resolve.
+SNAPSHOT_NETWORK_MAINNET  := virtenginenet-2
+SNAPSHOT_NETWORK_SANDBOX  := sandbox-2
+SNAPSHOT_NETWORK_SANDBOX1 := sandbox-01
 
 ifeq ($(SNAPSHOT_SOURCE),mainnet)
-	SNAPSHOT_NETWORK    := virtenginenet-2
-	CHAIN_METADATA_URL  := https://raw.githubusercontent.com/virtengine-network/net/master/mainnet/meta.json
+	SNAPSHOT_NETWORK    := $(SNAPSHOT_NETWORK_MAINNET)
 else ifeq ($(SNAPSHOT_SOURCE),sandbox)
-	SNAPSHOT_NETWORK    := sandbox-2
-	CHAIN_METADATA_URL  := https://raw.githubusercontent.com/virtengine-network/net/master/sandbox-2/meta.json
+	SNAPSHOT_NETWORK    := $(SNAPSHOT_NETWORK_SANDBOX)
 else ifeq ($(SNAPSHOT_SOURCE),sandbox1)
-	SNAPSHOT_NETWORK    := sandbox-01
-	CHAIN_METADATA_URL  := https://raw.githubusercontent.com/virtengine-network/net/master/sandbox/meta.json
+	SNAPSHOT_NETWORK    := $(SNAPSHOT_NETWORK_SANDBOX1)
 else
 $(error "invalid snapshot source $(SNAPSHOT_SOURCE)")
 endif
 
+CHAIN_METADATA_URL      ?=
+
 SNAPSHOT_URL            ?= https://snapshots.VirtEngine.network/$(SNAPSHOT_NETWORK)/latest
-REMOTE_TEST_WORKDIR     ?= ~/go/src/github.com/virtengine-network/node
+REMOTE_TEST_WORKDIR     ?= ~/go/src/github.com/virtengine/virtengine
 REMOTE_TEST_HOST        ?=
 
 MAX_VALIDATORS          := $(shell cat $(TEST_CONFIG) | jq -r '.validators | length' | tr -d '\n')

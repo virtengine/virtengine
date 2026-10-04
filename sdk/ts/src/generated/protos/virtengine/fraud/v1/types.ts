@@ -244,6 +244,11 @@ export enum AuditAction {
   AUDIT_ACTION_ESCALATED = 7,
   /** AUDIT_ACTION_COMMENT_ADDED - AUDIT_ACTION_COMMENT_ADDED indicates a comment was added */
   AUDIT_ACTION_COMMENT_ADDED = 8,
+  /**
+   * AUDIT_ACTION_RESPONDED - AUDIT_ACTION_RESPONDED indicates the reported party or the reporter filed a
+   * response/rebuttal against a report
+   */
+  AUDIT_ACTION_RESPONDED = 9,
   UNRECOGNIZED = -1,
 }
 
@@ -276,6 +281,9 @@ export function auditActionFromJSON(object: any): AuditAction {
     case 8:
     case "AUDIT_ACTION_COMMENT_ADDED":
       return AuditAction.AUDIT_ACTION_COMMENT_ADDED;
+    case 9:
+    case "AUDIT_ACTION_RESPONDED":
+      return AuditAction.AUDIT_ACTION_RESPONDED;
     case -1:
     case "UNRECOGNIZED":
     default:
@@ -303,7 +311,52 @@ export function auditActionToJSON(object: AuditAction): string {
       return "AUDIT_ACTION_ESCALATED";
     case AuditAction.AUDIT_ACTION_COMMENT_ADDED:
       return "AUDIT_ACTION_COMMENT_ADDED";
+    case AuditAction.AUDIT_ACTION_RESPONDED:
+      return "AUDIT_ACTION_RESPONDED";
     case AuditAction.UNRECOGNIZED:
+    default:
+      return "UNRECOGNIZED";
+  }
+}
+
+/** FraudRespondentRole identifies which side of the report filed a response */
+export enum FraudRespondentRole {
+  /** FRAUD_RESPONDENT_ROLE_UNSPECIFIED - FRAUD_RESPONDENT_ROLE_UNSPECIFIED represents an unspecified respondent role */
+  FRAUD_RESPONDENT_ROLE_UNSPECIFIED = 0,
+  /** FRAUD_RESPONDENT_ROLE_REPORTED_PARTY - FRAUD_RESPONDENT_ROLE_REPORTED_PARTY indicates the party the report was filed against */
+  FRAUD_RESPONDENT_ROLE_REPORTED_PARTY = 1,
+  /** FRAUD_RESPONDENT_ROLE_REPORTER - FRAUD_RESPONDENT_ROLE_REPORTER indicates the original reporter */
+  FRAUD_RESPONDENT_ROLE_REPORTER = 2,
+  UNRECOGNIZED = -1,
+}
+
+export function fraudRespondentRoleFromJSON(object: any): FraudRespondentRole {
+  switch (object) {
+    case 0:
+    case "FRAUD_RESPONDENT_ROLE_UNSPECIFIED":
+      return FraudRespondentRole.FRAUD_RESPONDENT_ROLE_UNSPECIFIED;
+    case 1:
+    case "FRAUD_RESPONDENT_ROLE_REPORTED_PARTY":
+      return FraudRespondentRole.FRAUD_RESPONDENT_ROLE_REPORTED_PARTY;
+    case 2:
+    case "FRAUD_RESPONDENT_ROLE_REPORTER":
+      return FraudRespondentRole.FRAUD_RESPONDENT_ROLE_REPORTER;
+    case -1:
+    case "UNRECOGNIZED":
+    default:
+      return FraudRespondentRole.UNRECOGNIZED;
+  }
+}
+
+export function fraudRespondentRoleToJSON(object: FraudRespondentRole): string {
+  switch (object) {
+    case FraudRespondentRole.FRAUD_RESPONDENT_ROLE_UNSPECIFIED:
+      return "FRAUD_RESPONDENT_ROLE_UNSPECIFIED";
+    case FraudRespondentRole.FRAUD_RESPONDENT_ROLE_REPORTED_PARTY:
+      return "FRAUD_RESPONDENT_ROLE_REPORTED_PARTY";
+    case FraudRespondentRole.FRAUD_RESPONDENT_ROLE_REPORTER:
+      return "FRAUD_RESPONDENT_ROLE_REPORTER";
+    case FraudRespondentRole.UNRECOGNIZED:
     default:
       return "UNRECOGNIZED";
   }
@@ -374,6 +427,50 @@ export interface FraudReport {
   /** FinancialCaseID links financially relevant reports to settlement authority. */
   financialCaseId: string;
   financialCaseStatus: string;
+  /**
+   * ResponseCount is the number of responses/rebuttals filed against this report.
+   * PUBLIC BY DESIGN: a counter only, it carries no free text.
+   */
+  responseCount: number;
+  /**
+   * NoOrderAvailable records that the reporter asserted there is genuinely no
+   * order/resource to reference. PUBLIC BY DESIGN: a boolean only; the actual
+   * justification lives in EncryptedEvidence so it never reaches public state.
+   */
+  noOrderAvailable: boolean;
+}
+
+/**
+ * FraudResponse is a response/rebuttal filed by a party to a report.
+ *
+ * PUBLIC/PRIVATE SPLIT: every field below is integrity metadata (ids, role,
+ * hashes, timestamps). The respondent's actual statement is NOT a public field;
+ * it is carried in EncryptedEvidence addressed to the moderator recipients.
+ */
+export interface FraudResponse {
+  /** ID is the unique identifier for this response */
+  id: string;
+  /** ReportID is the report this response is filed against */
+  reportId: string;
+  /** Respondent is the address filing the response */
+  respondent: string;
+  /** Role identifies which side of the report the respondent represents */
+  role: FraudRespondentRole;
+  /** Evidence holds the encrypted response content for the moderator recipients */
+  evidence: EncryptedEvidence[];
+  /**
+   * StatementHash is SHA256 of the plaintext statement, for integrity only.
+   * PUBLIC BY DESIGN: a digest, not the statement.
+   */
+  statementHash: string;
+  /** ContentHash is SHA256 over the immutable response fields for integrity */
+  contentHash: string;
+  /** SubmittedAt is when the response was filed */
+  submittedAt:
+    | Date
+    | undefined;
+  /** BlockHeight is the block height when the response was filed */
+  blockHeight: Long;
 }
 
 /** FraudAuditLog represents an audit log entry for a fraud report */
@@ -416,6 +513,11 @@ export interface ModeratorQueueEntry {
   category: FraudCategory;
   /** AssignedTo is the moderator assigned (empty if unassigned) */
   assignedTo: string;
+  /**
+   * ResponseCount is how many responses/rebuttals are attached to the report,
+   * so a moderator sees the rebuttal alongside the report in the queue.
+   */
+  responseCount: number;
 }
 
 function createBaseEncryptedEvidence(): EncryptedEvidence {
@@ -638,6 +740,8 @@ function createBaseFraudReport(): FraudReport {
     relatedOrderIds: [],
     financialCaseId: "",
     financialCaseStatus: "",
+    responseCount: 0,
+    noOrderAvailable: false,
   };
 }
 
@@ -698,6 +802,12 @@ export const FraudReport: MessageFns<FraudReport, "virtengine.fraud.v1.FraudRepo
     }
     if (message.financialCaseStatus !== "") {
       writer.uint32(146).string(message.financialCaseStatus);
+    }
+    if (message.responseCount !== 0) {
+      writer.uint32(152).uint32(message.responseCount);
+    }
+    if (message.noOrderAvailable !== false) {
+      writer.uint32(160).bool(message.noOrderAvailable);
     }
     return writer;
   },
@@ -853,6 +963,22 @@ export const FraudReport: MessageFns<FraudReport, "virtengine.fraud.v1.FraudRepo
           message.financialCaseStatus = reader.string();
           continue;
         }
+        case 19: {
+          if (tag !== 152) {
+            break;
+          }
+
+          message.responseCount = reader.uint32();
+          continue;
+        }
+        case 20: {
+          if (tag !== 160) {
+            break;
+          }
+
+          message.noOrderAvailable = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -886,6 +1012,8 @@ export const FraudReport: MessageFns<FraudReport, "virtengine.fraud.v1.FraudRepo
         : [],
       financialCaseId: isSet(object.financial_case_id) ? globalThis.String(object.financial_case_id) : "",
       financialCaseStatus: isSet(object.financial_case_status) ? globalThis.String(object.financial_case_status) : "",
+      responseCount: isSet(object.response_count) ? globalThis.Number(object.response_count) : 0,
+      noOrderAvailable: isSet(object.no_order_available) ? globalThis.Boolean(object.no_order_available) : false,
     };
   },
 
@@ -945,6 +1073,12 @@ export const FraudReport: MessageFns<FraudReport, "virtengine.fraud.v1.FraudRepo
     if (message.financialCaseStatus !== "") {
       obj.financial_case_status = message.financialCaseStatus;
     }
+    if (message.responseCount !== 0) {
+      obj.response_count = Math.round(message.responseCount);
+    }
+    if (message.noOrderAvailable !== false) {
+      obj.no_order_available = message.noOrderAvailable;
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<FraudReport>): FraudReport {
@@ -969,6 +1103,208 @@ export const FraudReport: MessageFns<FraudReport, "virtengine.fraud.v1.FraudRepo
     message.relatedOrderIds = object.relatedOrderIds?.map((e) => e) || [];
     message.financialCaseId = object.financialCaseId ?? "";
     message.financialCaseStatus = object.financialCaseStatus ?? "";
+    message.responseCount = object.responseCount ?? 0;
+    message.noOrderAvailable = object.noOrderAvailable ?? false;
+    return message;
+  },
+};
+
+function createBaseFraudResponse(): FraudResponse {
+  return {
+    id: "",
+    reportId: "",
+    respondent: "",
+    role: 0,
+    evidence: [],
+    statementHash: "",
+    contentHash: "",
+    submittedAt: undefined,
+    blockHeight: Long.ZERO,
+  };
+}
+
+export const FraudResponse: MessageFns<FraudResponse, "virtengine.fraud.v1.FraudResponse"> = {
+  $type: "virtengine.fraud.v1.FraudResponse" as const,
+
+  encode(message: FraudResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.id !== "") {
+      writer.uint32(10).string(message.id);
+    }
+    if (message.reportId !== "") {
+      writer.uint32(18).string(message.reportId);
+    }
+    if (message.respondent !== "") {
+      writer.uint32(26).string(message.respondent);
+    }
+    if (message.role !== 0) {
+      writer.uint32(32).int32(message.role);
+    }
+    for (const v of message.evidence) {
+      EncryptedEvidence.encode(v!, writer.uint32(42).fork()).join();
+    }
+    if (message.statementHash !== "") {
+      writer.uint32(50).string(message.statementHash);
+    }
+    if (message.contentHash !== "") {
+      writer.uint32(58).string(message.contentHash);
+    }
+    if (message.submittedAt !== undefined) {
+      Timestamp.encode(toTimestamp(message.submittedAt), writer.uint32(66).fork()).join();
+    }
+    if (!message.blockHeight.equals(Long.ZERO)) {
+      writer.uint32(72).int64(message.blockHeight.toString());
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FraudResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFraudResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.id = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.reportId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.respondent = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 32) {
+            break;
+          }
+
+          message.role = reader.int32() as any;
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.evidence.push(EncryptedEvidence.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.statementHash = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.contentHash = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.submittedAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 9: {
+          if (tag !== 72) {
+            break;
+          }
+
+          message.blockHeight = Long.fromString(reader.int64().toString());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FraudResponse {
+    return {
+      id: isSet(object.id) ? globalThis.String(object.id) : "",
+      reportId: isSet(object.report_id) ? globalThis.String(object.report_id) : "",
+      respondent: isSet(object.respondent) ? globalThis.String(object.respondent) : "",
+      role: isSet(object.role) ? fraudRespondentRoleFromJSON(object.role) : 0,
+      evidence: globalThis.Array.isArray(object?.evidence)
+        ? object.evidence.map((e: any) => EncryptedEvidence.fromJSON(e))
+        : [],
+      statementHash: isSet(object.statement_hash) ? globalThis.String(object.statement_hash) : "",
+      contentHash: isSet(object.content_hash) ? globalThis.String(object.content_hash) : "",
+      submittedAt: isSet(object.submitted_at) ? fromJsonTimestamp(object.submitted_at) : undefined,
+      blockHeight: isSet(object.block_height) ? Long.fromValue(object.block_height) : Long.ZERO,
+    };
+  },
+
+  toJSON(message: FraudResponse): unknown {
+    const obj: any = {};
+    if (message.id !== "") {
+      obj.id = message.id;
+    }
+    if (message.reportId !== "") {
+      obj.report_id = message.reportId;
+    }
+    if (message.respondent !== "") {
+      obj.respondent = message.respondent;
+    }
+    if (message.role !== 0) {
+      obj.role = fraudRespondentRoleToJSON(message.role);
+    }
+    if (message.evidence?.length) {
+      obj.evidence = message.evidence.map((e) => EncryptedEvidence.toJSON(e));
+    }
+    if (message.statementHash !== "") {
+      obj.statement_hash = message.statementHash;
+    }
+    if (message.contentHash !== "") {
+      obj.content_hash = message.contentHash;
+    }
+    if (message.submittedAt !== undefined) {
+      obj.submitted_at = message.submittedAt.toISOString();
+    }
+    if (!message.blockHeight.equals(Long.ZERO)) {
+      obj.block_height = (message.blockHeight || Long.ZERO).toString();
+    }
+    return obj;
+  },
+  fromPartial(object: DeepPartial<FraudResponse>): FraudResponse {
+    const message = createBaseFraudResponse();
+    message.id = object.id ?? "";
+    message.reportId = object.reportId ?? "";
+    message.respondent = object.respondent ?? "";
+    message.role = object.role ?? 0;
+    message.evidence = object.evidence?.map((e) => EncryptedEvidence.fromPartial(e)) || [];
+    message.statementHash = object.statementHash ?? "";
+    message.contentHash = object.contentHash ?? "";
+    message.submittedAt = object.submittedAt ?? undefined;
+    message.blockHeight = (object.blockHeight !== undefined && object.blockHeight !== null)
+      ? Long.fromValue(object.blockHeight)
+      : Long.ZERO;
     return message;
   },
 };
@@ -1189,7 +1525,7 @@ export const FraudAuditLog: MessageFns<FraudAuditLog, "virtengine.fraud.v1.Fraud
 };
 
 function createBaseModeratorQueueEntry(): ModeratorQueueEntry {
-  return { reportId: "", priority: 0, queuedAt: undefined, category: 0, assignedTo: "" };
+  return { reportId: "", priority: 0, queuedAt: undefined, category: 0, assignedTo: "", responseCount: 0 };
 }
 
 export const ModeratorQueueEntry: MessageFns<ModeratorQueueEntry, "virtengine.fraud.v1.ModeratorQueueEntry"> = {
@@ -1210,6 +1546,9 @@ export const ModeratorQueueEntry: MessageFns<ModeratorQueueEntry, "virtengine.fr
     }
     if (message.assignedTo !== "") {
       writer.uint32(42).string(message.assignedTo);
+    }
+    if (message.responseCount !== 0) {
+      writer.uint32(48).uint32(message.responseCount);
     }
     return writer;
   },
@@ -1261,6 +1600,14 @@ export const ModeratorQueueEntry: MessageFns<ModeratorQueueEntry, "virtengine.fr
           message.assignedTo = reader.string();
           continue;
         }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.responseCount = reader.uint32();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1277,6 +1624,7 @@ export const ModeratorQueueEntry: MessageFns<ModeratorQueueEntry, "virtengine.fr
       queuedAt: isSet(object.queued_at) ? fromJsonTimestamp(object.queued_at) : undefined,
       category: isSet(object.category) ? fraudCategoryFromJSON(object.category) : 0,
       assignedTo: isSet(object.assigned_to) ? globalThis.String(object.assigned_to) : "",
+      responseCount: isSet(object.response_count) ? globalThis.Number(object.response_count) : 0,
     };
   },
 
@@ -1297,6 +1645,9 @@ export const ModeratorQueueEntry: MessageFns<ModeratorQueueEntry, "virtengine.fr
     if (message.assignedTo !== "") {
       obj.assigned_to = message.assignedTo;
     }
+    if (message.responseCount !== 0) {
+      obj.response_count = Math.round(message.responseCount);
+    }
     return obj;
   },
   fromPartial(object: DeepPartial<ModeratorQueueEntry>): ModeratorQueueEntry {
@@ -1306,6 +1657,7 @@ export const ModeratorQueueEntry: MessageFns<ModeratorQueueEntry, "virtengine.fr
     message.queuedAt = object.queuedAt ?? undefined;
     message.category = object.category ?? 0;
     message.assignedTo = object.assignedTo ?? "";
+    message.responseCount = object.responseCount ?? 0;
     return message;
   },
 };

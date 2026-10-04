@@ -89,8 +89,9 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 | `portal-deploy-pages.yaml`   | Portal Pages deploy                                        | push main portal paths, dispatch                                     | build, deploy, preview-comment                                                                                                                                                           | Pages artifact                                | Node 20, pnpm 10.28.2                                       |
 | `proto-generation.yaml`      | Reproducible protobuf/module contract gate                 | PR/push paths for module, SDK proto, generated API                    | module checks, pinned generation, drift, compatibility, gateway parity, TS                                                                                                              | Descriptor/OpenAPI/SDK drift evidence         | Go 1.26.8, pinned generation image                          |
 | `pr-security-check.yaml`     | PR security checks                                         | pull_request main/develop                                            | analysis + summary                                                                                                                                                                       | Security reports                              | Go 1.26.8 + dependency-review                               |
-| `quality-gate.yaml`          | PR quality gate                                            | PR main/develop, push main/mainnet/develop/release/\*\*              | lint, vet, build, test-go, agents-docs                                                                                                                                                   | Build/test outputs                            | Go 1.26.8                                                   |
+| `quality-gate.yaml`          | PR quality gate                                            | PR main/develop, push main/mainnet/develop/release/\*\*              | lint, vet, build, test-go, infra-contracts, agents-docs                                                                                                                                | Build/test outputs                            | Go 1.26.8                                                   |
 | `release.yaml`               | Publish release                                            | dispatch                                                             | publish, test-network-upgrade-on-release, notify-homebrew                                                                                                                                | Release artifacts                             | GoReleaser, Docker Buildx                                   |
+| `sdk-ci.yaml`                | Go + TypeScript SDK lint/test gate                         | push main/mainnet, PR sdk/go|sdk/specs|sdk/ts paths, dispatch        | `go` Go SDK lint+tests 45m: `go test ./...`, diff-scoped golangci-lint, GOWORK=off, CGO_ENABLED=0; `typescript` TS SDK lint+build 30m: npm ci, lint, build, validator determinism        | Build/test outputs (no published artifacts)   | Go (sdk/go/go.mod), Node 22, npm; golangci-lint v2.13.2     |
 | `sdk-publish.yaml`           | Publish SDKs                                               | release published                                                    | publish-python, publish-rust                                                                                                                                                             | SDK packages                                  | PyPI + crates.io                                            |
 | `security.yaml`              | Security scanning                                          | push main/mainnet, daily 02:00 UTC, dispatch                         | CodeQL + vuln scans                                                                                                                                                                      | SBOM, SARIF                                   | CodeQL, govulncheck, pip-audit, npm audit, Trivy, gosec     |
 | `smoke-test.yaml`             | Post-deploy smoke tests                                    | workflow_dispatch, workflow_run from infra                           | `smoke-test`                                                                                                                                                                             | None (notifications only)                     | Go, Node, pnpm, Playwright                                  |
@@ -160,14 +161,14 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 
 ### Caching
 
-- **Go**: `actions/cache@v4` with `~/go/pkg/mod` and `~/.cache/go-build` keys
-- **Node**: `pnpm/action-setup@v2` with built-in store caching
-- **Python**: `actions/setup-python@v5` with `pip` cache
+- **Go**: `actions/cache@v5` with `~/go/pkg/mod` and `~/.cache/go-build` keys
+- **Node**: `pnpm/action-setup@v5` with built-in store caching
+- **Python**: `actions/setup-python@v6` with `pip` cache
 
 ### Coverage Gates
 
 - **Go**: 80% coverage threshold (`ci.yaml`) via `go test -coverprofile`; PRs that do not touch Go-related files short-circuit the `Go Tests` job with a skip notice so non-Go changes do not fail on unrelated repo-wide Go test or coverage baselines.
-- Coverage reports uploaded to Codecov with `codecov/codecov-action@v4`, with PR security advisory summaries in `pr-security-check.yaml`
+- Coverage reports uploaded to Codecov with `codecov/codecov-action@v5`, with PR security advisory summaries in `pr-security-check.yaml`
 
 ### Test Timeouts
 
@@ -200,7 +201,7 @@ Inventory and docs live in `.github/workflows/` with release details in `RELEASE
 **Jobs:\*\*
 
 1. `build`: pnpm install + build portal static site
-2. `deploy`: Upload to GitHub Pages via `actions/deploy-pages@v4`
+2. `deploy`: Upload to GitHub Pages via `actions/deploy-pages@v5`
 3. `preview-comment`: Comment on PRs with preview URL
 
 **Artifacts:** Pages deployment to `https://virtengine.github.io/virtengine`
@@ -475,7 +476,7 @@ gh run view <run-id> --log-failed  # failed jobs only
 
 ```yaml
 # Bust cache by updating key
-- uses: actions/cache@v4
+- uses: actions/cache@v5
   with:
     key: go-${{ runner.os }}-${{ hashFiles('go.sum') }}-v2 # increment v2 → v3
 ```

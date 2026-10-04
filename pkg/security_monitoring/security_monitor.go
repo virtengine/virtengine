@@ -205,7 +205,7 @@ func (sm *SecurityMonitor) Stop() {
 	sm.wg.Wait()
 
 	if sm.auditLog != nil {
-		sm.auditLog.Close()
+		_ = sm.auditLog.Close()
 	}
 }
 
@@ -259,7 +259,7 @@ func (sm *SecurityMonitor) updateIncidents(event *SecurityEvent) {
 	incidentKey := event.Type + ":" + event.Source
 	incident, exists := sm.activeIncidents[incidentKey]
 
-	if !exists && event.Severity >= SeverityMedium {
+	if !exists && event.Severity.AtLeast(SeverityMedium) {
 		// Create new incident
 		incident = &SecurityIncident{
 			ID:          generateIncidentID(),
@@ -288,7 +288,7 @@ func (sm *SecurityMonitor) updateIncidents(event *SecurityEvent) {
 		// Update existing incident
 		incident.LastEventAt = event.Timestamp
 		incident.EventCount++
-		if event.Severity > incident.Severity {
+		if event.Severity.Above(incident.Severity) {
 			incident.Severity = event.Severity
 		}
 	}
@@ -335,7 +335,7 @@ func (sm *SecurityMonitor) updateThreatLevel() {
 // shouldAlert checks if an alert should be sent for this event
 func (sm *SecurityMonitor) shouldAlert(event *SecurityEvent) bool {
 	// Only alert on medium severity or higher
-	if event.Severity < SeverityMedium {
+	if !event.Severity.AtLeast(SeverityMedium) {
 		return false
 	}
 

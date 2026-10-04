@@ -592,6 +592,7 @@ func combineSignatures(signatures []CollectedSignature) []byte {
 
 	// Concatenate signatures with length prefix
 	combined := make([]byte, 0, 1+len(sorted)*(8+1+64))
+	// #nosec G115 -- len(sorted) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 	combined = append(combined, byte(len(sorted))) // Number of signatures
 
 	for _, sig := range sorted {
@@ -600,7 +601,7 @@ func combineSignatures(signatures []CollectedSignature) []byte {
 		combined = append(combined, pubKeyHash[:8]...)
 
 		// Add signature length and data
-		combined = append(combined, byte(len(sig.Signature)))
+		combined = append(combined, byte(len(sig.Signature))) // #nosec G115 -- len(sig.Signature) is bounded by its allocating container, a protocol-capped collection far below 2^32, so the conversion cannot truncate
 		combined = append(combined, sig.Signature...)
 	}
 

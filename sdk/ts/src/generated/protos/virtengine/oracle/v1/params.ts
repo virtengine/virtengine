@@ -13,8 +13,11 @@ import { Any } from "../../../google/protobuf/any.ts";
 
 /** PythContractParams contains configuration for Pyth price feeds */
 export interface PythContractParams {
-  /** akt_price_feed_id is the Pyth price feed identifier for AKT/USD */
-  aktPriceFeedId: string;
+  /**
+   * native_price_feed_id identifies an explicitly configured VE/USD feed.
+   * No default market feed is asserted for the proposed native asset.
+   */
+  nativePriceFeedId: string;
 }
 
 /** Params defines the parameters for the oracle module */
@@ -37,15 +40,15 @@ export interface Params {
 }
 
 function createBasePythContractParams(): PythContractParams {
-  return { aktPriceFeedId: "" };
+  return { nativePriceFeedId: "" };
 }
 
 export const PythContractParams: MessageFns<PythContractParams, "virtengine.oracle.v1.PythContractParams"> = {
   $type: "virtengine.oracle.v1.PythContractParams" as const,
 
   encode(message: PythContractParams, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
-    if (message.aktPriceFeedId !== "") {
-      writer.uint32(10).string(message.aktPriceFeedId);
+    if (message.nativePriceFeedId !== "") {
+      writer.uint32(10).string(message.nativePriceFeedId);
     }
     return writer;
   },
@@ -62,7 +65,7 @@ export const PythContractParams: MessageFns<PythContractParams, "virtengine.orac
             break;
           }
 
-          message.aktPriceFeedId = reader.string();
+          message.nativePriceFeedId = reader.string();
           continue;
         }
       }
@@ -75,19 +78,21 @@ export const PythContractParams: MessageFns<PythContractParams, "virtengine.orac
   },
 
   fromJSON(object: any): PythContractParams {
-    return { aktPriceFeedId: isSet(object.akt_price_feed_id) ? globalThis.String(object.akt_price_feed_id) : "" };
+    return {
+      nativePriceFeedId: isSet(object.native_price_feed_id) ? globalThis.String(object.native_price_feed_id) : "",
+    };
   },
 
   toJSON(message: PythContractParams): unknown {
     const obj: any = {};
-    if (message.aktPriceFeedId !== "") {
-      obj.akt_price_feed_id = message.aktPriceFeedId;
+    if (message.nativePriceFeedId !== "") {
+      obj.native_price_feed_id = message.nativePriceFeedId;
     }
     return obj;
   },
   fromPartial(object: DeepPartial<PythContractParams>): PythContractParams {
     const message = createBasePythContractParams();
-    message.aktPriceFeedId = object.aktPriceFeedId ?? "";
+    message.nativePriceFeedId = object.nativePriceFeedId ?? "";
     return message;
   },
 };

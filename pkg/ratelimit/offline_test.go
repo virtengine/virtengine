@@ -27,6 +27,15 @@ import (
 	"google.golang.org/grpc/status"
 )
 
+// Shared literals for the offline rate-limit tests. goconst runs at the
+// default three-occurrence threshold, so each repeated fixture is named once
+// here instead of being re-typed at every call site.
+const (
+	testHealthSkipPath  = "/health"
+	testGRPCFullMethod  = "/svc/Method"
+	testWhitelistedUser = "admin"
+)
+
 // fakeLimiter is an in-memory RateLimiter for offline unit tests.
 type fakeLimiter struct {
 	mu            sync.Mutex
@@ -195,7 +204,7 @@ func TestHTTPMiddlewareSkipPaths(t *testing.T) {
 	// Skip logic bypasses the limiter entirely, so the shared middleware
 	// (single promauto registration) exercises it without Redis.
 	h := sharedHTTPMiddleware.WrapHandler(okHandler("skipped"), HTTPMiddlewareConfig{
-		SkipPaths: []string{"/health"},
+		SkipPaths: []string{testHealthSkipPath},
 	})
 	req := httptest.NewRequest(http.MethodGet, "/health/live", nil)
 	req.RemoteAddr = "10.0.0.2:1234"
@@ -377,8 +386,8 @@ func TestAddRateLimitHeadersNil(t *testing.T) {
 }
 
 func TestShouldSkipHTTP(t *testing.T) {
-	assert.True(t, sharedHTTPMiddleware.shouldSkip("/health/live", []string{"/health"}))
-	assert.False(t, sharedHTTPMiddleware.shouldSkip("/api", []string{"/health"}))
+	assert.True(t, sharedHTTPMiddleware.shouldSkip("/health/live", []string{testHealthSkipPath}))
+	assert.False(t, sharedHTTPMiddleware.shouldSkip("/api", []string{testHealthSkipPath}))
 	assert.False(t, sharedHTTPMiddleware.shouldSkip("/api", nil))
 }
 
@@ -390,7 +399,7 @@ func unaryHandlerOK(_ context.Context, _ interface{}) (interface{}, error) {
 
 func TestGRPCUnaryAllow(t *testing.T) {
 	ic := sharedGRPCInterceptor.UnaryServerInterceptor(GRPCInterceptorConfig{})
-	resp, err := ic(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}, unaryHandlerOK)
+	resp, err := ic(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: testGRPCFullMethod}, unaryHandlerOK)
 	require.NoError(t, err)
 	assert.Equal(t, "ok-response", resp)
 }
@@ -411,7 +420,7 @@ func TestGRPCUnaryBlockedCode(t *testing.T) {
 		},
 	})
 	interceptor := ic.UnaryServerInterceptor(GRPCInterceptorConfig{})
-	_, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}, unaryHandlerOK)
+	_, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: testGRPCFullMethod}, unaryHandlerOK)
 	require.Error(t, err)
 	assert.Equal(t, codes.ResourceExhausted, status.Code(err))
 	assert.Contains(t, err.Error(), "rate limit exceeded")
@@ -424,7 +433,7 @@ func TestGRPCUnaryLimiterError(t *testing.T) {
 		},
 	})
 	interceptor := ic.UnaryServerInterceptor(GRPCInterceptorConfig{})
-	resp, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "/svc/Method"}, unaryHandlerOK)
+	resp, err := interceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: testGRPCFullMethod}, unaryHandlerOK)
 	require.NoError(t, err)
 	assert.Equal(t, "ok-response", resp)
 }
@@ -895,7 +904,7 @@ func TestRedisLimiterAllowDisabled(t *testing.T) {
 func TestRedisLimiterAllowWhitelisted(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.WhitelistedIPs = []string{"10.1.2.3", "192.168.0.0/16"}
-	cfg.WhitelistedUsers = []string{"admin"}
+	cfg.WhitelistedUsers = []string{testWhitelistedUser}
 	r := offlineRedisLimiter(cfg)
 
 	allowed, _, err := r.Allow(context.Background(), "10.1.2.3", LimitTypeIP)
@@ -906,7 +915,7 @@ func TestRedisLimiterAllowWhitelisted(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, allowed)
 
-	allowed, _, err = r.Allow(context.Background(), "admin", LimitTypeUser)
+	allowed, _, err = r.Allow(context.Background(), testWhitelistedUser, LimitTypeUser)
 	require.NoError(t, err)
 	assert.True(t, allowed)
 }
@@ -914,13 +923,13 @@ func TestRedisLimiterAllowWhitelisted(t *testing.T) {
 func TestRedisLimiterIsWhitelisted(t *testing.T) {
 	cfg := DefaultConfig()
 	cfg.WhitelistedIPs = []string{"10.1.2.3", "192.168.0.0/16"}
-	cfg.WhitelistedUsers = []string{"admin"}
+	cfg.WhitelistedUsers = []string{testWhitelistedUser}
 	r := offlineRedisLimiter(cfg)
 
 	assert.True(t, r.IsWhitelisted("10.1.2.3", LimitTypeIP))
 	assert.True(t, r.IsWhitelisted("192.168.1.1", LimitTypeIP))
 	assert.False(t, r.IsWhitelisted("11.0.0.1", LimitTypeIP))
-	assert.True(t, r.IsWhitelisted("admin", LimitTypeUser))
+	assert.True(t, r.IsWhitelisted(testWhitelistedUser, LimitTypeUser))
 	assert.False(t, r.IsWhitelisted("bob", LimitTypeUser))
 	assert.False(t, r.IsWhitelisted("x", LimitTypeGlobal))
 	assert.False(t, r.IsWhitelisted("x", LimitTypeEndpoint))
@@ -1056,7 +1065,7 @@ func startRESPStub(t *testing.T) *respStub {
 }
 
 func (s *respStub) serve(conn net.Conn) {
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 	rd := bufio.NewReader(conn)
 	for {
 		args, err := readRESPArray(rd)

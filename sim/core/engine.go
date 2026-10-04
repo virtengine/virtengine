@@ -203,7 +203,34 @@ func (e *Engine) collectEvents(ctx context.Context) {
 	}
 }
 
+// resetMarketFlow clears the per-step flow accumulators.
+//
+// Compute/Storage/GPU/Gas Demand and Supply are step-LOCAL flow rates, not
+// stocks. `processEvents` adds one DemandEvent per user and one SupplyEvent per
+// provider into these fields every step, and nothing ever cleared them, so each
+// field grew monotonically with step count: at step k they held k steps' worth of
+// flow. Downstream that is not a scaling artefact but an unbounded compound
+// multiplier -- `markets.UpdateCompute` re-prices off the ratio demand/supply, and
+// `adjustPrice` may move the price by up to MaxPriceMove (35%) per step, so a
+// ratio that grows linearly drives the price as 1.35^k. At the baseline horizon
+// (366 steps) that reached 1.8e46, which is what made the economics gate report
+// avg_gas_price = 9.917836366755436e+28 against a 0.0004..0.01 bound.
+//
+// Zeroing them at the start of each step makes the fields mean "flow in this
+// step", which is what every consumer of them already assumes.
+func (e *Engine) resetMarketFlow() {
+	e.state.Market.ComputeDemand = 0
+	e.state.Market.StorageDemand = 0
+	e.state.Market.GPUDemand = 0
+	e.state.Market.GasDemand = 0
+	e.state.Market.ComputeSupply = 0
+	e.state.Market.StorageSupply = 0
+	e.state.Market.GPUSupply = 0
+}
+
 func (e *Engine) processEvents() {
+	e.resetMarketFlow()
+
 	events := e.events.Drain()
 	if len(events) == 0 {
 		return

@@ -77,13 +77,21 @@ jobs:
       PNPM_VERSION: "10.28.2"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@v6
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
+
+      - name: Install build dependencies for cgo packages
+        # github.com/zondax/hid (via go.mod replace) carries `#cgo pkg-config: libudev`;
+        # without libudev-dev the packages below die at pkg-config build time and
+        # `go build`/`go test` never run. Not present on the ubuntu-latest image.
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends libudev-dev
 
       - name: Build virtengine CLI
         run: go build -o /usr/local/bin/virtengine ./cmd/virtengine
@@ -99,12 +107,12 @@ jobs:
           scripts/ci/post-deploy-smoke-test.sh 2>&1 | tee smoke-backend-output.txt
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v5
         with:
           version: ${{ env.PNPM_VERSION }}
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
           node-version: ${{ env.NODE_VERSION }}
           cache: "pnpm"
@@ -113,7 +121,10 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Install Playwright browsers
-        run: npx playwright install --with-deps chromium
+        # Workspace-pinned Playwright only; `npx playwright install` would fetch
+        # the newest release from the registry and install a browser build the
+        # locked @playwright/test does not launch.
+        run: pnpm --filter virtengine-portal exec playwright install --with-deps chromium
 
       - name: Run portal smoke test
         env:
@@ -124,7 +135,7 @@ jobs:
 
       - name: Upload smoke artifacts
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v6
         with:
           name: smoke-artifacts-${{ env.TARGET_ENV }}
           path: |

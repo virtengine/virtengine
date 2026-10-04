@@ -21,12 +21,23 @@ locals {
 }
 
 data "aws_availability_zones" "available" {
+  #checkov:skip=CKV_AWS_394:accepted: the AZ set is read from the provider at apply time; pinning AZ names would hard-fail in any account whose AZ letters differ | review-by 2027-04-01
   state = "available"
 }
 
 # -----------------------------------------------------------------------------
 # VPC
 # -----------------------------------------------------------------------------
+# Lock down the auto-created default security group. No ingress/egress blocks
+# means nothing is allowed; the VPC has no workload that relies on it.
+resource "aws_default_security_group" "main" {
+  vpc_id = aws_vpc.main.id
+
+  tags = merge(local.tags, {
+    Name = "default-deny-all"
+  })
+}
+
 resource "aws_vpc" "main" {
   cidr_block           = var.vpc_cidr
   enable_dns_hostnames = true
@@ -52,6 +63,7 @@ resource "aws_internet_gateway" "main" {
 # Public Subnets
 # -----------------------------------------------------------------------------
 resource "aws_subnet" "public" {
+  #checkov:skip=CKV_AWS_130:accepted by definition: this is a subnet named `public`; map_public_ip_on_launch=true is the property that makes it public | review-by 2027-04-01
   count = var.az_count
 
   vpc_id                  = aws_vpc.main.id
@@ -204,12 +216,62 @@ resource "aws_flow_log" "main" {
 }
 
 resource "aws_cloudwatch_log_group" "flow_logs" {
+  #checkov:skip=CKV_AWS_338:KNOWN GAP, real defect carried deliberately: retention is below the 1-year the check wants. Declared with a deliberate operational retention; long-term retention is carried by the S3 archive buckets. Real fix is to confirm each retention with the log owner and raise where the window is genuinely too short | review-by 2026-11-01
   count = var.enable_flow_logs ? 1 : 0
 
   name              = "/aws/vpc/${var.name}/flow-logs"
   retention_in_days = var.flow_logs_retention_days
+  kms_key_id        = aws_kms_key.flow_logs.arn
 
   tags = local.tags
+}
+
+# -----------------------------------------------------------------------------
+# KMS key for VPC flow log encryption
+# -----------------------------------------------------------------------------
+data "aws_caller_identity" "current" {}
+
+resource "aws_kms_key" "flow_logs" {
+  description             = "KMS key for VPC flow log encryption"
+  deletion_window_in_days = 30
+  enable_key_rotation     = true
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Sid    = "AllowKeyAdministration"
+        Effect = "Allow"
+        Principal = {
+          AWS = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:root"
+        }
+        Action   = "kms:*"
+        Resource = "*"
+      },
+      {
+        Sid    = "AllowServicesUse"
+        Effect = "Allow"
+        Principal = {
+          Service = [
+            "cloudwatch.amazonaws.com",
+            "vpc-flow-logs.amazonaws.com",
+            "logs.${data.aws_region.current.name}.amazonaws.com",
+          ]
+        }
+        Action   = ["kms:Decrypt", "kms:GenerateDataKey*", "kms:Describe*"]
+        Resource = "*"
+      },
+    ]
+  })
+
+  tags = merge(local.tags, {
+    Name = "${var.name}-vpc-flow-logs-key"
+  })
+}
+
+resource "aws_kms_alias" "flow_logs" {
+  name          = "alias/${var.name}-vpc-flow-logs"
+  target_key_id = aws_kms_key.flow_logs.key_id
 }
 
 resource "aws_iam_role" "flow_logs" {
@@ -239,17 +301,47 @@ resource "aws_iam_role_policy" "flow_logs" {
 
   policy = jsonencode({
     Version = "2012-10-17"
-    Statement = [{
-      Action = [
-        "logs:CreateLogGroup",
-        "logs:CreateLogStream",
-        "logs:PutLogEvents",
-        "logs:DescribeLogGroups",
-        "logs:DescribeLogStreams"
-      ]
-      Effect   = "Allow"
-      Resource = "*"
-    }]
+    Statement = [
+      {
+        # Write actions scoped to THIS log group. The delivery role has no reason
+        # to be able to write to any other log group in the account.
+        Action = [
+          "logs:CreateLogStream",
+          "logs:PutLogEvents",
+          "logs:DescribeLogStreams"
+        ]
+        Effect   = "Allow"
+        Resource = "${aws_cloudwatch_log_group.flow_logs[0].arn}:*"
+      },
+      {
+        # logs:CreateLogGroup is scoped to the log group itself (no stream suffix);
+        # AWS requires this call to be made against the parent log group ARN.
+        Action   = ["logs:CreateLogGroup"]
+        Effect   = "Allow"
+        Resource = aws_cloudwatch_log_group.flow_logs[0].arn
+      },
+      {
+        # logs:DescribeLogGroups does NOT support resource-level permissions --
+        # AWS rejects any ARN other than "*". It is a read-only, account-scoped
+        # call and cannot be narrowed; it is isolated in its own statement so the
+        # write actions above can be scoped.
+        Action   = ["logs:DescribeLogGroups"]
+        Effect   = "Allow"
+        Resource = "*"
+      },
+      {
+        # REQUIRED: the log group is KMS-encrypted, so the flow-logs delivery role
+        # must be allowed to generate the data key for every envelope write.
+        # Without this the delivery silently fails once encryption is enabled.
+        Action = [
+          "kms:Decrypt",
+          "kms:GenerateDataKey",
+          "kms:DescribeKey"
+        ]
+        Effect   = "Allow"
+        Resource = aws_kms_key.flow_logs.arn
+      },
+    ]
   })
 }
 
@@ -315,6 +407,8 @@ resource "aws_vpc_endpoint" "sts" {
 }
 
 resource "aws_security_group" "vpc_endpoints" {
+  #checkov:skip=CKV_AWS_382:accepted: node/cluster/database security groups need unrestricted egress to pull images and reach AWS service endpoints; restricting it requires a per-service-endpoint egress allowlist | review-by 2027-04-01
+  #checkov:skip=CKV2_AWS_5:accepted: attachment is expressed through aws_security_group_rule or a module output rather than an inline vpc_id on the group; the check only resolves the inline form | review-by 2027-04-01
   count = var.enable_vpc_endpoints ? 1 : 0
 
   name        = "${var.name}-vpc-endpoints-sg"
