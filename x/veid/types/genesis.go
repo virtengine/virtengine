@@ -13,6 +13,14 @@ type GenesisState struct {
 	// ApprovedClients are the initially approved clients
 	ApprovedClients []ApprovedClient `json:"approved_clients"`
 
+	// AssuranceVectors are the initial per-factor assurance vectors.
+	//
+	// An account absent from this list has NO assurance vector: that is "no
+	// assurance claim", not a vector of zeros. Genesis never synthesises a vector
+	// for an account that has none, so no chain can start claiming assurance it
+	// never measured.
+	AssuranceVectors []*AssuranceVector `json:"assurance_vectors,omitempty"`
+
 	// Params are the module parameters
 	Params Params `json:"params"`
 }
@@ -76,6 +84,20 @@ func DefaultParams() Params {
 
 // Validate validates the genesis state
 func (gs GenesisState) Validate() error {
+	// Validate assurance vectors. A vector with a bad commitment is rejected at
+	// genesis rather than imported, so the chain cannot start from a state whose
+	// assurance claims do not match their own hashes.
+	seenVectors := make(map[string]bool, len(gs.AssuranceVectors))
+	for _, vector := range gs.AssuranceVectors {
+		if err := vector.Validate(); err != nil {
+			return err
+		}
+		if seenVectors[vector.Account] {
+			return ErrInvalidScoringModel.Wrapf("duplicate assurance vector: %s", vector.Account)
+		}
+		seenVectors[vector.Account] = true
+	}
+
 	// Validate identity records
 	seenRecords := make(map[string]bool)
 	for _, record := range gs.IdentityRecords {

@@ -155,6 +155,111 @@ func (s *SDKQueryServer) ModelParams(goCtx context.Context, req *veidv1.QueryMod
 // Conversion helpers: local types → proto types
 // ============================================================================
 
+// AssuranceVector returns an account's per-factor assurance vector.
+func (s *SDKQueryServer) AssuranceVector(goCtx context.Context, req *veidv1.QueryAssuranceVectorRequest) (*veidv1.QueryAssuranceVectorResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	resp, err := NewGRPCQuerier(s.keeper).QueryAssuranceVector(ctx, &types.QueryAssuranceVectorRequest{
+		AccountAddress: req.GetAccountAddress(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	out := &veidv1.QueryAssuranceVectorResponse{
+		Found:        resp.Found,
+		CurrentEpoch: resp.CurrentEpoch,
+	}
+	if resp.Vector != nil {
+		out.Vector = localAssuranceVectorToProto(resp.Vector)
+	}
+	if resp.Recency != nil {
+		out.Recency = localAssuranceRecencyToProto(resp.Recency)
+	}
+
+	return out, nil
+}
+
+// AssuranceVectorHistory returns an account's assurance vectors, newest first.
+func (s *SDKQueryServer) AssuranceVectorHistory(goCtx context.Context, req *veidv1.QueryAssuranceVectorHistoryRequest) (*veidv1.QueryAssuranceVectorHistoryResponse, error) {
+	if req == nil {
+		return nil, status.Error(codes.InvalidArgument, errMsgEmptyRequest)
+	}
+	ctx := sdk.UnwrapSDKContext(goCtx)
+
+	resp, err := NewGRPCQuerier(s.keeper).QueryAssuranceVectorHistory(ctx, &types.QueryAssuranceVectorHistoryRequest{
+		AccountAddress: req.GetAccountAddress(),
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	out := &veidv1.QueryAssuranceVectorHistoryResponse{
+		Vectors: make([]veidv1.AssuranceVector, 0, len(resp.Vectors)),
+	}
+	for _, vector := range resp.Vectors {
+		if vector == nil {
+			continue
+		}
+		out.Vectors = append(out.Vectors, *localAssuranceVectorToProto(vector))
+	}
+
+	return out, nil
+}
+
+func localAssuranceVectorToProto(v *types.AssuranceVector) *veidv1.AssuranceVector {
+	if v == nil {
+		return nil
+	}
+
+	factors := make([]veidv1.AssuranceFactorEntry, 0, len(v.Factors))
+	for _, entry := range v.Factors {
+		factors = append(factors, veidv1.AssuranceFactorEntry{
+			Factor:           string(entry.Factor),
+			ScoreBps:         entry.ScoreBps,
+			WeightBps:        entry.WeightBps,
+			WeightedScoreBps: entry.WeightedScoreBps,
+			Measured:         entry.Measured,
+			PassedThreshold:  entry.PassedThreshold,
+		})
+	}
+
+	return &veidv1.AssuranceVector{
+		Version:        v.Version,
+		Account:        v.Account,
+		Epoch:          v.Epoch,
+		Factors:        factors,
+		OverallBps:     v.OverallBps,
+		ScalarScore:    v.ScalarScore,
+		Passed:         v.Passed,
+		ScoreVersion:   v.ScoreVersion,
+		ModelVersion:   v.ModelVersion,
+		AccountAgeBps:  v.AccountAgeBps,
+		VerifiedHeight: v.VerifiedHeight,
+		VerifiedAtUnix: v.VerifiedAtUnix,
+		InputHash:      append([]byte(nil), v.InputHash...),
+		Commitment:     append([]byte(nil), v.Commitment...),
+	}
+}
+
+func localAssuranceRecencyToProto(r *types.AssuranceVectorRecency) *veidv1.AssuranceVectorRecency {
+	if r == nil {
+		return nil
+	}
+
+	return &veidv1.AssuranceVectorRecency{
+		Epoch:          r.Epoch,
+		AgeSeconds:     r.AgeSeconds,
+		VerifiedHeight: r.VerifiedHeight,
+		VerifiedAtUnix: r.VerifiedAtUnix,
+		Stale:          r.Stale,
+		MaxAgeSeconds:  r.MaxAgeSeconds,
+	}
+}
+
 func localModelStatusToProto(s types.ModelStatus) veidv1.ModelStatus {
 	switch s {
 	case types.ModelStatusPending:
