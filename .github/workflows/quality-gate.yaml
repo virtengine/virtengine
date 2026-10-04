@@ -303,6 +303,43 @@ jobs:
       - name: Validate AGENTS documentation
         run: node scripts/validate-agents-docs.mjs
 
+  deploy-env-policies:
+    name: deploy-env-policies
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+        with:
+          # The census reads the real remote branch list, so it needs a real
+          # remote-tracking view rather than a depth-1 clone.
+          fetch-depth: 0
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Falsify the deploy-environment policy guard
+        # Runs the offline fixture suite first: if the guard's own assertions
+        # are broken the gate must say so rather than reporting a verdict from a
+        # classifier that no longer works.
+        run: node scripts/ci/check-deploy-env-policies.mjs --selftest
+
+      - name: Falsification suite for the deploy-environment policy guard
+        run: node scripts/ci/check-deploy-env-policies.test.mjs
+
+      - name: Check deployment environment branch policies
+        # Fails when a workflow's `environment:` cannot be reached by the refs
+        # that trigger it -- a job rejected before a runner is scheduled, which
+        # GitHub reports as `failure` with zero steps. Exit 2 (unreadable API)
+        # is deliberately NOT a pass, so a token/scope problem cannot read as a
+        # clean estate.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ci/check-deploy-env-policies.mjs
+
   economics-sim:
     name: economics-sim
     runs-on: ubuntu-latest
