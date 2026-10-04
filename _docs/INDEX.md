@@ -113,6 +113,7 @@ This index lists internal-only documentation. Do not add internal docs outside `
 - `_docs/audits/task-t4-13a-generated-contract-inventory-2026-08-02.md`
 - `_docs/audits/task-t4-01e-intake-freeze-planner-2026-08-02.md`
 - `_docs/protocols/hpc-cluster-template-spec.md`
+- `_docs/protocols/hpc-template-approval-route.md`
 - `_docs/protocols/hpc-node-agent-protocol.md`
 - `_docs/protocols/mobile-capture-protocol-v1.md`
 - `_docs/protocols/mobile-capture-sdk.md`
