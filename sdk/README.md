@@ -12,18 +12,24 @@
 | [`sdk/python`](./python) | **none — see below** | — |
 | [`sdk/rust`](./rust) | **none — see below** | — |
 
-> **Known gap: `sdk/python` and `sdk/rust` have no CI.** Both fail for reasons
-> that predate this workflow and that a CI gate cannot fix on its own:
+> **Known gap: `sdk/python` and `sdk/rust` have no CI.** Neither is a supported
+> release contract — `sdk/generation/toolchain.json:46-47` declares that no
+> Python protobuf SDK is published ("generation fails closed") and that the Rust
+> templates are experimental ("no Rust protobuf SDK is a release output"), and
+> `sdk/generation/generate.sh:333` refuses both by name. Gating them would mean
+> gating output the build deliberately does not produce.
 >
-> - `sdk/python` — pytest cannot collect. The generated `google/` package
->   vendored next to the code shadows the installed `google.protobuf`, so
->   `from google.protobuf import any_pb2` raises
->   `ImportError: cannot import name 'descriptor'`. All 3 test modules error
->   during collection.
-> - `sdk/rust` — does not compile. `rust/src/proto/mod.rs:123` contains
->   `pub mod mod {`, which is a syntax error on every platform; the crate then
->   reports cascading `E0428` (duplicate module) errors and a `stringify!`
->   recursion-limit failure.
+> Two concrete defects make them un-gateable today, independent of that policy:
+>
+> - `sdk/python` — pytest cannot collect. The generated `google/protobuf/`
+>   package checked in next to the code is a 0-byte `__init__.py` plus generated
+>   `*_pb2` modules with no `descriptor.py`, so it shadows the installed
+>   `google.protobuf` whenever `sdk/python` is first on `sys.path`. Measured:
+>   `pytest tests/ --collect-only` → 3 collection errors, `ImportError: cannot
+>   import name 'descriptor' from 'google.protobuf'`. All 3 test modules error.
+> - `sdk/rust` — the checked-in `rust/src/proto/mod.rs:123` contains
+>   `pub mod mod {`. `mod` is a Rust keyword, so this cannot compile; the file is
+>   marked `@generated` and is consistent with output that was never compiled.
 >
 > These are tracked as separate work items; this workflow gates only what is
 > known green so that a red check always means a real regression.

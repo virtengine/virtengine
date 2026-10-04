@@ -11,12 +11,23 @@ name: SDK CI
 #               proto-generation.yaml, which can run them (see the typescript
 #               job for why they cannot run on a bare checkout).
 #   sdk/portal  is gated by portal-ci.yaml (job "SDK Portal"), not here.
-#   sdk/python  and sdk/rust are NOT gated here: both fail for PRE-EXISTING
-#   reasons a new gate cannot fix (python: the vendored google.protobuf
-#   package shadows the real one, so pytest cannot collect; rust:
-#   rust/src/proto/mod.rs:123 contains `pub mod mod {`, a syntax error on
-#   every platform). Wiring them in red would fail every SDK PR while
-#   telling nobody why. Tracked in sdk/README.md.
+#   sdk/python  is NOT gated here, and the reason is sharper than "it is
+#               broken": sdk/python/google/protobuf/ is a 0-byte __init__.py
+#               plus generated *_pb2 modules and no descriptor.py, so it
+#               SHADOWS the runtime protobuf package whenever sdk/python is
+#               first on sys.path. Measured: `pytest tests/ --collect-only`
+#               -> 3 collection errors, ImportError on
+#               `from google.protobuf import descriptor`. Every other test
+#               module fails the same way. Not fixable by adding a gate.
+#   sdk/rust    is NOT gated here because it is not a supported contract at
+#               all: sdk/generation/generate.sh refuses it by name
+#               (`python|rust)` -> "not a supported release contract; see
+#               sdk/generation/toolchain.json"). Its checked-in
+#               rust/src/proto/mod.rs:123 contains `pub mod mod {` - `mod` is
+#               a Rust keyword, so it cannot compile - which is consistent
+#               with generated-but-never-verified output, not a regression.
+#               Wiring either in red would fail every SDK PR while telling
+#               nobody why. Tracked in sdk/README.md.
 
 on:
   push:
@@ -114,13 +125,6 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
-
-      - name: Setup Go
-        uses: actions/setup-go@v6
-        with:
-          go-version-file: sdk/go/go.mod
-          cache: true
-          cache-dependency-path: sdk/go/go.sum
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
