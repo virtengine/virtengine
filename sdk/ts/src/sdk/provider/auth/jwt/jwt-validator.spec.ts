@@ -2,8 +2,8 @@ import { beforeEach, describe, expect, it } from "@jest/globals";
 
 import { JwtValidator } from "./jwt-validator.ts";
 
-const issuer = "virtengine1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63";
-const provider = "virtengine18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4";
+const issuer = "ve1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63";
+const provider = "ve18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4";
 
 function toBase64Url(value: Record<string, unknown>) {
   return Buffer.from(JSON.stringify(value)).toString("base64url");

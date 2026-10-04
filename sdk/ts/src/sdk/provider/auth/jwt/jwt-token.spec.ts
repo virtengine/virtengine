@@ -23,7 +23,7 @@ describe("JWT Claims Validation", () => {
 
   beforeAll(async () => {
     testWallet = await Secp256k1HdWallet.fromMnemonic(jwtMnemonic, {
-      prefix: "virtengine",
+      prefix: "ve",
     });
     const [account] = await testWallet.getAccounts();
     testAccount = account;
