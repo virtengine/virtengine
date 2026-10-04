@@ -22,6 +22,7 @@ import {
   SigningStargateClient,
 } from "@cosmjs/stargate";
 
+import { BECH32_PREFIX_ACC_ADDR } from "../../../../encoding/bech32Prefixes.ts";
 import type { TxClient, TxRaw } from "../TxClient.ts";
 
 const DEFAULT_AVERAGE_GAS_PRICE = "0.025uve";
@@ -191,6 +192,6 @@ function createOfflineSigner(options: WithSigner<BaseGenericStargateClientOption
 
   return DirectSecp256k1HdWallet.fromMnemonic(options.signerMnemonic, {
     ...options.signerOptions,
-    prefix: "virtengine",
+    prefix: BECH32_PREFIX_ACC_ADDR,
   });
 }

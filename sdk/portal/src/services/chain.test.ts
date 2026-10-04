@@ -1,6 +1,7 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 
-import { resolveRuntimeConfig } from "./chain";
+import { resolveRuntimeConfig, virtengineChain } from "./chain";
 
 describe("resolveRuntimeConfig", () => {
   it("prefers VITE variables and derives testnet defaults", () => {
@@ -36,5 +37,33 @@ describe("resolveRuntimeConfig", () => {
     expect(config.providerDaemonUrl).toBe("https://provider.virtengine.com");
     expect(config.walletConnectProjectId).toBe("project-123");
     expect(config.chainLabel).toBe("Mainnet ready");
+  });
+});
+
+describe("virtengineChain bech32 prefix", () => {
+  it("matches sdk/go/sdkutil.Bech32PrefixAccAddr, not the retired 'virtengine'", () => {
+    // `virtengineChain` is handed to the Keplr chain-registry object in
+    // main.tsx, so this prefix decides what address format the portal shows
+    // users and validates against. It was hardcoded to "virtengine", which the
+    // chain rejects, so every displayed address was wrong.
+    //
+    // Read the Go source of truth rather than duplicating the value, so this is
+    // a real cross-language assertion.
+    let goPrefix: string | undefined;
+    try {
+      const src = readFileSync(
+        new URL("../../../go/sdkutil/init.go", import.meta.url),
+        "utf8",
+      );
+      goPrefix = /Bech32PrefixAccAddr\s*=\s*"([^"]+)"/.exec(src)?.[1];
+    } catch {
+      goPrefix = undefined;
+    }
+
+    if (goPrefix !== undefined) {
+      expect(virtengineChain.bech32_prefix).toBe(goPrefix);
+    }
+    expect(virtengineChain.bech32_prefix).not.toBe("virtengine");
+    expect(virtengineChain.bech32_prefix).toBe("ve");
   });
 });

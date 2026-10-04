@@ -13,13 +13,14 @@
  * });
  *
  * // Query VEID identity
- * const identity = await client.veid.getIdentity('virt1...');
+ * const identity = await client.veid.getIdentity('ve1...');
  *
  * // Submit HPC job (when txSigner is provided)
  * const result = await client.hpc.submitJob({ ... });
  * ```
  */
 
+import { BECH32_CONFIG } from "../encoding/bech32Prefixes.ts";
 import { ConnectionManager, type ConnectionManagerOptions } from "../network/ConnectionManager.ts";
 import { createChainNodeSDK } from "../sdk/chain/createChainNodeSDK.ts";
 import { createChainNodeWebSDK } from "../sdk/chain/createChainNodeWebSDK.ts";
@@ -123,14 +124,7 @@ export const VIRTENGINE_MAINNET: ChainInfo = {
   rpc: "https://rpc.virtengine.network",
   rest: "https://api.virtengine.network",
   bip44: { coinType: 118 },
-  bech32Config: {
-    bech32PrefixAccAddr: "virt",
-    bech32PrefixAccPub: "virtpub",
-    bech32PrefixValAddr: "virtvaloper",
-    bech32PrefixValPub: "virtvaloperpub",
-    bech32PrefixConsAddr: "virtvalcons",
-    bech32PrefixConsPub: "virtvalconspub",
-  },
+  bech32Config: BECH32_CONFIG,
   currencies: [
     { coinDenom: "VE", coinMinimalDenom: "uve", coinDecimals: 6 },
     { coinDenom: "VCC", coinMinimalDenom: "uvcc", coinDecimals: 6 },
@@ -150,14 +144,7 @@ export const VIRTENGINE_TESTNET: ChainInfo = {
   rpc: "https://rpc.testnet.virtengine.network",
   rest: "https://api.testnet.virtengine.network",
   bip44: { coinType: 118 },
-  bech32Config: {
-    bech32PrefixAccAddr: "virt",
-    bech32PrefixAccPub: "virtpub",
-    bech32PrefixValAddr: "virtvaloper",
-    bech32PrefixValPub: "virtvaloperpub",
-    bech32PrefixConsAddr: "virtvalcons",
-    bech32PrefixConsPub: "virtvalconspub",
-  },
+  bech32Config: BECH32_CONFIG,
   currencies: [
     { coinDenom: "VE", coinMinimalDenom: "uve", coinDecimals: 6 },
     { coinDenom: "VCC", coinMinimalDenom: "uvcc", coinDecimals: 6 },
