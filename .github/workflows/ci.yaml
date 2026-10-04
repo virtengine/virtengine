@@ -183,8 +183,14 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      # Wrapped, not bare `go mod download`: a module-proxy TRANSPORT fault
+      # (HTTP/2 RST_STREAM, a reset mid-zip, a TLS blip) is not a defect in the
+      # code under test, and a bare download turns every proxy hiccup into a red
+      # that says nothing about the commit. The wrapper retries ONLY signatures a
+      # transport emits and fails fast on anything else, so it cannot manufacture
+      # a pass - see scripts/ci/go-mod-download.sh.
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Run go vet
         env:
@@ -214,9 +220,14 @@ jobs:
           go-version: "1.26.8"
           cache: true
 
+      # Wrapped, not bare `go mod download`, for the same reason as the ubuntu
+      # jobs. `shell: bash` (Git Bash) rather than `pwsh`: the wrapper IS a bash
+      # script. That also makes this the job that exercises the Windows half of
+      # the transport regex - the `wsarecv:` / "forcibly closed" reset spellings
+      # exist in the script precisely because a reset surfaces differently here.
       - name: Download dependencies
-        shell: pwsh
-        run: go mod download
+        shell: bash
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Build VirtEngine
         shell: pwsh
@@ -382,9 +393,13 @@ jobs:
         if: github.event_name == 'pull_request'
         run: git fetch origin "${{ github.base_ref }}" --depth=1
 
+      # Wrapped, not bare `go mod download`, for the same reason as the ubuntu
+      # jobs. The `if:` guard is unchanged - it gates whether this job runs a
+      # Go build at all, which is a different concern from retrying transport
+      # faults inside it.
       - name: Download dependencies
         if: steps.detect.outputs.run == 'true'
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Sync dependencies
         if: steps.detect.outputs.run == 'true'
@@ -497,9 +512,13 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      # Wrapped, not bare `go mod download`, for the same reason as the ubuntu
+      # jobs. The `if:` guard is unchanged - it gates whether this job runs the
+      # simulation suite at all, which is a different concern from retrying
+      # transport faults inside it.
       - name: Download dependencies
         if: steps.detect.outputs.run == 'true'
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Run economics simulation suite
         if: steps.detect.outputs.run == 'true'

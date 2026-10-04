@@ -14,6 +14,10 @@
 //                                            (never retried, never a pass)
 //   5. garbage attempts value            -> exit 2
 //   6. per-OS spelling of a mid-stream reset -> retried on linux, windows, darwin
+//   7. per-spelling TLS fault             -> retried (handshake failure, record
+//                                            MAC, protocol version, ...)
+//   8. TLS TRUST failure                  -> exit non-zero on the FIRST attempt
+//                                            (never retried, never a pass)
 //
 // Cases 3 and 4 are the anti-vacuity arms: a wrapper that appended `|| true`,
 // retried everything, or gave up after one failure would pass cases 1 and 2 and
@@ -73,6 +77,81 @@ const NON_TRANSPORT_ERRORS = {
   vendor_inconsistent: [
     "inconsistent vendoring in /home/runner/work/virtengine/virtengine:",
     "\tgithub.com/x/y@v1.0.0: is marked as explicit in vendor/modules.txt, but not",
+  ].join("\n"),
+};
+
+// Every TLS fault a CLIENT surfaces, with the verbatim string a real Go client
+// prints. Each was captured by driving a real crypto/tls client against a
+// local server that induces that exact fault - see the comment block in
+// scripts/ci/go-mod-download.sh. The old regex carried a `TLS handshake error`
+// alternative that matched none of these: it exists only in the tree as a
+// net/http SERVER log line, so every non-timeout TLS fault fell through to the
+// fail-fast branch as a "NON-transport" error. That is the false red this
+// script exists to remove, so each spelling below is a regression arm.
+//
+// The `local_error_bad_record_mac` entry is the subtle one. crypto/tls wraps a
+// PEER-sent alert in `Op: "remote error"` (conn.go:733) but a record the client
+// itself found corrupt in `Op: "local error"` (conn.go:844), so the anchored
+// `remote error: tls: bad record MAC` spelling the first draft of this fix
+// added would NOT have matched the most common corruption case at all.
+const TLS_TRANSPORT_ERRORS = {
+  peer_alert_handshake_failure: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\tremote error: tls: handshake failure",
+  ].join("\n"),
+  peer_alert_protocol_version: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\tremote error: tls: protocol version not supported",
+  ].join("\n"),
+  local_error_bad_record_mac: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\tlocal error: tls: bad record MAC",
+  ].join("\n"),
+  first_record_not_a_handshake: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\ttls: first record does not look like a TLS handshake",
+  ].join("\n"),
+  server_selected_unsupported_version: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\ttls: server selected unsupported protocol version 303",
+  ].join("\n"),
+  http_tls_handshake_timeout: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\tnet/http: TLS handshake timeout",
+  ].join("\n"),
+};
+
+// The counterweight to the TLS arms above. A `bad record MAC` is also the
+// classic MITM/corruption signal, so the fix had to decide where the line is.
+// These X.509 and trust failures are deliberately NOT retried: a retry cannot
+// make a forged certificate verify, and after the budget is spent the run is
+// red anyway - so retrying them would only spend CI minutes while implying a
+// compromise might resolve itself. Pinned here so that decision cannot be
+// quietly widened later.
+const TLS_TRUST_ERRORS = {
+  x509_unknown_authority: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\tx509: certificate signed by unknown authority",
+  ].join("\n"),
+  x509_expired: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\tx509: certificate has expired or is not yet valid: current time 2026-01-01",
+  ].join("\n"),
+  x509_wrong_name: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\tx509: certificate is valid for edge.internal, not proxy.golang.org",
+  ].join("\n"),
+  unrecognized_name: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\tremote error: tls: unrecognized name",
+  ].join("\n"),
+  bad_certificate: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\tremote error: tls: bad certificate",
+  ].join("\n"),
+  failed_to_verify_certificate: [
+    'go: github.com/pkg/errors@v0.9.1: Get "https://proxy.golang.org/x.zip":',
+    "\ttls: failed to verify certificate: x509: certificate signed by unknown authority",
   ].join("\n"),
 };
 
@@ -323,6 +402,84 @@ test("every per-platform spelling of a mid-stream reset is retried", async () =>
       /NON-transport/,
       `the ${os} reset spelling was misclassified as a real module defect`
     );
+  }
+});
+
+test("every TLS fault spelling a Go client emits is retried", async () => {
+  // Regression arm for the dead `TLS handshake error` alternative. Only the
+  // handshake-TIMEOUT spelling used to match, so a proxy blip that surfaces as
+  // any of the others was classified NON-transport and failed on attempt one -
+  // the exact false red this script exists to remove.
+  for (const [name, errorText] of Object.entries(TLS_TRANSPORT_ERRORS)) {
+    const result = await runWithStub({
+      mode: "transport_then_ok",
+      errorText,
+      env: { VE_GO_MOD_DOWNLOAD_ATTEMPTS: "2" },
+    });
+    assert.equal(
+      result.status,
+      0,
+      `the ${name} spelling must be retried into a pass, got ${result.status}\n${result.stderr}`
+    );
+    assert.equal(result.invocations, 2, `the ${name} spelling must retry exactly once`);
+    assert.doesNotMatch(
+      result.stderr,
+      /NON-transport/,
+      `the ${name} spelling was misclassified as a real module defect`
+    );
+    assert.match(result.stderr, /transport error/i, `the ${name} spelling must be reported as transport`);
+  }
+});
+
+test("TLS trust failures are never retried", async () => {
+  // The counterweight. Widening the TLS block must not swallow a certificate
+  // trust failure: those are incidents, not transport faults, and a retry
+  // cannot make a forged certificate verify.
+  for (const [name, errorText] of Object.entries(TLS_TRUST_ERRORS)) {
+    const result = await runWithStub({ mode: "always_error", errorText });
+    assert.notEqual(result.status, 0, `${name}: a trust failure must never exit 0`);
+    assert.doesNotMatch(
+      result.stderr,
+      /unknown GO_STUB_MODE/,
+      `${name}: the stub hit an unhandled mode, so this test proves nothing`
+    );
+    assert.equal(
+      result.invocations,
+      1,
+      `${name}: a certificate trust failure must not be retried`
+    );
+    assert.match(result.stderr, /NON-transport/i, `${name}: must be classified as real`);
+  }
+});
+
+test("the TLS fixtures carry the spelling they are named for", async () => {
+  // The reset matrix already got bitten by a fixture bug here: a missing join
+  // operator turned two entries into bare first lines with no reset token at
+  // all, and the classification test then failed on a fixture bug while
+  // looking like a product bug. Guard the TLS fixtures the same way: each must
+  // actually contain the token the regex alternative keys on.
+  const EXPECTED = {
+    peer_alert_handshake_failure: "remote error: tls: handshake failure",
+    peer_alert_protocol_version: "remote error: tls: protocol version not supported",
+    local_error_bad_record_mac: "bad record MAC",
+    first_record_not_a_handshake: "first record does not look like a TLS handshake",
+    server_selected_unsupported_version: "server selected unsupported protocol version",
+    http_tls_handshake_timeout: "net/http: TLS handshake timeout",
+  };
+  for (const [name, token] of Object.entries(EXPECTED)) {
+    const fixture = TLS_TRANSPORT_ERRORS[name];
+    assert.ok(fixture, `missing TLS fixture: ${name}`);
+    assert.ok(
+      fixture.includes(token),
+      `the ${name} fixture must contain "${token}" - a half-written fixture proves nothing`
+    );
+    assert.match(fixture, /Get "https:\/\//, `the ${name} fixture must include the module URL line`);
+  }
+  // Every trust fixture must be a trust string too, and none of them may
+  // contain a token the retry block legitimately matches.
+  for (const [name, fixture] of Object.entries(TLS_TRUST_ERRORS)) {
+    assert.match(fixture, /x509:|tls: (unrecognized name|bad certificate|failed to verify)/,
+      `the ${name} fixture must read as a trust failure`);
   }
 });
 

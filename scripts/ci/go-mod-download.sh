@@ -68,8 +68,9 @@ case "${backoff_seconds}" in
 esac
 
 # Transport-layer signatures: an HTTP/2 RST_STREAM from the proxy, a dropped or
-# refused TCP connection, a stalled TLS handshake, or a 5xx/EOF from the edge.
-# A go.sum or module-resolution error matches NONE of these on purpose.
+# refused TCP connection, a TLS fault in the handshake or the record layer, or a
+# 5xx/EOF from the edge. A go.sum or module-resolution error matches NONE of
+# these on purpose.
 #
 # Every alternative is anchored to something a TRANSPORT emits, never to a bare
 # token. A trailing `|EOF` is deliberately absent: `EOF` alone also matches
@@ -83,7 +84,61 @@ esac
 # Windows (see the `windows-native` CI job) and `connection aborted` on macOS.
 # Matching only the Linux spelling turns a transport reset on every non-Linux
 # runner into a false red - the exact failure mode this script exists to remove.
-readonly TRANSPORT_FAILURE_RE='stream error:|INTERNAL_ERROR; received from peer|unexpected EOF|connection reset by peer|forcibly closed|connection aborted|wsarecv:|connection refused|broken pipe|i/o timeout|TLS handshake timeout|TLS handshake error|server closed idle connection|GOAWAY|502 Bad Gateway|503 Service Unavailable|504 Gateway|Client\.Timeout exceeded|transport connection broken|dial tcp'
+#
+# The TLS block was the one place that rule was broken. It carried a
+# `TLS handshake error` alternative that matches NO client-side spelling Go can
+# print: the string exists in the tree only at net/http/server.go ("http: TLS
+# handshake error from <addr>"), which is a SERVER log line, so a module download
+# never emits it. The comment above promised a "stalled TLS handshake" and the
+# only alternative that fired was `TLS handshake timeout`. Every other TLS fault
+# - a proxy that resets during the handshake, an edge that mangles a record - fell
+# through to the fail-fast branch as a NON-transport error, which is the exact
+# false red this script exists to remove.
+#
+# So the block below carries the spellings a TLS CLIENT actually surfaces. Every
+# string here was MEASURED, not guessed - each is the verbatim output of a real
+# Go client handed to a local server that induces that fault:
+#   remote error: tls: handshake failure        peer alert 40 (alertHandshakeFailure)
+#   remote error: tls: bad record MAC           peer alert 20 (alertBadRecordMAC)
+#   remote error: tls: protocol version not supported
+#                                                 peer alert 70 (alertProtocolVersion)
+#   tls: first record does not look like a TLS handshake
+#                                                 plaintext served on a TLS port
+#   local error: tls: bad record MAC             ciphertext corrupted mid-stream
+# and two read out of the pinned toolchain rather than induced:
+#   net/http: TLS handshake timeout              net/http/transport.go:3211
+#   tls: server selected unsupported protocol version %x
+#                                                 crypto/tls/handshake_client.go:520
+#
+# Note the `local error:` spelling. crypto/tls wraps a PEER-sent alert in
+# `&net.OpError{Op: "remote error", ...}` (conn.go:733) but a record the CLIENT
+# itself found corrupt in `&net.OpError{Op: "local error", ...}` (conn.go:844).
+# So the bare `bad record MAC` is the load-bearing alternative and an anchored
+# `remote error: tls: bad record MAC` would be redundant - it is a substring of
+# the bare one, exactly like the `|EOF` this file already refuses to carry.
+#
+# WHY bad record MAC is in here despite also being the classic MITM/corruption
+# signal, and why the X.509 trust failures next to it are NOT: retrying is not
+# the same as accepting. The retry can only re-fetch the same bytes over the same
+# TLS connection - it cannot make a forged certificate verify, so the outcome
+# after the budget is spent is still a red. What the retry buys is immunity to the
+# one case that does resolve: a load balancer or middlebox that corrupts a record
+# mid-stream, which is transient and succeeds on a fresh connection. Swallowing
+# the error instead (a `|| true`) is what manufactures confidence, and that is
+# still refused: every attempt re-runs the full verification and after the last
+# attempt the script exits with `go`'s own non-zero code.
+#
+# Deliberately EXCLUDED, because they are trust decisions and not transport
+# faults, and retrying them would hide a real compromise or a real misconfig:
+#   x509: certificate signed by unknown authority / has expired / not yet valid
+#   x509: certificate is valid for <other name>, not <this name>
+#   remote error: tls: unrecognized name          (SNI the proxy refuses)
+#   remote error: tls: bad certificate            (peer rejects OUR chain)
+#   tls: failed to verify certificate
+# An expired-certificate blip is a real incident; a plain retry just spends the
+# budget and returns the same red. If one of these ever needs different handling it
+# is a policy call with an owner, not a regex alternative.
+readonly TRANSPORT_FAILURE_RE='stream error:|INTERNAL_ERROR; received from peer|unexpected EOF|connection reset by peer|forcibly closed|connection aborted|wsarecv:|connection refused|broken pipe|i/o timeout|TLS handshake timeout|remote error: tls: handshake failure|remote error: tls: protocol version not supported|bad record MAC|first record does not look like a TLS handshake|server selected unsupported protocol version|server closed idle connection|GOAWAY|502 Bad Gateway|503 Service Unavailable|504 Gateway|Client\.Timeout exceeded|transport connection broken|dial tcp'
 
 is_transport_failure() {
   grep -qiE "${TRANSPORT_FAILURE_RE}" "$1"
