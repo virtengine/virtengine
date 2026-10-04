@@ -146,48 +146,115 @@ export function parseTriggerRefs(source) {
   return { refs: [...refs], dynamic };
 }
 
-/** Pull `branches:` / `branches-ignore:` / `tags:` lists out of a trigger body. */
+/**
+ * Split a trigger body into its SIBLING keys first, then read each one on its
+ * own terms. The first cut ran a single regex over the whole body and harvested
+ * every deeper-indented `- item` that followed, which produced three measured
+ * false readings on this repo's real workflows:
+ *
+ *   - `paths:`/`paths-ignore:` filters were harvested as BRANCH names. A job that
+ *     triggers on `main` was recorded as triggering on `portal/**`.
+ *   - a `push:` carrying BOTH `branches:` and `tags:` (ci.yaml) matched only the
+ *     first key, so the tag axis was lost and `tags:` items were filed as branches.
+ *   - `branches: [main]` followed by a `paths:` list (portal-deploy-pages.yaml)
+ *     collected the PATH items, so `values` was non-empty and the real branch
+ *     `main` was never read at all -- the one branch the workflow actually
+ *     triggers on, silently dropped.
+ *
+ * Keying by sibling key makes each of those unrepresentable.
+ */
 function collectRefs(body, refs, dynamic) {
-  // Horizontal whitespace only -- see the note in parseEnvironments: a greedy \s
-  // here would swallow the following `- item` lines into the inline value.
-  const listMatch = body.match(/^([^\S\r\n]*)(branches|tags)(-ignore)?:[^\S\r\n]*(.*)$/m);
-  if (!listMatch) {
-    // A push/pull_request trigger with no branch filter runs on every branch,
-    // which means every existing branch is a candidate trigger ref.
-    refs.add(ANY_BRANCH);
-    return;
-  }
-  const [, keyIndent, kind, ignoreFlag, inline] = listMatch;
-  const values = [];
-  // Collect every `- item` that is indented DEEPER than the key itself, which
-  // is exactly the block-style list under it.
-  const tail = body.slice(body.indexOf(listMatch[0]) + listMatch[0].length);
-  for (const line of tail.split(/\r?\n/)) {
-    const im = line.match(/^[^\S\r\n]+-[^\S\r\n]*["']?([^"'\r\n]+?)["']?[^\S\r\n]*$/);
-    if (im) {
-      const thisIndent = line.match(/^([^\S\r\n]*)/)[1].length;
-      if (thisIndent > keyIndent.length) values.push(im[1].trim());
-      else break;
-    }
-  }
-  if (values.length === 0 && inline && inline.trim() && inline.trim() !== '[]') {
-    values.push(inline.trim().replace(/^\[|\]$/g, '').split(',')[0]?.trim() ?? '');
-  }
-  if (values.length === 0 || values.every((v) => !v)) {
-    refs.add(ANY_BRANCH);
-    return;
-  }
-  for (const v of values) {
-    if (!v) continue;
-    // A glob like 'release/**' or 'v*' is a pattern, not a literal branch name.
-    if (kind === 'tags' || ignoreFlag || /[*?]/.test(v)) {
-      if (kind === 'tags') refs.add(`tag:${v}`);
-      else refs.add(v);
+  const blocks = new Map(); // key -> { items: string[], inline: string, indent: number }
+  let current = null;
+  for (const line of body.split(/\r?\n/)) {
+    if (!line.trim() || /^[^\S\r\n]*#/.test(line)) continue;
+    const keyMatch = line.match(/^([^\S\r\n]*)([A-Za-z_][\w-]*):[^\S\r\n]*(.*)$/);
+    if (keyMatch) {
+      const indent = keyMatch[1].length;
+      // Only a key at THIS level starts a block; a deeper line that looks like
+      // `key:` is a mapping value inside the current block.
+      if (!current || indent <= current.indent || current.depth === undefined) {
+        current = { items: [], inline: keyMatch[3]?.trim() ?? '', indent, depth: 0 };
+        blocks.set(keyMatch[2], current);
+      } else {
+        current = { items: [], inline: keyMatch[3]?.trim() ?? '', indent, depth: current.depth + 1 };
+        blocks.set(`${keyMatch[2]}#${current.depth}`, current);
+      }
       continue;
     }
-    refs.add(v);
+    const item = line.match(/^[^\S\r\n]+-[^\S\r\n]*["']?([^"'#\r\n]+?)["']?[^\S\r\n]*$/);
+    if (item && current && line.match(/^([^\S\r\n]*)/)[1].length > current.indent) {
+      current.items.push(item[1].trim());
+    }
   }
-  if (ignoreFlag) dynamic.push(`${kind}-ignore`);
+
+  /** A block's values: its `- item` list, else the inline form `[a, b]`. */
+  const valuesOf = (key) => {
+    const b = blocks.get(key);
+    if (!b) return null;
+    if (b.items.length > 0) return b.items.filter(Boolean);
+    const inline = (b.inline || '').trim();
+    if (!inline || inline === '[]') return [];
+    // Inline flow list: `branches: [main, develop]` -- every entry, not the first.
+    return inline
+      .replace(/^\[/, '')
+      .replace(/\]$/, '')
+      .split(',')
+      .map((v) => v.trim().replace(/^["']|["']$/g, ''))
+      .filter(Boolean);
+  };
+
+  const branchValues = valuesOf('branches');
+  const tagValues = valuesOf('tags');
+
+  // `branches-ignore:`/`tags-ignore:` genuinely change WHICH REF can fire, so the
+  // candidate ref set on that axis is not enumerable and nothing can be proven
+  // there. `paths:`/`paths-ignore:` filter FILES within a ref, not the ref
+  // itself: a push to `main` that touches no matching file simply does not
+  // start a run, but every run it does start has ref `main`. Treating them as
+  // ref-scoped made ci.yaml -- whose push block carries `paths-ignore` on its
+  // pull_request clause -- unverifiable and silently downgraded the live staging
+  // phantom from PHANTOM to UNPROVEN. Only the ignore forms go in the list.
+  for (const key of ['branches-ignore', 'tags-ignore']) {
+    if (blocks.has(key)) dynamic.push(key);
+  }
+
+  const addBranches = (values) => {
+    if (values === null) return;
+    for (const v of values) refs.add(v);
+  };
+  const addTags = (values) => {
+    if (values === null) return;
+    // A tag ref is a DIFFERENT axis: GitHub evaluates it against tag policy, not
+    // branch policy. Prefix it so classifyEnvironment can keep the two apart.
+    for (const v of values) refs.add(`tag:${v}`);
+  };
+
+  addBranches(branchValues);
+  addTags(tagValues);
+
+  // An unfiltered push runs on every branch. A `tags:`-only push does NOT: it
+  // runs on tags only, and adding the branch sentinel there made a tag-scoped
+  // workflow look branch-triggered (the old parser returned early for a `tags`
+  // match and so never added it -- that early return was load-bearing).
+  if (branchValues === null && tagValues === null && !blocks.has('branches-ignore')) refs.add(ANY_BRANCH);
+}
+
+/**
+ * fnmatch-style match, GitHub's documented rules: '*' does not cross '/'.
+ * Used to decide whether a tag POLICY admits a tag trigger pattern.
+ */
+export function patternMatches(policyName, refPattern) {
+  const toRegex = (p) =>
+    `^${p
+      .split('')
+      .map((ch) => {
+        if (ch === '*') return '[^/]*';
+        if (ch === '?') return '[^/]';
+        return ch.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      })
+      .join('')}$`;
+  return new RegExp(toRegex(policyName)).test(refPattern);
 }
 
 /** Locate the `on:` mapping and return each trigger clause as {key, body}. */
@@ -263,84 +330,257 @@ export function collectWorkflowEnvironments(root = repoRoot, dir = workflowsDir)
  * Decide whether an environment is reachable, given its policy and the refs that
  * trigger the workflow. Pure so the selftest can drive it with no network.
  *
- * Policy shape from the API:
- *   { branch_policies: [{ name: 'staging', type: 'branch' }, ...] }
- * An empty list means "all branches allowed".
+ * Policy shape from the API (BOTH axes are real -- GitHub's create-policy
+ * endpoint takes `type: branch | tag`, documented, and the list endpoint returns
+ * them side by side):
+ *   { branch_policies: [{ name: 'staging', type: 'branch' }],
+ *     tag_policies:     [{ name: 'v*',      type: 'tag'    }],
+ *     custom_branch_policies: true }
+ *
+ * A branch policy can never admit a tag ref and a tag policy can never admit a
+ * branch ref; GitHub evaluates each ref kind against its own axis. The first cut
+ * read `branch_policies` alone and treated "no branch policy" as "all branches
+ * allowed", which collapsed three DIFFERENT repository states into one green:
+ *
+ *   - policy=null (every ref admitted)                  -- genuinely OK
+ *   - custom=true with ZERO policies (NOTHING admitted) -- reported OK, is a phantom
+ *   - a tag-only policy with a branch-triggered ref     -- reported OK, is a phantom
+ *
+ * `policies` is therefore `{ branches, tags, custom, notFound }`. A bare array is
+ * still accepted so older callers keep working, but it is only ever the honest
+ * "policy absent, everything allowed" reading.
  */
-export function classifyEnvironment({ envName, policies, branches, refs, dynamic }) {
+export function classifyEnvironment({ envName, policies, tagPolicies, branches, refs, dynamic }) {
   // Resolve an `${{ ... }}` environment expression: we cannot know its value
   // statically, so report it as unresolved rather than guessing.
   if (envName.includes('${{')) {
     return { envName, verdict: 'DYNAMIC', reason: 'environment name is an expression; resolve at runtime' };
   }
 
-  const admitted = policies.length === 0 ? null : policies;
+  // Accept both shapes. An array carries no custom-policy evidence, so it means
+  // "no restriction configured" -- the only reading in which an empty array is
+  // safe to treat as permissive.
+  const branchList = Array.isArray(policies) ? policies : (policies?.branches ?? []);
+  const tagList = Array.isArray(policies) ? [] : (policies?.tags ?? []);
+  const custom = Array.isArray(policies) ? false : (policies?.custom === true);
+  const notFound = !Array.isArray(policies) && policies?.notFound === true;
+  const effectiveTags = tagList.length > 0 ? tagList : (tagPolicies ?? []);
 
-  // No trigger ref is a literal branch (only tags/patterns/dispatch) -> the
-  // branch policy cannot be what rejected it, and we cannot prove a red.
   const literalBranches = refs.filter((r) => !r.startsWith('tag:') && !/[*?]/.test(r));
+  const tagRefs = refs.filter((r) => r.startsWith('tag:')).map((r) => r.slice(4));
   const usesTagsOnly = literalBranches.length === 0;
   // A dispatch / schedule / workflow_run trigger fires with github.ref set to
   // some REAL branch (the default branch, or the triggering workflow's ref), so
   // it is still subject to the branch policy -- unlike a pure tag trigger, which
   // GitHub evaluates against tag policy. `workflow_run` must therefore NOT be
   // treated as "branch reachability cannot be decided".
-  const refScopedDynamic = dynamic.filter((k) => k !== 'workflow_run');
-  const usesTagsOnlyStrict = usesTagsOnly && refScopedDynamic.length === 0;
-  const allowsAnyBranch = literalBranches.includes(ANY_BRANCH) || dynamic.includes('workflow_run');
+  const refScopedDynamic = (dynamic ?? []).filter((k) => k !== 'workflow_run');
+  const unfilteredBranchTrigger =
+    literalBranches.includes(ANY_BRANCH) || (dynamic ?? []).includes('workflow_run');
 
-  if (admitted === null) {
-    return { envName, verdict: 'OK', reason: 'no branch policy; all branches allowed' };
+  const tagPolicyNames = effectiveTags.map((p) => p.name);
+  const admittedNames = branchList.map((p) => p.name);
+
+  // A name in a policy is only ADMITTING if the branch actually exists on the
+  // remote AND the workflow can trigger on it. Matching the two lists by name
+  // alone reported a policy admitting `main` as reachable while `branches` was
+  // empty -- i.e. while the environment admits a branch nobody has pushed.
+  const branchAdmitted = admittedNames.some((n) => literalBranches.includes(n) && branches.includes(n));
+  const tagAdmitted =
+    tagPolicyNames.length > 0 && tagRefs.some((t) => tagPolicyNames.some((n) => patternMatches(n, t)));
+
+  // Per-axis completeness. A proof of REJECTION needs the candidate ref set on
+  // that axis to be fully enumerable. A ref-scoped dynamic trigger (`paths:`,
+  // `paths-ignore:`, `branches-ignore:`, `workflow_dispatch`, `schedule`) means
+  // it is not, so nothing can be proven on the branch axis.
+  //
+  // The tag axis is decidable whenever tag policies EXIST, because those are a
+  // finite, readable list: "this workflow pushes v* and the only tag policy is
+  // nightly-*" is a proof, not a shrug. The first cut called every tag-scoped
+  // workflow UNPROVEN because it never read tag policies at all -- which is how
+  // a wrong tag policy could hide behind the tag axis forever.
+  const branchRefsKnown = refScopedDynamic.length === 0;
+  const tagRefsKnown = refScopedDynamic.length === 0;
+  // An unfiltered branch trigger still needs SOME branch policy to exist, and
+  // every named branch to exist: if the policy admits only nonexistent branches,
+  // "fires on every branch" cannot rescue it. Treating the trigger itself as
+  // proof of reachability turned the live phantom smoke-test shape green.
+  const unfilteredRescued =
+    unfilteredBranchTrigger && admittedNames.length > 0 && !admittedNames.every((n) => !branches.includes(n));
+
+  // --- no restriction at all: every branch and tag is admitted -------------
+  // `custom: true` with an empty policy list is NOT this case: it admits NOTHING,
+  // so it must be judged as a phantom, not waved through as permissive. This
+  // branch is checked before the reachability test for exactly that reason --
+  // ordering it after made `locked-empty` fall through to a bare DEGRADED.
+  if (notFound || (!custom && admittedNames.length === 0 && tagPolicyNames.length === 0)) {
+    if (custom) {
+      return {
+        envName,
+        verdict: 'PHANTOM',
+        reason:
+          'custom_branch_policies is ON with zero policies, so GitHub admits NO ref; ' +
+          'an empty policy list here is not "everything allowed"',
+        missing: [],
+        admittedNames: [],
+      };
+    }
+    return { envName, verdict: 'OK', reason: 'no deployment branch policy; all refs allowed' };
   }
 
-  const admittedNames = admitted.map((p) => p.name);
-  const missing = admittedNames.filter((n) => !branches.includes(n));
-
-  // ALL admitted branches are nonexistent AND nothing in this workflow can ever
-  // supply one => the environment is unreachable. This is the phantom shape, and
-  // it must be tested BEFORE the partial-missing DEGRADED branch: with every
-  // admitted name missing there is no "remaining" branch to fall back to, so
-  // checking `missing.length > 0` first reported a merely-degraded environment
-  // for a workflow that can never deploy at all. That ordering bug was caught by
-  // the workflow_run case in the selftest.
-  const allAdmittedMissing = admittedNames.length > 0 && missing.length === admittedNames.length;
-  if (allAdmittedMissing && !usesTagsOnlyStrict) {
+  if (custom && admittedNames.length === 0 && tagPolicyNames.length === 0) {
     return {
       envName,
       verdict: 'PHANTOM',
-      reason: `policy admits only [${admittedNames.join(', ')}] and no such branch exists; triggers on [${[...refs, ...dynamic].join(', ') || 'nothing static'}] can never deploy`,
-      missing,
-      admittedNames,
+      reason:
+        'custom_branch_policies is ON with zero policies, so GitHub admits NO ref; ' +
+        'an empty policy list here is not "everything allowed"',
+      missing: [],
+      admittedNames: [],
     };
   }
 
-  if (missing.length > 0) {
+  // A partially-nonexistent policy is DEGRADED even when another policy admits
+  // the trigger ref. Tested BEFORE the reachability test on purpose: policy
+  // [main, stagng] admits `main`, so a bare "is the trigger admitted" question
+  // says OK and the typo that names a branch nobody has pushed goes unreported.
+  const missing = admittedNames.filter((n) => !branches.includes(n));
+  const allAdmittedMissing = admittedNames.length > 0 && missing.length === admittedNames.length;
+  if (missing.length > 0 && !allAdmittedMissing) {
     return {
       envName,
-      verdict: usesTagsOnlyStrict ? 'UNPROVEN' : 'DEGRADED',
+      verdict: 'DEGRADED',
       reason: `policy admits [${admittedNames.join(', ')}] of which nonexistent: [${missing.join(', ')}]; remaining [${admittedNames.filter((n) => !missing.includes(n)).join(', ') || 'none'}]`,
       missing,
       admittedNames,
     };
   }
 
-  const admitsTriggerRef =
-    admittedNames.some((n) => literalBranches.includes(n)) || literalBranches.includes(ANY_BRANCH) || allowsAnyBranch;
-  if (admitsTriggerRef) {
-    return { envName, verdict: 'OK', reason: `policy admits [${admittedNames.join(', ')}], reachable from a trigger ref` };
-  }
-  if (usesTagsOnly) {
+  const reachable = branchAdmitted || tagAdmitted || unfilteredRescued;
+
+  // Reachable, but only through the axis we can actually prove.
+  if (reachable) {
+    const via = [];
+    if (branchAdmitted) via.push(`branch policy [${admittedNames.join(', ')}]`);
+    if (tagAdmitted) via.push(`tag policy [${tagPolicyNames.join(', ')}]`);
+    if (unfilteredRescued && via.length === 0) via.push('an unfiltered branch trigger');
     return {
       envName,
-      verdict: 'UNPROVEN',
-      reason: `policy admits [${admittedNames.join(', ')}]; this workflow fires on tags/expressions, so branch reachability cannot be decided from the workflow alone`,
+      verdict: 'OK',
+      reason: `admitted by ${via.join(' and ')}, which can admit a ref this workflow triggers on`,
+    };
+  }
+
+  // --- not reachable -------------------------------------------------------
+  const branchAxisExhausted = admittedNames.length > 0 && allAdmittedMissing;
+  const tagAxisExhausted = tagPolicyNames.length > 0 && !tagAdmitted;
+  const branchAxisNeeded = literalBranches.length > 0 || unfilteredBranchTrigger;
+  const tagAxisNeeded = tagRefs.length > 0;
+
+  // A phantom needs: the workflow DOES fire on this axis, nothing on that axis
+  // admits it, AND the candidate refs on that axis are enumerable -- otherwise we
+  // cannot prove rejection and must not claim it.
+  const branchPhantom = branchAxisNeeded && branchAxisExhausted && !branchAdmitted && branchRefsKnown;
+  const tagPhantom = tagAxisNeeded && tagAxisExhausted && !tagAdmitted && tagRefsKnown;
+  // The dangerous half: tag policies exist and NONE of them is a branch policy,
+  // yet this workflow only ever fires on branches.
+  const tagOnlyRejectsBranches =
+    tagPolicyNames.length > 0 && branchList.length === 0 && branchAxisNeeded && branchRefsKnown;
+
+  if (branchPhantom || tagPhantom || tagOnlyRejectsBranches) {
+    const why = [];
+    if (branchPhantom) why.push(`branch policy admits only [${admittedNames.join(', ')}] and no such branch exists`);
+    if (tagOnlyRejectsBranches) {
+      why.push(
+        admittedNames.length === 0
+          ? `only a TAG policy exists [${tagPolicyNames.join(', ')}], which can never admit a branch`
+          : `tag policy [${tagPolicyNames.join(', ')}] cannot admit a branch`
+      );
+    }
+    if (tagPhantom) why.push(`tag policy [${tagPolicyNames.join(', ')}] admits no ref this workflow pushes`);
+    return {
+      envName,
+      verdict: 'PHANTOM',
+      reason: `${why.join('; ')}; triggers on [${[...refs, ...(dynamic ?? [])].join(', ') || 'nothing static'}] can never deploy`,
+      missing,
       admittedNames,
     };
   }
+
+  // A tag-only workflow whose environment declares NO tag policy. Whether that
+    // admits the tag depends entirely on `custom_branch_policies`:
+  //   - true  -> enforcement is ON and the tag list is empty, so NO tag is
+  //              admitted. That is a proof, and it is the live `staging` defect:
+  //              Post-Deploy Smoke Test / Staging E2E have never run once.
+  //   - false -> policy=null, so every tag is admitted and the branch axis above
+  //              has already returned OK.
+  //
+  // Hedging this to UNPROVEN unconditionally was measured to erase both live
+  // PHANTOM rows and turn the gate GREEN on a real, unfixed red -- the exact
+  // failure mode a false green exists to cause.
+  if (usesTagsOnly && tagPolicyNames.length === 0) {
+    if (custom) {
+      return {
+        envName,
+        verdict: 'PHANTOM',
+        reason:
+          `custom_branch_policies is ON and the environment declares NO tag policy, so GitHub ` +
+          `admits no tag at all; this workflow fires on tags (${tagRefs.join(', ')}) and the ` +
+          `branch policy [${admittedNames.join(', ') || 'none'}] cannot admit a tag`,
+        missing,
+        admittedNames,
+      };
+    }
+    return {
+      envName,
+      verdict: 'UNPROVEN',
+      reason: `policy admits [${admittedNames.join(', ') || 'nothing'}] on the BRANCH axis only; this workflow fires on tags (${tagRefs.join(', ')}) and no tag policy is visible, so branch reachability cannot decide it`,
+      admittedNames,
+    };
+  }
+
+  // Something exists on an axis, some ref is genuinely not admitted by it, but
+  // we cannot enumerate the candidate refs (a `paths:` or `branches-ignore:`
+  // filter, or a dispatch/schedule trigger). Report it, never silently green.
+  if (!branchRefsKnown || !tagRefsKnown) {
+    const undecided = [];
+    if (!branchRefsKnown && branchAxisNeeded) undecided.push('branch');
+    if (!tagRefsKnown && tagAxisNeeded) undecided.push('tag');
+    if (undecided.length > 0) {
+      return {
+        envName,
+        verdict: 'UNPROVEN',
+        reason:
+          `policy admits [${[...admittedNames, ...tagPolicyNames].join(', ') || 'nothing'}]; ` +
+          `no match on the ${undecided.join(' and ')} axis, but a path/ignore/dispatch trigger ` +
+          'means the candidate refs cannot be enumerated from the workflow alone',
+        missing,
+        admittedNames,
+      };
+    }
+  }
+
+  // Reachable in principle, but degraded: some policy names a ref that cannot
+  // admit this workflow, or nothing matches while the refs ARE enumerable.
+  const partiallyMissing = missing.length > 0 && !allAdmittedMissing;
+  if (partiallyMissing || admittedNames.length > 0 || tagPolicyNames.length > 0) {
+    return {
+      envName,
+      verdict: 'DEGRADED',
+      reason:
+        `policy admits [${[...admittedNames, ...tagPolicyNames].join(', ')}]` +
+        (partiallyMissing
+          ? ` of which nonexistent: [${missing.join(', ')}]; remaining [${admittedNames.filter((n) => !missing.includes(n)).join(', ') || 'none'}]`
+          : ` but no policy matches a ref this workflow triggers on ([${[...refs, ...(dynamic ?? [])].join(', ')}])`),
+      missing,
+      admittedNames,
+    };
+  }
+
   return {
     envName,
     verdict: 'DEGRADED',
-    reason: `policy admits [${admittedNames.join(', ')}] but the workflow triggers on [${literalBranches.join(', ')}]`,
+    reason: `policy admits [${[...admittedNames, ...tagPolicyNames].join(', ')}] but no policy matches a ref this workflow triggers on`,
     admittedNames,
   };
 }
@@ -365,9 +605,24 @@ async function apiFetch(apiUrl, token, route, { allow404 = false } = {}) {
   // that 404 as "the API is down" aborted the whole census on a perfectly
   // healthy environment, so it is mapped to "no policy" here. Any OTHER 404
   // (unknown repo, missing scope) still propagates and fails closed.
-  if (allow404 && res.status === 404) return { branch_policies: [], notFound: true };
+  //
+  // This 404 is the SAME response an environment with `custom_branch_policies:
+  // false` produces, and it is NOT proof that every ref is admitted. It is
+  // therefore reported as `notFound` so the classifier can weigh it against the
+  // environment's own policy object rather than assuming the permissive reading.
+  if (allow404 && res.status === 404) return { branch_policies: [], tag_policies: [], notFound: true };
   if (!res.ok) throw new Error(`${route} -> HTTP ${res.status}: ${body.slice(0, 200)}`);
   return JSON.parse(body);
+}
+
+/** The environment's own policy object: is custom policy enforcement ON? */
+async function fetchEnvPolicy(apiUrl, token, repo, env) {
+  const data = await apiFetch(apiUrl, token, `/repos/${repo}/environments/${encodeURIComponent(env)}`, {
+    allow404: true,
+  });
+  // A 404 on the environment itself (rather than on its policies) means the
+  // environment does not exist -- nothing targets it, so nothing can be phantom.
+  return { custom: data?.deployment_branch_policy?.custom_branch_policies === true, missing: data?.notFound === true };
 }
 
 function resolveRepo() {
@@ -412,7 +667,26 @@ async function gatherLive() {
       `/repos/${repo}/environments/${encodeURIComponent(env)}/deployment-branch-policies`,
       { allow404: true }
     );
-    policies.set(env, data.branch_policies ?? []);
+    // BOTH axes. `tag_policies` is not a subset of `branch_policies`: GitHub
+    // matches a tag ref only against a tag policy and a branch ref only against
+    // a branch policy. Reading one list and calling it "the policy" is what let
+    // a tag-only environment report OK for a branch-triggered workflow.
+    const branchList = data.branch_policies ?? [];
+    const tagList = data.tag_policies ?? [];
+    // The environment's own `custom_branch_policies` flag decides what an EMPTY
+    // list means, so it is always needed, not only when both lists came back
+    // empty: `staging` has a branch policy AND zero tag policies, and it is
+    // precisely that second fact that makes every tag ref unreachable. Reading
+    // the flag only on the empty-both-lists path left it false for `staging` and
+    // silently turned the live phantom into UNPROVEN.
+    const envPolicy = await fetchEnvPolicy(apiUrl, token, repo, env);
+    policies.set(env, {
+      branches: branchList,
+      tags: tagList,
+      custom: envPolicy.custom,
+      notFound: data.notFound === true || envPolicy.missing,
+      missing: envPolicy.missing,
+    });
   }
   return { repo, branches, findings, policies };
 }
@@ -429,6 +703,15 @@ const FIXTURE = {
     staging: [{ name: 'staging', type: 'branch' }],
     prod: [{ name: 'mainnet', type: 'branch' }],
     'github-pages': [{ name: 'main', type: 'branch' }],
+    // The operator's REMEDY for `staging`, which the guard must accept: a tag
+    // policy admitting the v* tags the release gates actually trigger on.
+    'staging-tagfix': { branches: [{ name: 'staging', type: 'branch' }], tags: [{ name: 'v*', type: 'tag' }] },
+    // A tag-ONLY policy on an environment a branch-triggered workflow deploys to.
+    'tag-only': { branches: [], tags: [{ name: 'v*', type: 'tag' }] },
+    // custom_branch_policies ON with nothing configured: GitHub admits no ref.
+    'locked-empty': { branches: [], tags: [], custom: true },
+    // policy=null: GitHub admits every ref.
+    'unrestricted': { branches: [], tags: [], custom: false },
   },
 };
 
@@ -556,7 +839,9 @@ function selftest() {
     assert(verdict.verdict === 'DYNAMIC', `verdict=${verdict.verdict}`);
   });
 
-  check('a tag-only workflow against a phantom policy is UNPROVEN, not PHANTOM', () => {
+  check('a tag-only workflow is tag-scoped: no PHANTOM without a real proof', () => {
+    // With NO environment policy evidence at all (`custom` absent), the branch
+    // policy cannot decide a tag ref -> UNPROVEN, not an invented PHANTOM.
     const verdict = classifyEnvironment({
       envName: 'staging',
       policies: FIXTURE.policies.staging,
@@ -565,6 +850,124 @@ function selftest() {
       dynamic: [],
     });
     assert(verdict.verdict === 'UNPROVEN', `verdict=${verdict.verdict}`);
+  });
+
+  // The live `staging` shape: custom enforcement ON, one branch policy naming a
+  // branch nobody pushed, and NO tag policy. This is the defect the guard exists
+  // to catch, and it is the row that proved a tag-blind guard goes green on it.
+  check('LIVE: custom ON + zero tag policies means a tag ref is PHANTOM', () => {
+    const verdict = classifyEnvironment({
+      envName: 'staging',
+      policies: { branches: [{ name: 'staging', type: 'branch' }], tags: [], custom: true },
+      branches: FIXTURE.branches,
+      refs: ['tag:v*'],
+      dynamic: [],
+    });
+    assert(verdict.verdict === 'PHANTOM', `verdict=${verdict.verdict}: ${verdict.reason}`);
+  });
+
+  // --- the tag axis: GitHub matches a tag ref against TAG policy only -------
+  check('a tag policy that admits the trigger tag makes the environment OK', () => {
+    // This is the shape an operator produces by ADDING a v* tag policy, which is
+    // the recommended remedy for the phantom `staging`. The guard must go green
+    // on a genuinely fixed environment, or the fix looks broken.
+    const verdict = classifyEnvironment({
+      envName: 'staging',
+      policies: FIXTURE.policies['staging-tagfix'],
+      branches: FIXTURE.branches,
+      refs: ['tag:v*'],
+      dynamic: [],
+    });
+    assert(verdict.verdict === 'OK', `operator fix must go green, got ${verdict.verdict}: ${verdict.reason}`);
+  });
+
+  check('a tag policy that admits a DIFFERENT tag does not make it OK', () => {
+    const verdict = classifyEnvironment({
+      envName: 'staging',
+      policies: { branches: [], tags: [{ name: 'nightly-*', type: 'tag' }] },
+      branches: FIXTURE.branches,
+      refs: ['tag:v*'],
+      dynamic: [],
+    });
+    assert(verdict.verdict !== 'OK', `wrong tag pattern was accepted: ${verdict.reason}`);
+  });
+
+  check('patternMatches honours GitHub fnmatch: * does not cross /', () => {
+    assert(patternMatches('v*', 'v1.2.3'), 'v* must match v1.2.3');
+    assert(patternMatches('release/*', 'release/1'), 'release/* must match release/1');
+    assert(!patternMatches('release/*', 'release/1/2'), 'a single * must not cross /');
+    assert(!patternMatches('v*', 'nightly-1'), 'v* must not match nightly-1');
+  });
+
+  // --- the two false greens this axis used to produce ----------------------
+  check('custom policies ON with ZERO policies is PHANTOM, not "all allowed"', () => {
+    // GitHub admits no ref at all when custom_branch_policies is on and no policy
+    // exists. The first cut read an empty branch_policies as permissive.
+    const verdict = classifyEnvironment({
+      envName: 'locked-empty',
+      policies: FIXTURE.policies['locked-empty'],
+      branches: FIXTURE.branches,
+      refs: ['main'],
+      dynamic: [],
+    });
+    assert(verdict.verdict === 'PHANTOM', `verdict=${verdict.verdict}: ${verdict.reason}`);
+  });
+
+  check('policy=null (custom OFF) really is OK', () => {
+    const verdict = classifyEnvironment({
+      envName: 'unrestricted',
+      policies: FIXTURE.policies.unrestricted,
+      branches: FIXTURE.branches,
+      refs: ['main'],
+      dynamic: [],
+    });
+    assert(verdict.verdict === 'OK', `verdict=${verdict.verdict}: ${verdict.reason}`);
+  });
+
+  check('a TAG-only policy cannot admit a branch-triggered workflow', () => {
+    // The dangerous false green: v* admits tags, so the empty branch_policies
+    // list read as "all branches allowed" while `main` is in fact rejected.
+    const verdict = classifyEnvironment({
+      envName: 'tag-only',
+      policies: FIXTURE.policies['tag-only'],
+      branches: FIXTURE.branches,
+      refs: ['main'],
+      dynamic: [],
+    });
+    assert(verdict.verdict === 'PHANTOM', `verdict=${verdict.verdict}: ${verdict.reason}`);
+  });
+
+  // --- the trigger parser must not read path filters as branch names --------
+  check('paths: filters are not harvested as branch refs', () => {
+    const { refs } = parseTriggerRefs(
+      ['on:', '  push:', '    branches: [main]', '    paths:', '      - "portal/**"',
+       'jobs:', '  a:', '    environment: staging'].join('\n')
+    );
+    assert(refs.includes('main'), `real branch lost: ${JSON.stringify(refs)}`);
+    assert(
+      !refs.some((r) => r.includes('/**')),
+      `path filter harvested as a branch: ${JSON.stringify(refs)}`
+    );
+  });
+
+  check('a push carrying BOTH branches and tags keeps both axes', () => {
+    // ci.yaml's real trigger. The first cut matched only the first key, so the
+    // tag axis was lost and `v*` was filed as a BRANCH name.
+    const { refs } = parseTriggerRefs(
+      ['on:', '  push:', '    branches:', '      - main', '      - develop',
+       '    tags:', '      - "v*"', 'jobs:', '  a:', '    environment: staging'].join('\n')
+    );
+    assert(refs.includes('main'), `branches lost: ${JSON.stringify(refs)}`);
+    assert(refs.includes('tag:v*'), `tag axis lost: ${JSON.stringify(refs)}`);
+    assert(!refs.includes('v*'), `tag filed as a branch: ${JSON.stringify(refs)}`);
+  });
+
+  check('an inline branch list keeps EVERY entry, not just the first', () => {
+    const { refs } = parseTriggerRefs(
+      ['on:', '  push:', '    branches: [main, mainnet/main]', 'jobs:', '  a:',
+       '    environment: staging'].join('\n')
+    );
+    assert(refs.includes('mainnet/main'), `second entry dropped: ${JSON.stringify(refs)}`);
   });
 
   // --- the failure direction that matters: a broken guard must not pass ---
