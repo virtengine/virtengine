@@ -120,14 +120,26 @@ function driftStepScript() {
   const inline = step.match(/^[ \t]*run:[ \t]*(git diff --exit-code.*)$/m);
   if (inline) return inline[1].trim();
 
-  const block = step.match(/^[ \t]*run:[ \t]*\|[ \t]*\n([\s\S]*?)(?=\n[ \t]{0,6}-[ \t]|$)/m);
+  // A block scalar's body runs until the next step's `- name:` (indent 6) or end
+  // of the `step` slice. Three traps, all hit in a first version of this:
+  //
+  //  * `run:` is mid-string, so `^` needs the `m` flag to find it;
+  //  * the body contains comment lines starting with `- `, so the terminator
+  //    must be `- name:`, not a bare `- `; and
+  //  * with `m` on, a bare `$` matches at the end of the FIRST line, which
+  //    silently truncated the script to `git diff --exit-code -- \` -- a
+  //    malformed command that exits 128 rather than diffing anything. The
+  //    terminator is therefore an explicit lookahead for the next step key, with
+  //    a `(?![\\s\\S])` end-of-slice fallback that `m` cannot pre-empt.
+  const block = step.match(/^[ \t]*run:[ \t]*\|[ \t]*\n([\s\S]*?)(?=\n[ \t]{0,6}-[ \t]name:|(?![\s\S]))/m);
   if (block) {
-    // A block scalar is indented at least 2 past its key, so 10 spaces is the
-    // body indent for a key at 8. Trim a uniform prefix rather than assuming one.
-    const lines = block[1].split("\n").filter((l) => l.trim() !== "");
+    // Strip YAML block-scalar indentation, then join shell line continuations so
+    // the result is one runnable command line. Also tolerate CRLF.
+    const lines = block[1].replace(/\r/g, "").split("\n").filter((l) => l.trim() !== "");
     const indent = Math.min(...lines.map((l) => l.length - l.trimStart().length));
-    const body = lines.map((l) => l.slice(indent)).join("\n").trim();
-    if (body.includes("git diff --exit-code")) return body;
+    const body = lines.map((l) => l.slice(indent).trimEnd()).join("\n");
+    const command = body.replace(/\\\n\s*/g, " ").replace(/\s+/g, " ").trim();
+    if (command.includes("git diff --exit-code")) return command;
     assert.fail(`the drift step's block scalar does not run git diff --exit-code:\n${body}`);
   }
 
@@ -367,33 +379,74 @@ test("both contracts-gate declarations name every generated validator", () => {
   }
 });
 
-test("the gate actually fails when a generated validator drifts", (t) => {
-  // Coverage is only real if the widened pathspec can go red. Plant a byte in one
-  // validator, run the REAL command proto-generation.yaml's "Verify generated
-  // drift" step runs -- extracted from the workflow, not transcribed here -- and
-  // require a non-zero exit; then restore.
+test("the extracted drift pathspec names both generated validators", () => {
+  // String-level half of the coverage proof. It reads the drift step's real
+  // pathspec out of the workflow and requires each validator to be reachable by
+  // it -- either named outright or sitting under a directory the pathspec names.
+  // This is deliberately a PARSE rather than a mutation: the first version of
+  // this check planted a byte in the validator and ran the command, and it was
+  // WRONG in a way only CI exposed. The sibling test above runs the real
+  // generator and restores these exact two files in its own t.after, so the
+  // planted byte could be restored before the diff read it -- the test then
+  // reported "git diff found nothing" for a file that was, momentarily, clean.
+  // A local run passed by luck of timing; CI lost the race and went red with
+  // expected: 0, actual: 0.
   //
-  // The extraction is the whole point. A first version of this test inlined the
-  // expected pathspec, and the negative control caught it: with the OLD gate
-  // restored the test still PASSED, because it was proving git reacts to a
-  // planted byte under a pathspec this file chose itself, not that the gate
-  // covers the file. That is the exact shape of the bug this card closes -- a
-  // declaration and a check that agree with each other while both miss the file.
-  const target = path.join(sdkTsDir, GENERATED[0]);
-  const original = fs.readFileSync(target, "utf8");
-  t.after(() => fs.writeFileSync(target, original));
+  // Parsing cannot race, because it reads a file nobody writes during the suite.
+  const pathspec = driftStepScript().replace(/^git\s+diff\s+--exit-code\s+--\s*/, "");
+  const tokens = pathspec.split(/\s+/).map((t) => t.trim()).filter(Boolean);
 
-  fs.writeFileSync(target, `${original}\n// planted drift\n`);
+  for (const rel of GENERATED) {
+    const repoRelative = repoRel(rel);
+    assert.ok(tokens.includes(repoRelative),
+      `the drift step's pathspec does not name ${repoRelative} (it has: ${tokens.join(" ")}) -- `
+      + `a regeneration that rewrote this artifact would not fail the gate`);
+  }
+
+  // And every pre-existing root must still be reachable, so this test cannot pass
+  // by someone replacing the whole pathspec with just the two validators. Matched
+  // by PREFIX rather than by equality: the workflow names
+  // `api/openapi/virtengine-proto.swagger.json` where GATE_COVERED lists the
+  // directory `api/openapi`, so an equality check would flag a pathspec that has
+  // been perfectly intact since long before this change.
+  for (const root of GATE_COVERED) {
+    assert.ok(tokens.some((t) => t === root || t.startsWith(`${root}/`)),
+      `the drift step's pathspec lost the pre-existing root ${root} (it has: ${tokens.join(" ")})`);
+  }
+});
+
+test("the extracted drift step actually goes red on drift", (t) => {
+  // Execution-level half: prove the command this test just parsed exits non-zero
+  // when a covered artifact changes, rather than trusting that it looks right.
+  //
+  // The mutation target is a DIFFERENT covered artifact
+  // (sdk/artifacts/proto/virtengine.binpb.sha256), not one of the two
+  // validators. It is committed, it is inside an existing pathspec root, and no
+  // other test in this file writes it -- so the control cannot be raced by a
+  // sibling's cleanup the way planting in the validators could.
+  const target = "sdk/artifacts/proto/virtengine.binpb.sha256";
+  const abs = path.join(repoRoot, target);
+  const original = fs.readFileSync(abs, "utf8");
+  t.after(() => fs.writeFileSync(abs, original));
 
   const script = driftStepScript();
   assert.ok(script.includes("git diff --exit-code"),
     "could not extract the drift step's git command from proto-generation.yaml -- "
     + "this test would be vacuous if it silently fell back to its own pathspec");
 
-  // `git diff` only reports tracked modifications; confirm the planted file is
-  // tracked so a clean result cannot mean "git never looked at it".
-  execFileSync("git", ["ls-files", "--error-unmatch", repoRel(GENERATED[0])],
-    { cwd: repoRoot, stdio: "pipe" });
+  // `git diff` only reports tracked modifications, so confirm the target is
+  // tracked: a clean diff against an untracked file proves nothing.
+  execFileSync("git", ["ls-files", "--error-unmatch", target], { cwd: repoRoot, stdio: "pipe" });
+
+  // Baseline: a clean tree must exit 0, or a red here would prove nothing.
+  try {
+    execFileSync("bash", ["-c", script], { cwd: repoRoot, stdio: "pipe" });
+  } catch (e) {
+    assert.fail(`the drift step is already red on a clean tree (status ${e.status}), `
+      + `so the non-zero exit asserted below would prove nothing`);
+  }
+
+  fs.writeFileSync(abs, `${original}\n# planted drift\n`);
 
   let exitCode = 0;
   try {
@@ -403,8 +456,8 @@ test("the gate actually fails when a generated validator drifts", (t) => {
   }
 
   assert.notEqual(exitCode, 0,
-    `the drift pathspec did NOT fail on a planted change in ${GENERATED[0]} -- `
-    + `the gate cannot see this artifact, which is the bug this card closes`);
+    `the drift step did NOT go red on a planted change in ${target} -- `
+    + `the gate does not fail on drift, which is the bug this card closes`);
 });
 
 test("neither committed validator bakes an absolute or parent-walking path", () => {
