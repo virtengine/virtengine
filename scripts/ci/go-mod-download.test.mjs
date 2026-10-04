@@ -427,7 +427,14 @@ test("every TLS fault spelling a Go client emits is retried", async () => {
       /NON-transport/,
       `the ${name} spelling was misclassified as a real module defect`
     );
-    assert.match(result.stderr, /transport error/i, `the ${name} spelling must be reported as transport`);
+    // The retry notice is a `::warning::` on STDOUT; only the offending go output is
+    // echoed on stderr. Asserting against stderr alone made every spelling look
+    // unreported even though the wrapper had already retried it into a pass.
+    assert.match(
+      `${result.stdout}\n${result.stderr}`,
+      /transport error/i,
+      `the ${name} spelling must be reported as transport`
+    );
   }
 });
 
