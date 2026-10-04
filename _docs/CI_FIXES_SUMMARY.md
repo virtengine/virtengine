@@ -85,8 +85,8 @@ npm error 404  'bosun@0.8.0' is not in this registry.
 6. Configure:
    ```
    Organization: virtengine
-   Repository: virtengine
-   Workflow filename: bosun-publish.yaml
+   Repository: bosun
+   Workflow filename: publish.yaml
    Environment: npm-publish
    ```
 7. Save
@@ -101,7 +101,7 @@ npm error 404  'bosun@0.8.0' is not in this registry.
 
 **Verification**:
 ```bash
-gh workflow run bosun-publish.yaml
+gh workflow run publish.yaml -R virtengine/bosun
 ```
 Watch logs to confirm OIDC authentication succeeds.
 
@@ -153,11 +153,18 @@ https://github.com/virtengine/virtengine/blob/main/_docs/operations/ci-troublesh
 - Reference to troubleshooting guide
 - Explains resolution steps
 
-**bosun-publish.yaml**:
+**`virtengine/bosun/.github/workflows/publish.yaml`** (in the bosun repository, not this
+one):
 - Expanded prerequisites section
 - Added GitHub environment setup instructions
 - Added troubleshooting reference
 - Clarified configuration requirements
+
+> Correction (2026-10-04): this summary previously attributed those changes to a
+> `bosun-publish.yaml` in this repository. No such file exists here in any revision
+> (`git log --all -- .github/workflows/bosun-publish.yaml` is empty); the workflow is
+> `virtengine/bosun/.github/workflows/publish.yaml`. The changes described are real —
+> they are recorded in the other repository.
 
 ---
 
