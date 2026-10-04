@@ -58,11 +58,95 @@ const sdkTsDir = path.join(scriptDir, "..");
 
 // The two files the estate generator writes, and the two paths no drift gate
 // covers. Both are asserted here so a THIRD generated file escaping the gate
-// is a visible failure rather than silent drift.
+// is a visible failure rather than silent drift -- see the discovery assertion
+// below, which is what actually makes that claim true.
 const GENERATED = [
   "src/sdk/provider/auth/jwt/validateJwtPayload.ts",
   "src/sdl/SDL/validateSDL/validateSDLInput.ts",
 ];
+
+// Recursively collect every source file under src/ carrying esbuild's CJS-interop
+// preamble, i.e. every bundled artefact the SDK has committed. This is how a NEW
+// generated file is discovered: the GENERATED list above is a hardcoded pair, so
+// on its own a third artefact is invisible to every per-file assertion in this
+// file -- the comment on GENERATED claimed a discovery nothing implemented. This
+// sweep is what makes the claim true.
+function discoverBundledArtifacts(dir = path.join(sdkTsDir, "src")) {
+  const found = [];
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    const abs = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      found.push(...discoverBundledArtifacts(abs));
+    } else if (entry.isFile() && entry.name.endsWith(".ts")) {
+      let text;
+      try {
+        text = fs.readFileSync(abs, "utf8");
+      } catch {
+        continue; // unreadable: not a determinism signal, and not ours to fail on
+      }
+      if (text.includes(BUNDLE_SIGNATURE)) {
+        found.push(path.relative(sdkTsDir, abs).split(path.sep).join("/"));
+      }
+    }
+  }
+  return found.sort();
+}
+
+// The path shapes that make a committed artefact non-reproducible, named as data
+// so a failure message can quote them and so the list is reviewable.
+//   RELATIVE_WALK  the original defect: the id walked out of the checkout and
+//                  back down, so its length encoded the author's directory depth
+//                  (../../../virtengine/sdk/ts/node_modules/...)
+//   DRIVE_ABSOLUTE a Windows checkout path (C:/Users/<name>/...)
+//   POSIX_ABSOLUTE a POSIX checkout path (/home/<name>/..., /Users/<name>/...)
+const FORBIDDEN_ID_SHAPES = [
+  { name: "RELATIVE_WALK", test: (id) => id.includes("../") },
+  { name: "DRIVE_ABSOLUTE", test: (id) => /^[A-Za-z]:[\\/]/.test(id) },
+  { name: "POSIX_ABSOLUTE", test: (id) => id.startsWith("/") },
+];
+
+function forbiddenIdShapesIn(id) {
+  return FORBIDDEN_ID_SHAPES.filter((shape) => shape.test(id)).map((s) => s.name);
+}
+
+// A checkout-specific path can reach a generated file in a shape moduleIds()
+// cannot harvest -- a header comment or a string literal, not a module id. So the
+// file-level guard harvests path-like TOKENS from the whole text, which keeps it
+// shape-independent rather than module-id-shaped.
+//
+// Each alternative is a complete token:
+//   [A-Za-z]:[\\/]...          a Windows drive path. Anchored by a lookbehind so
+//                              the char before the letter is not alphanumeric,
+//                              which is what stops the `p:` in the
+//                              `http://json-schema.org/draft-07/schema#` literal
+//                              both artefacts embed in their $schema field from
+//                              matching.
+//   (../)+ ...                a walk out of the checkout. Deliberately NOT
+//                              restricted to walks that reach node_modules: a
+//                              parent walk encodes the author's directory depth
+//                              whatever it points at, so any `../` in a bundled
+//                              artefact is checkout-specific. Neither committed
+//                              artefact contains one (verified: 0 matches each),
+//                              so this does not false-positive on real content.
+//   /Users/... or /home/...   a POSIX home directory
+//
+// Matching the token wherever it sits is the point -- SDL's legitimate
+// absolute-path schema values (e.g. new RegExp("^/")) never form one of these, so
+// real schema content is not mistaken for build metadata.
+const PATH_TOKEN
+  = /(?<![A-Za-z0-9])[A-Za-z]:[\\/][^\s"'`;,)]+|(?:\.\.\/)+[^\s"'`;,)]*|[\w.~-]*\/(?:Users|home)\/[^\s"'`;,)"]+/g;
+
+// Return { line, token, shapes } for every checkout-specific path token in text.
+function checkoutSpecificPaths(text) {
+  const hits = [];
+  text.split("\n").forEach((line, i) => {
+    for (const m of line.matchAll(PATH_TOKEN)) {
+      const shapes = forbiddenIdShapesIn(m[0]);
+      if (shapes.length) hits.push({ line: i + 1, token: m[0], shapes });
+    }
+  });
+  return hits;
+}
 
 // Transcribed from proto-generation.yaml step 8 and scripts/verify-proto-generation.sh.
 // Kept as data so the test fails if generation ever escapes a wider blast radius.
@@ -185,7 +269,7 @@ test("the gate is not vacuous: a content change changes the bytes", async (t) =>
   const { fakeSdk, script } = makeFakeSdk(tmpRoot, "vacuity");
 
   const base = await bundleProbe(esbuild, script, fakeSdk);
-  const mutated = await bundleProbe(esbuild, script, fakeSdk, 'export const MUTANT = "x";');
+  const mutated = await bundleProbe(esbuild, script, fakeSdk, "export const MUTANT = \"x\";");
 
   assert.notEqual(base, mutated,
     "changing the bundled contents did not change the output -- the comparison above proves nothing");
@@ -196,7 +280,7 @@ test("an unresolvable import fails closed instead of emitting a partial bundle",
   await assert.rejects(
     () => esbuild.build({
       stdin: {
-        contents: 'import {x} from "this-package-does-not-exist-ik-xyz"; export const v = x;',
+        contents: "import {x} from \"this-package-does-not-exist-ik-xyz\"; export const v = x;",
         resolveDir: scriptDir,
       },
       absWorkingDir: sdkTsDir,
@@ -246,9 +330,9 @@ test("the real generator's output depends only on sdk/ts, not on the cwd it runs
 
   for (const [rel, a, b] of GENERATED.map((rel, i) => [rel, canonical[i], fromRepoRoot[i]])) {
     assert.equal(b, a,
-      `${rel} differs when the generator runs from the repo root instead of sdk/ts -- ` +
-      `absWorkingDir is not pinned, so the committed artifact depends on the working directory`);
-    assert.ok(!b.includes("../") && !/^[A-Za-z]:[\\/]/m.test(b.split("\n").filter(l => l.includes("node_modules/ajv")).join("\n")),
+      `${rel} differs when the generator runs from the repo root instead of sdk/ts -- `
+      + `absWorkingDir is not pinned, so the committed artifact depends on the working directory`);
+    assert.ok(!b.includes("../") && !/^[A-Za-z]:[\\/]/m.test(b.split("\n").filter((l) => l.includes("node_modules/ajv")).join("\n")),
       `${rel} bakes a working-directory-derived path into the output -- regenerate from sdk/ts`);
   }
 });
@@ -267,14 +351,14 @@ test("the committed validators are exactly what the generator produces from sdk/
 
   execFileSync(process.execPath,
     ["--experimental-strip-types", "--no-warnings",
-     path.join(scriptDir, "compile-json-schema-to-ts.ts")],
+      path.join(scriptDir, "compile-json-schema-to-ts.ts")],
     { cwd: sdkTsDir, stdio: "pipe" });
 
   for (const [rel, original] of before) {
     const now = fs.readFileSync(path.join(sdkTsDir, rel), "utf8");
     assert.equal(now, original,
-      `${rel} is not what the generator produces -- regenerate it and commit the result ` +
-      `(this is exactly the silent drift the contracts gate cannot see)`);
+      `${rel} is not what the generator produces -- regenerate it and commit the result `
+      + `(this is exactly the silent drift the contracts gate cannot see)`);
   }
 });
 
@@ -290,8 +374,8 @@ test("both committed validators are outside every contracts-gate pathspec", () =
       return abs === rootAbs || abs.startsWith(rootAbs + path.sep);
     });
     assert.equal(covered, false,
-      `${rel} is now inside a gate pathspec (${GATE_COVERED.join(", ")}) -- ` +
-      `update GATE_COVERED and confirm the drift gate actually sees this file`);
+      `${rel} is now inside a gate pathspec (${GATE_COVERED.join(", ")}) -- `
+      + `update GATE_COVERED and confirm the drift gate actually sees this file`);
   }
 });
 
@@ -299,6 +383,12 @@ test("neither committed validator bakes an absolute or parent-walking path", () 
   // The concrete symptom this whole change exists to remove. A `../..` walk or
   // a drive letter in a committed artifact means it was generated from a
   // different checkout than the one the gate runs, so it will drift.
+  //
+  // Two assertions, deliberately different in scope:
+  //   (1) module ids only, reported by their named shape, and
+  //   (2) every path-like TOKEN anywhere in the file, so a checkout-specific
+  //       path planted in a comment or a string literal cannot hide from a
+  //       module-id-shaped check.
   for (const rel of GENERATED) {
     const text = fs.readFileSync(path.join(sdkTsDir, rel), "utf8");
     assert.ok(text.includes(BUNDLE_SIGNATURE),
@@ -306,10 +396,86 @@ test("neither committed validator bakes an absolute or parent-walking path", () 
     const ids = moduleIds(text);
     assert.ok(ids.length > 0, `${rel} has no location-derived module ids -- test would be vacuous`);
     for (const id of ids) {
-      assert.ok(!id.includes("../"),
-        `${rel} bakes a relative walk into a committed artifact: ${id}`);
-      assert.ok(!/^[A-Za-z]:[\\/]/.test(id) && !id.startsWith("/"),
-        `${rel} bakes an absolute path into a committed artifact: ${id}`);
+      const shapes = forbiddenIdShapesIn(id);
+      assert.deepEqual(shapes, [],
+        `${rel} bakes a checkout-specific path into a committed artifact `
+        + `[${shapes.join(", ")}]: ${id}`);
     }
+    const hits = checkoutSpecificPaths(text);
+    assert.deepEqual(hits, [],
+      `${rel} carries a checkout-specific path that is not a module id, so the `
+      + `module-id scan above cannot see it: `
+      + hits.map((h) => `line ${h.line} [${h.shapes.join(", ")}] ${h.token}`).join("; "));
   }
+});
+
+test("the sweep finds every bundled artefact under src/, not just the two listed", () => {
+  // Without this, GENERATED is a hardcoded pair and a THIRD generated file
+  // escaping the contracts gate is ungoverned: every other per-file assertion in
+  // this file iterates GENERATED, so nothing would scan it. The comment on
+  // GENERATED claimed this discovery; this test makes the claim true, and fails
+  // the moment the sweep and the hardcoded list disagree.
+  const swept = discoverBundledArtifacts();
+  const listed = [...GENERATED].sort();
+  assert.deepEqual(swept, listed,
+    `bundled artefacts under src/ and GENERATED disagree.\n`
+    + `  swept : ${JSON.stringify(swept)}\n`
+    + `  listed: ${JSON.stringify(listed)}\n`
+    + `  A new generated file must be added to GENERATED so the byte-equality, `
+    + `gate-coverage and path-shape guards cover it too.`);
+});
+
+test("the path-token guard is not vacuous: it rejects every named shape", () => {
+  // The guard above is only worth anything if it rejects the shapes it claims to.
+  // Each real shape is asserted against the same tokenizer, so a future edit that
+  // loosens PATH_TOKEN fails here instead of silently going blind.
+  const cases = [
+    ["RELATIVE_WALK", "// ../../../virtengine/sdk/ts/node_modules/ajv/dist/runtime/ucs2length.js"],
+    ["RELATIVE_WALK", "  \"../../../virtengine/sdk/ts/node_modules/ajv/x.js\"(exports) {"],
+    ["DRIVE_ABSOLUTE", "// C:/Users/jON/virtengine-ops/virtengine/sdk/ts/node_modules/ajv/x.js"],
+    ["DRIVE_ABSOLUTE", "  \"C:\\Users\\jON\\virtengine-ops\\sdk\\ts\\node_modules\\ajv\\x.js\"(exports) {"],
+    ["POSIX_ABSOLUTE", "// /home/jaeko44/virtengine/sdk/ts/node_modules/ajv/x.js"],
+    ["POSIX_ABSOLUTE", "  \"/Users/jON/virtengine-ops/virtengine/sdk/ts/node_modules/ajv/x.js\"(exports) {"],
+  ];
+  for (const [shape, line] of cases) {
+    const hits = checkoutSpecificPaths(line);
+    assert.ok(hits.length > 0, `tokenizer missed ${shape} in: ${line}`);
+    assert.ok(hits.some((h) => h.shapes.includes(shape)),
+      `tokenizer found ${JSON.stringify(hits)} but did not name ${shape} for: ${line}`);
+  }
+
+  // And the canonical location-free form must NOT trip the tokenizer, nor must
+  // SDL's legitimate absolute-path data, which is real content rather than build
+  // metadata.
+  for (const ok of [
+    "// node_modules/ajv/dist/runtime/ucs2length.js",
+    "  \"node_modules/ajv/dist/runtime/ucs2length.js\"(exports) {",
+    "require(\"ajv/dist/runtime/ucs2length\").default",
+    "var pattern8 = new RegExp(\"^/\", \"u\");",
+    "export type AbsolutePath = string;",
+  ]) {
+    assert.deepEqual(checkoutSpecificPaths(ok), [],
+      `tokenizer flagged a location-free line as checkout-specific: ${ok}`);
+  }
+});
+
+test("a planted checkout-specific path is caught even outside a module id", () => {
+  // The specific hole this addition closes: the previous guard harvested module
+  // ids only, so a header comment carrying the build machine's path passed every
+  // per-file assertion. Verify the token guard catches it.
+  const planted = [
+    "// DO NOT EDIT THIS FILE",
+    "// Generated at C:/Users/jON/virtengine-ops/virtengine on the author's laptop",
+    "var note = \"built from ../../../virtengine/sdk/ts at commit deadbeef\";",
+    "",
+    "var __commonJS = (cb, mod) => { return mod; };",
+    "// node_modules/ajv/dist/runtime/ucs2length.js",
+  ].join("\n");
+  const hits = checkoutSpecificPaths(planted);
+  assert.ok(hits.length >= 2,
+    `expected the planted absolute path and the planted ../ walk to be caught, got ${JSON.stringify(hits)}`);
+  assert.ok(hits.some((h) => h.shapes.includes("DRIVE_ABSOLUTE")),
+    `planted Windows checkout path not detected: ${JSON.stringify(hits)}`);
+  assert.ok(hits.some((h) => h.shapes.includes("RELATIVE_WALK")),
+    `planted parent-walking path not detected: ${JSON.stringify(hits)}`);
 });
