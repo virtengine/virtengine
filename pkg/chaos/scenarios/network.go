@@ -234,8 +234,8 @@ func (p *PartitionScenario) Build() (*Experiment, error) {
 			Targets:     allTargets,
 		},
 		Labels: map[string]string{
-			"chaos.virtengine.com/type":     string(ExperimentTypeNetworkPartition),
-			"chaos.virtengine.com/category": "network",
+			ChaosLabelType:     string(ExperimentTypeNetworkPartition),
+			ChaosLabelCategory: ChaosCategoryNetwork,
 		},
 	}, nil
 }
@@ -505,8 +505,8 @@ func (l *LatencyScenario) Build() (*Experiment, error) {
 			Targets:      l.Targets,
 		},
 		Labels: map[string]string{
-			"chaos.virtengine.com/type":     string(ExperimentTypeNetworkLatency),
-			"chaos.virtengine.com/category": "network",
+			ChaosLabelType:     string(ExperimentTypeNetworkLatency),
+			ChaosLabelCategory: ChaosCategoryNetwork,
 		},
 	}, nil
 }
@@ -651,8 +651,8 @@ func (p *PacketLossScenario) Build() (*Experiment, error) {
 			Targets:     p.Targets,
 		},
 		Labels: map[string]string{
-			"chaos.virtengine.com/type":     string(ExperimentTypePacketLoss),
-			"chaos.virtengine.com/category": "network",
+			ChaosLabelType:     string(ExperimentTypePacketLoss),
+			ChaosLabelCategory: ChaosCategoryNetwork,
 		},
 	}, nil
 }
@@ -776,8 +776,8 @@ func (b *BandwidthScenario) Build() (*Experiment, error) {
 			Targets: b.Targets,
 		},
 		Labels: map[string]string{
-			"chaos.virtengine.com/type":     string(ExperimentTypeBandwidth),
-			"chaos.virtengine.com/category": "network",
+			ChaosLabelType:     string(ExperimentTypeBandwidth),
+			ChaosLabelCategory: ChaosCategoryNetwork,
 		},
 	}, nil
 }

@@ -200,8 +200,11 @@ func generateMockValidator(index int) *MockValidator {
 	}
 
 	// Generate deterministic address
-	h := sha256.New()
-_ = fmt.Fprintf(h, "validator_%d", index)
+		h := sha256.New()
+	// hash.Hash.Write never returns an error (documented on the interface), so
+	// this call has no error path to handle. The two-value discard is what
+	// satisfies errcheck without leaving an unchecked call.
+	_, _ = fmt.Fprintf(h, "validator_%d", index)
 	sum := h.Sum(nil)
 	copy(v.Address[:], sum[:20])
 
