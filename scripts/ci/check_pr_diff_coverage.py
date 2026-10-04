@@ -15,8 +15,37 @@ MIN_COVERAGE = 80.0
 
 
 def load_changed_lines(base_ref: str) -> dict[str, set[int]]:
+    # --ignore-all-space is load-bearing, not a tolerance knob.
+    #
+    # Without it the gate counts WHITESPACE-ONLY edits as newly added code. A
+    # `gofmt -w` run realigns struct-literal field columns, which rewrites many
+    # lines that already existed and adds no statement the tests did not already
+    # have to cover. Those realigned lines then match a coverprofile block whose
+    # count is 0 (the block was recorded for the pre-realignment layout), so a
+    # pure formatting fix scored 0/34 = 0.0% and failed an 80% floor.
+    #
+    # Observed: virtengine#1222, run 37177320130 job 111362592944 --
+    #   "Changed Go line coverage: 0/34 = 0.0%"
+    #   "Uncovered changed lines: x/hpc/keeper/grpc_query.go:234,235,..."
+    # on a branch whose entire real payload was scripts/ci/lint_budget_gate.py.
+    # `git diff -w` drops all three Go files from that branch's diff entirely,
+    # which is the proof the churn was whitespace-only.
+    #
+    # This cannot mask a real uncovered line: `--ignore-all-space` still reports
+    # any line whose non-whitespace content differs, so adding a statement, an
+    # assertion or a trailing comment keeps it in the denominator. See
+    # WhitespaceOnlyChangeTest in .github/tests/test_coverage_gate.py, which
+    # pins the whitespace case green AND a real uncovered addition red.
     diff = subprocess.check_output(
-        ["git", "diff", "--unified=0", "--no-color", f"origin/{base_ref}...HEAD", "--", "*.go"],
+        [
+            "git", "diff",
+            "--unified=0",
+            "--no-color",
+            "--ignore-all-space",
+            f"origin/{base_ref}...HEAD",
+            "--",
+            "*.go",
+        ],
         text=True,
     )
 
