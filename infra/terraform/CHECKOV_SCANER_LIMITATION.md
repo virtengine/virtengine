@@ -181,7 +181,11 @@ run exits 2 rather than silently reporting nothing.
 * **Not** that `count = 0` passes vacuously. It does not.
 * **Not** that the other findings are unreal. **110 of the 112 are untouched by
   this.** It concerns exactly the 2 `CKV2_AWS_6` findings that sit on indexed
-  resources whose control is present.
+  resources whose control is present. What happened to those 110 is recorded in
+  `CHECKOV_ACCEPTED_RISK.md`: they were dispositioned as accepted risk, per
+  resource, on t_ae133441 — not "fixed on their own merits", which is what this
+  file originally said. 41 of them are real defects carried deliberately and
+  labelled `KNOWN GAP`; the rest are accepted design or tool-shape.
 * **Not** a claim that the previous version of this file was right. It was not,
   and it suppressed a real finding — which is why every number above now comes
   from a script that fails when the numbers change.

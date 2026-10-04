@@ -7,7 +7,9 @@ name: SDK CI
 #
 # SCOPE — deliberately partial, and each omission is deliberate:
 #   sdk/go      linted + tested here (go test + golangci-lint).
-#   sdk/ts      linted + tested + built here.
+#   sdk/ts      linted + built here; its 40 test suites are owned by
+#               proto-generation.yaml, which can run them (see the typescript
+#               job for why they cannot run on a bare checkout).
 #   sdk/portal  is gated by portal-ci.yaml (job "SDK Portal"), not here.
 #   sdk/python  and sdk/rust are NOT gated here: both fail for PRE-EXISTING
 #   reasons a new gate cannot fix (python: the vendored google.protobuf
@@ -60,6 +62,14 @@ jobs:
       # Without it the package set under test is the workspace's, not this
       # module's.
       GOWORK: "off"
+      # Same reason as ci.yaml's windows-native job (ci.yaml:224). With cgo on,
+      # cosmos-sdk/crypto/ledger pulls in zondax/hid, whose callbacks_cgo.cgo2.c
+      # defines each callback twice, and GCC 10+ on ubuntu runners rejects the
+      # duplicate symbols at link time ("multiple definition of cNextKey_cgo").
+      # The ledger HID path is unreachable from these tests, so disabling cgo is
+      # the same isolation the rest of the repo already uses.
+      CGO_ENABLED: "0"
+      GOFLAGS: "-mod=readonly"
     steps:
       - name: Checkout
         uses: actions/checkout@v5
@@ -95,7 +105,7 @@ jobs:
           args: --timeout=10m --new-from-rev=origin/${{ github.base_ref || 'develop' }}
 
   typescript:
-    name: TypeScript SDK (lint, tests, and build)
+    name: TypeScript SDK (lint and build)
     runs-on: ubuntu-latest
     timeout-minutes: 30
     defaults:
@@ -104,6 +114,13 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v5
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: sdk/go/go.mod
+          cache: true
+          cache-dependency-path: sdk/go/go.sum
 
       - name: Setup Node.js
         uses: actions/setup-node@v6
@@ -118,8 +135,28 @@ jobs:
       - name: Lint
         run: npm run lint
 
-      - name: Test
-        run: npm test
-
+      # This job deliberately does NOT run `npm test`. All 40 sdk/ts suites are
+      # owned by proto-generation.yaml's `contracts` job, which runs the whole
+      # suite (lint, `test --runInBand`, build) inside the pinned generator
+      # image on every `sdk/**` change - a path superset of this workflow's
+      # `sdk/ts/**` trigger, on both pull_request and push. Measured green:
+      # run 37148208070 reported "Test Suites: 40 passed, 40 total / Tests:
+      # 1375 passed, 1375 total", i.e. every suite, none skipped.
+      #
+      # It could not be run here even if it were duplicated. 7 suites import
+      # test/helpers/runBufGenerate.ts, which `cp`s proto modules out of
+      # sdk/go/vendor (test/helpers/proto.ts:37). sdk/go/vendor is gitignored,
+      # so a bare runner has no such tree and they die with ENOENT on lstat.
+      # `go mod vendor` does NOT fix that: it vendors Go packages, and
+      # cosmos-sdk/proto is a proto-only tree, so the directory is absent from a
+      # vendored sdk/go (measured - 51 .proto files under gogoproto/ and iavl/,
+      # none under cosmos-sdk/proto). That tree is built by goware/modvendor
+      # plus the per-module dependency staging in sdk/generation/generate.sh,
+      # which needs buf and the pinned image (sdk/generation/Dockerfile).
+      #
+      # So lint and build below are the checks that need no proto toolchain and
+      # genuinely do pass on a bare checkout (both verified exit 0 with
+      # sdk/go/vendor absent). This job is the fast lane; proto-generation.yaml
+      # is the correctness lane.
       - name: Build
         run: npm run build
