@@ -89,6 +89,31 @@ def test_target_resolution() -> None:
               not gpt.is_scannable_file("x/foo/bar_test.go")
               and not gpt.is_scannable_file("api/query.pb.go")
               and gpt.is_scannable_file("x/foo/bar.go"))
+
+        # A file the go tool IGNORES (basename starting with _ or .) is not
+        # scannable: it is never compiled into the directory's package, so that
+        # directory may legitimately have no loadable package. Measured on PR
+        # #1222 / job 111357375880: a gofmt-only change to scripts/dev/_tmp_addr.go
+        # was fail-closed refused with "no Go files in .../scripts/dev" and turned
+        # a clean PR red. One such file alongside a real one must still yield the
+        # real one -- the filter must not silently swallow a whole PR.
+        check("go-tool-ignored files are filtered out",
+              not gpt.is_scannable_file("scripts/dev/_tmp_addr.go")
+              and not gpt.is_scannable_file("scripts/dev/.hidden.go")
+              and not gpt.is_scannable_file("x/foo/._bar.go"))
+        check("an ordinary file in an _-prefixed FILE name is still scannable",
+              gpt.is_scannable_file("x/foo/real.go"))
+        mixed_good, mixed_bad, mixed_skipped = gpt.resolve(
+            ["scripts/dev/_tmp_addr.go", "pkg/verification/sms/providers.go"], str(REPO))
+        check("an ignored file does not drag a real package down with it",
+              mixed_good == ["./pkg/verification/sms"] and mixed_bad == []
+              and mixed_skipped == ["scripts/dev/_tmp_addr.go"], repr((mixed_good, mixed_bad, mixed_skipped)))
+        # An all-ignored PR must be "nothing to scan" (exit 0 via the empty-report
+        # path), NOT the fail-closed refusal that made it red.
+        only_good, only_bad, only_skipped = gpt.resolve(["scripts/dev/_tmp_addr.go"], str(REPO))
+        check("a PR touching only go-tool-ignored files resolves to no targets",
+              only_good == [] and only_bad == [] and only_skipped == ["scripts/dev/_tmp_addr.go"],
+              repr((only_good, only_bad, only_skipped)))
         # A file in a directory that is not a package must be refused, not passed on.
         good, bad = gpt.loadable(["pkg/verification/sms"], str(REPO))
         check("a real package resolves", good == ["./pkg/verification/sms"], repr(good))

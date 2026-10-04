@@ -220,9 +220,36 @@ def self_dir(d: str) -> str:
 
 
 def is_scannable_file(f: str) -> bool:
-    """False for files gosec must not be asked to cover (mirrors the workflow's awk)."""
+    """False for files gosec must not be asked to cover (mirrors the workflow's awk).
+
+    A file the GO TOOLCHAIN IGNORES is not a scannable target either, and asking
+    for one turns a clean PR into a false red. The toolchain ignores any basename
+    beginning with ``_`` or ``.`` (``go help build``: files whose names begin with
+    ``_`` or ``.`` are ignored by the go tool) -- such a file is a standalone
+    ``go run`` scratch program, never compiled into the directory's package, so
+    its directory legitimately has no loadable package. ``git diff --name-only
+    '*.go'`` does match it, and it is exactly the shape that produced a
+    fail-closed refusal on a run that had introduced no security finding at all.
+
+    Measured on PR #1222, run 37175539776, job 111357375880 (2026-10-04), where a
+    gofmt-only change to ``scripts/dev/_tmp_addr.go`` (this repo's whole-tree
+    gofmt debt, paid off in that PR) was refused by the gate above with::
+
+        ::error::changed Go file(s) in 'scripts/dev' are not in a loadable
+        package: no Go files in .../scripts/dev
+
+    ``scripts/dev`` holds no loadable package for a real reason -- ``_tmp_addr.go``
+    is the only .go file there and the go tool ignores it. Refusing was CORRECT
+    behaviour for the input it was handed, but the input should never have been
+    handed to it: gosec cannot scan a file the compiler never sees, so the honest
+    verdict is "nothing to scan here", not "refusing, and red".
+    """
     parts = norm(f).split("/")
     base = parts[-1]
+    # The go tool ignores _foo.go / .foo.go / ..foo.go outright, so they are
+    # neither compiled nor scannable.
+    if base.startswith(("_", ".")):
+        return False
     if base.endswith("_test.go") or base.endswith(".pb.go"):
         return False
     return not any(p in NEVER_A_PACKAGE_DIRS for p in parts[:-1])
