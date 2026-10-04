@@ -26,11 +26,11 @@
     },
     {
         "description": "ES256KADR36 - Valid Signature/with scoped claims",
-        "tokenString": "eyJhbGciOiJFUzI1NktBRFIzNiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJha2FzaDFxdWZhM3h6cmYzNHF2d3llamtodm5jNHBzZjQ5ZmZ0YXcwYXNtaCIsImV4cCI6MTc2MDQwNjc0MCwibmJmIjoxNzYwNDA0OTQwLCJpYXQiOjE3NjA0MDQ5NDAsInZlcnNpb24iOiJ2MSIsImxlYXNlcyI6eyJhY2Nlc3MiOiJzY29wZWQiLCJzY29wZSI6WyJzdGF0dXMiLCJzaGVsbCIsImV2ZW50cyIsImxvZ3MiXX19.dl8m8L0kExz2CCXvDXY65L0F3G7T21Zk5zfK_Ld78owfZrQbtNQW-FSsLtER2PFBwkEAgXgtrxl3kfImrEGLeg",
+        "tokenString": "eyJhbGciOiJFUzI1NktBRFIzNiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJ2ZTFxdWZhM3h6cmYzNHF2d3llamtodm5jNHBzZjQ5ZmZ0YXcwYXNtaCIsImV4cCI6MTc2MDQwNjc0MCwibmJmIjoxNzYwNDA0OTQwLCJpYXQiOjE3NjA0MDQ5NDAsInZlcnNpb24iOiJ2MSIsImxlYXNlcyI6eyJhY2Nlc3MiOiJzY29wZWQiLCJzY29wZSI6WyJzdGF0dXMiLCJzaGVsbCIsImV2ZW50cyIsImxvZ3MiXX19.gm755rzde7OBsBkudJ_q0ha-fzfYwBYXCMyfPcMc2Tp8is__0HwchNFG-ia0UD83BcezUNe72fSQ5MLXpL_WDQ",
         "expected": {
             "alg": "ES256KADR36",
             "claims": {
-                "iss": "virt1qufa3xzrf34qvwyejkhvnc4psf49fftaw0asmh",
+                "iss": "ve1qufa3xzrf34qvwyejkhvnc4psf49fftaw0asmh",
                 "exp": 1760406740,
                 "iat": 1760404940,
                 "nbf": 1760404940,

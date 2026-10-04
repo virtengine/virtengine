@@ -8,27 +8,27 @@ import (
 )
 
 type ErasureFence struct {
-	TargetCommitment      string `json:"target_commitment"`
+	TargetCommitment       string `json:"target_commitment"`
 	BackupGenerationDigest string `json:"backup_generation_digest"`
-	ErasureEpoch          uint64 `json:"erasure_epoch"`
-	ErasedHeight          int64  `json:"erased_height"`
-	ErasedUnix            int64  `json:"erased_unix"`
+	ErasureEpoch           uint64 `json:"erasure_epoch"`
+	ErasedHeight           int64  `json:"erased_height"`
+	ErasedUnix             int64  `json:"erased_unix"`
 }
 
 type TombstoneInventory struct {
-	TargetCommitment string `json:"target_commitment"`
+	TargetCommitment       string `json:"target_commitment"`
 	BackupGenerationDigest string `json:"backup_generation_digest"`
 	SnapshotManifestDigest string `json:"snapshot_manifest_digest"`
-	SnapshotHeight   int64  `json:"snapshot_height"`
-	SnapshotUnix     int64  `json:"snapshot_unix"`
-	ErasureEpoch     uint64 `json:"erasure_epoch"`
-	Tombstone        bool   `json:"tombstone"`
-	AuditRecords     bool   `json:"audit_records"`
-	ObjectMetadata   bool   `json:"object_metadata"`
-	Ciphertext       bool   `json:"ciphertext"`
-	WrappedKeys      bool   `json:"wrapped_keys"`
-	KeyReferences    bool   `json:"key_references"`
-	Undecryptable    bool   `json:"undecryptable"`
+	SnapshotHeight         int64  `json:"snapshot_height"`
+	SnapshotUnix           int64  `json:"snapshot_unix"`
+	ErasureEpoch           uint64 `json:"erasure_epoch"`
+	Tombstone              bool   `json:"tombstone"`
+	AuditRecords           bool   `json:"audit_records"`
+	ObjectMetadata         bool   `json:"object_metadata"`
+	Ciphertext             bool   `json:"ciphertext"`
+	WrappedKeys            bool   `json:"wrapped_keys"`
+	KeyReferences          bool   `json:"key_references"`
+	Undecryptable          bool   `json:"undecryptable"`
 }
 
 type RestoreInventoryAuthority interface {

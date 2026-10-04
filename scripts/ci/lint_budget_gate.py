@@ -27,14 +27,21 @@ What this gate does NOT do, deliberately:
 
 * It does not disable, silence, or scope any linter. Every finding golangci-lint
   reports is still reported; `.golangci.yaml` still enables all 13.
-* It does not touch the exit status of the `Lint` job. That job is already red on
-  `develop` for this debt and stays red; this gate runs alongside it and adds a
-  second, non-regression signal. Merging it changes no check result.
 * It does not lower a number to go green. Raising the baseline to accommodate
   growth is exactly the coverage gate's forbidden move.
 
-The baseline is pinned 1 below the measured value so ordinary run-to-run float
-noise cannot flip the gate, while any real growth fails. `--report-only` prints
+What it DOES do: on the push/whole-tree path it now FAILS the `Lint` job when a
+budget is exceeded or has expired. It previously ran with `continue-on-error:
+true`, which made it advisory-only -- in run 37155259055 (job 111297271101) it
+printed OK at 662/662 errcheck while the debt sat behind a permanently-failing
+linter step, so its verdict changed no check result and it could not have
+caught growth even had the debt increased. The linter's own exit is remapped to
+0 on that path (see the `--issues-exit-code` note in ci.yaml), so this gate is
+now the enforced signal rather than a report printed next to a red.
+
+The enforced limit is the measured value plus SLACK=1, so ordinary run-to-run
+float noise cannot flip the gate, while any real growth fails. `--report-only`
+prints
 the verdict and exits 0 for measurement runs that must not gate.
 
 Every baseline below carries the issue that tracks paying it down and the date it
@@ -83,9 +90,22 @@ PR_EVENT = "pull_request"
 #     goconst 926  errcheck 662  staticcheck 61  gosec 51
 #     prealloc  13  govet       6  gocritic  2
 #
-# Only the two linters with real backlog are budgeted. The rest are recorded
-# for context and enforced at their measured count, so the gate also catches
-# them growing.
+# Every linter `.golangci.yaml` enables has an entry here, so no enabled linter
+# can report findings without a budget that decides what happens to them. The
+# six that measure 0 are budgeted at 0 precisely BECAUSE they are clean: an
+# unbudgeted linter only emits a `::warning::` and exits 0, so on the push path
+# (where `--issues-exit-code=0` is set) growth in an unbudgeted linter would be
+# silently accepted. Budgeting a clean linter at 0 is what turns the warning
+# into a hard failure, and it costs nothing while the tree stays clean.
+#
+# Re-measured on `develop` at 0df6b86d8 with the same pinned toolchain
+# (golangci-lint v2.13.2, Go 1.26.8): copyloopvar 0, errchkjson 0, ineffassign
+# 0, misspell 0, unparam 0, unused 0 -- unchanged. The `gosec` baseline is
+# measured on the LINUX runner the `Lint` job uses; a windows host additionally
+# reports 3 findings in `//go:build windows` files (G115 x2 in
+# pkg/data_vault/internal/pathnorm/pathnorm_windows.go, G204 x1 in
+# pkg/data_vault/fixture_shortname_windows_test.go) that the ubuntu job never
+# analyses, hence 51 and not 54.
 #
 # Each entry: (measured findings, tracked issue, expiry).
 #   - Raise a baseline ONLY by fixing findings in the tree.
@@ -100,6 +120,14 @@ BASELINES: dict[str, tuple[int, str, str]] = {
     "prealloc": (13, "#1122", "2027-01-15"),
     "govet": (6, "#1122", "2027-01-15"),
     "gocritic": (2, "#1122", "2027-01-15"),
+    # Clean today, and enforced as such: the first finding any of these reports
+    # is a regression, not pre-existing debt, and must fail the push path.
+    "copyloopvar": (0, "#1122", "2027-01-15"),
+    "errchkjson": (0, "#1122", "2027-01-15"),
+    "ineffassign": (0, "#1122", "2027-01-15"),
+    "misspell": (0, "#1122", "2027-01-15"),
+    "unparam": (0, "#1122", "2027-01-15"),
+    "unused": (0, "#1122", "2027-01-15"),
 }
 
 # Slack between the enforced budget and the measured value, so float noise in a

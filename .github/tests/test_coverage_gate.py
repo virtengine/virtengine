@@ -610,6 +610,149 @@ class CoverageGateRoutingTest(unittest.TestCase):
         self.assertEqual(self.gate.main(["coverage_gate.py"]), 2)
 
 
+class WhitespaceOnlyChangeTest(unittest.TestCase):
+    """A `gofmt -w` fix must not score as newly uncovered code (and vice versa).
+
+    The defect this pins: `load_changed_lines` ran `git diff --unified=0`
+    WITHOUT `--ignore-all-space`, so reformatting counted as added lines. A
+    gofmt run on a struct literal realigns the field columns, which touches many
+    pre-existing lines and adds no statement. Those lines match coverprofile
+    blocks recorded against the previous layout, whose counts are 0, so the
+    branch scored 0/34 = 0.0% against an 80% floor.
+
+    Real instance: virtengine#1222, run 37177320130 job 111362592944. The
+    branch's entire real payload was scripts/ci/lint_budget_gate.py -- the three
+    Go files it also touched are invisible to `git diff -w`.
+
+    The load-bearing half is the NEGATIVE CONTROL below. `test_real_added_line
+    without_a_matching_covered_block_still_fails` is what stops this class from
+    being satisfied by a gate that simply stopped counting things: if the
+    `--ignore-all-space` flag were ever widened into something that also drops
+    real content, or if the exclusion were moved into `main()` and applied to
+    every line, the control goes red. A green pair is the only evidence that the
+    exclusion is whitespace-shaped rather than coverage-shaped.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls._tmp = tempfile.TemporaryDirectory()
+        root = Path(cls._tmp.name)
+        # TWO separate repos. One repo cannot express both cases: the whitespace
+        # case must have a diff that is EMPTY under --ignore-all-space, and the
+        # control must have a diff that is not. Sharing one fixture would let the
+        # fixture's own content decide which case runs, and the control would
+        # pass for the wrong reason.
+        cls.ws_repo = _git_repo_with_change(
+            root / "ws",
+            before="package keeper\n\ntype s struct {\n\ta int\n\tbcd int\n}\n",
+            after="package keeper\n\ntype s struct {\n\ta   int\n\tbcd int\n}\n",
+        )
+        cls.real_repo = _git_repo_with_change(
+            root / "real",
+            before="package keeper\n\nfunc Changed() {}\n",
+            after="package keeper\n\nfunc Changed() {}\n\nfunc Untested() int {\n\treturn 1\n}\n",
+        )
+
+    @classmethod
+    def tearDownClass(cls):
+        cls._tmp.cleanup()
+
+    def _gate(self, repo: Path, profile: Path) -> subprocess.CompletedProcess:
+        return subprocess.run(
+            [sys.executable, str(repo / "scripts" / "ci" / "check_pr_diff_coverage.py"),
+             str(profile)],
+            cwd=repo,
+            env={**os.environ, "BASE_REF": "develop"},
+            capture_output=True,
+            text=True,
+        )
+
+    def test_alignment_realignment_alone_does_not_fail_the_floor(self):
+        """The #1222 shape: realignment only -> no changed lines -> green."""
+        profile = self.ws_repo / "coverage.out"
+        # Count 0 on every block, so the gate would score 0% if it counted them.
+        profile.write_text(
+            "mode: atomic\n"
+            "x/keeper/query.go:4.1,4.10 1 0\n"
+            "x/keeper/query.go:5.1,5.10 1 0\n",
+            encoding="utf-8",
+        )
+        result = self._gate(self.ws_repo, profile)
+        self.assertEqual(
+            result.returncode, 0,
+            "whitespace-only change must not fail the coverage floor:\n"
+            f"{result.stdout}\n{result.stderr}",
+        )
+        self.assertIn("No changed Go lines detected", result.stdout)
+
+    def test_real_added_line_without_a_matching_covered_block_still_fails(self):
+        """NEGATIVE CONTROL: real content is still scored, and still fails."""
+        profile = self.real_repo / "coverage.out"
+        # A block covering the added `func Untested() int {` line, count 0.
+        profile.write_text(
+            "mode: atomic\n"
+            "x/keeper/query.go:5.1,5.22 1 0\n",
+            encoding="utf-8",
+        )
+        result = self._gate(self.real_repo, profile)
+        self.assertEqual(
+            result.returncode, 1,
+            "a genuinely uncovered added line MUST still fail the 80% floor -- "
+            "if this is green the whitespace exclusion has become a blanket "
+            "exclusion and the gate is decorative:\n"
+            f"{result.stdout}\n{result.stderr}",
+        )
+        self.assertIn("below minimum", result.stdout)
+
+    def test_a_covered_real_added_line_still_passes(self):
+        """The other half of the control: covered real code is not failed."""
+        profile = self.real_repo / "coverage_covered.out"
+        profile.write_text(
+            "mode: atomic\n"
+            "x/keeper/query.go:5.1,5.22 1 1\n",
+            encoding="utf-8",
+        )
+        result = self._gate(self.real_repo, profile)
+        self.assertEqual(result.returncode, 0, result.stdout)
+
+    def test_the_flag_is_present_in_the_invocation(self):
+        """Pin the flag itself, so it cannot be dropped without a test going red."""
+        source = DIFF_GATE_PATH.read_text(encoding="utf-8")
+        self.assertIn("--ignore-all-space", source)
+
+
+def _git_repo_with_change(root: Path, before: str, after: str) -> Path:
+    """A git repo whose only branch commit rewrites query.go from before to after."""
+    repo = root
+    (repo / "x" / "keeper").mkdir(parents=True)
+    (repo / "scripts" / "ci").mkdir(parents=True)
+
+    env = {**os.environ,
+           "GIT_CONFIG_GLOBAL": os.devnull,
+           "GIT_CONFIG_SYSTEM": os.devnull}
+
+    def g(*args: str) -> str:
+        return subprocess.run(["git", *args], cwd=repo, env=env, check=True,
+                              capture_output=True, text=True).stdout.strip()
+
+    g("init", "-q", "-b", "develop", ".")
+    g("config", "user.email", "test@example.com")
+    g("config", "user.name", "test")
+
+    target = repo / "x" / "keeper" / "query.go"
+    target.write_text(before, encoding="utf-8")
+    g("add", "-A")
+    g("commit", "-q", "-m", "base")
+    g("update-ref", "refs/remotes/origin/develop", g("rev-parse", "HEAD"))
+
+    target.write_text(after, encoding="utf-8")
+    g("add", "-A")
+    g("commit", "-q", "-m", "change")
+
+    shutil.copy2(DIFF_GATE_PATH, repo / "scripts" / "ci" / DIFF_GATE_PATH.name)
+    return repo
+
+
 class WorkflowWiringTest(unittest.TestCase):
     """The workflow must actually call the script, not re-inline the routing.
 

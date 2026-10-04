@@ -15,18 +15,27 @@
  *
  * schema-address-prefix.spec.ts asserts the schema still tracks this value, so
  * changing the prefix cannot drift silently on either side.
+ *
+ * The values themselves now live in `src/encoding/bech32Prefixes.ts`, which the
+ * shipped transaction signer and the portal's chain-registry entry also read.
+ * That module was added for the same bug class in PRODUCTION code, so the
+ * prefix is declared once rather than once per module.
  */
-export const ACCOUNT_ADDRESS_PREFIX = "ve";
+export {
+  ACCOUNT_ADDRESS_LENGTH,
+  BECH32_PREFIX_ACC_ADDR as ACCOUNT_ADDRESS_PREFIX,
+  BECH32_SEPARATOR,
+} from "../../../../encoding/bech32Prefixes.ts";
 
-/** Separator between the human-readable prefix and the payload. */
-export const BECH32_SEPARATOR = "1";
-
-/** Number of data characters in a VirtEngine account address. */
-export const ACCOUNT_ADDRESS_LENGTH = 38;
+import {
+  ACCOUNT_ADDRESS_LENGTH,
+  BECH32_PREFIX_ACC_ADDR,
+  BECH32_SEPARATOR,
+} from "../../../../encoding/bech32Prefixes.ts";
 
 /**
  * Regex source for a valid account address, built from the pieces above.
  * Mirrors the pattern the JWT payload schema embeds for `iss` and for
  * `leases.permissions[].provider`.
  */
-export const ACCOUNT_ADDRESS_PATTERN_SOURCE = `^${ACCOUNT_ADDRESS_PREFIX}${BECH32_SEPARATOR}[a-z0-9]{${ACCOUNT_ADDRESS_LENGTH}}$`;
+export const ACCOUNT_ADDRESS_PATTERN_SOURCE = `^${BECH32_PREFIX_ACC_ADDR}${BECH32_SEPARATOR}[a-z0-9]{${ACCOUNT_ADDRESS_LENGTH}}$`;

@@ -29,6 +29,8 @@ import unittest.mock
 from collections import Counter
 from pathlib import Path
 
+import yaml
+
 REPO_ROOT = Path(__file__).resolve().parents[2]
 GATE = REPO_ROOT / "scripts" / "ci" / "lint_budget_gate.py"
 
@@ -63,6 +65,17 @@ def run_gate(*args: str, env: dict[str, str] | None = None) -> tuple[int, str]:
     return proc.returncode, proc.stdout + proc.stderr
 
 
+def load_enabled_linters() -> list[str]:
+    """The linters `.golangci.yaml` enables, read from the config itself.
+
+    Parsed rather than hardcoded: the test is meant to fail when a linter is
+    ADDED to the config, so a literal copy of the list would pass forever and
+    stop guarding anything.
+    """
+    config = yaml.safe_load((REPO_ROOT / ".golangci.yaml").read_text(encoding="utf-8"))
+    return list(config["linters"]["enable"])
+
+
 class LoadFindingsTest(unittest.TestCase):
     def test_counts_by_reported_linter_not_by_flags(self):
         # The bug this guards: `--enable` is additive to the config, so a run
@@ -85,6 +98,29 @@ class LoadFindingsTest(unittest.TestCase):
 
 
 class BaselineTests(unittest.TestCase):
+    def test_every_enabled_linter_has_a_baseline(self):
+        # The ratchet must cover every linter `.golangci.yaml` enables.
+        #
+        # An UNBUDGETED linter falls into the `unbudgeted` branch, which emits a
+        # `::warning::` and returns EXIT_OK. On the push path the linter's own
+        # exit is remapped to 0 by `--issues-exit-code=0`, so nothing else can
+        # catch growth there: findings in an unbudgeted linter are accepted
+        # silently. That is how six enabled linters (copyloopvar, errchkjson,
+        # ineffassign, misspell, unparam, unused) came to be unbounded while the
+        # ratchet read as complete. Asserting the config and the gate agree is
+        # the check that makes a linter added to the config later fail HERE
+        # rather than silently appearing untracked in a build.
+        enabled = load_enabled_linters()
+        self.assertTrue(enabled, "no linters parsed from .golangci.yaml")
+        unbudgeted = sorted(set(enabled) - set(gate.BASELINES))
+        self.assertEqual(
+            unbudgeted, [],
+            f"linters enabled in .golangci.yaml with no baseline in "
+            f"lint_budget_gate.py: {unbudgeted}. On the push path an unbudgeted "
+            f"linter only warns, so its debt can grow unbounded. Budget it at its "
+            f"measured count.",
+        )
+
     def test_every_baseline_has_issue_and_expiry(self):
         # ESTATE.md: a tolerated debt needs a linked issue and an expiry.
         for linter, (_measured, issue, expiry) in gate.BASELINES.items():
