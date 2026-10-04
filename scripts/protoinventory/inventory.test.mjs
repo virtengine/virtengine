@@ -86,14 +86,30 @@ test("repository inventory has exact Go module replaces and TypeScript proto par
   // that changes go.mod, and say in that PR which directive was added or
   // repointed.
   //
-  // 24 as of 2026-10-01: 15 in go.mod + 1 in sdk/generation/go.mod + 8 in
-  // sdk/go/go.mod. It was 23 until b488f79a (#960) regenerated the inventory
-  // after #848 repointed the ledger directives to akash-network/ledger-go;
-  // that regeneration also carried a `bytedance/sonic` replace, and this
-  // constant was not updated with it. The contracts gate only reached the step
-  // that runs this test once #1102-#1107 made proto generation succeed, so the
-  // drift sat unreadable until then.
-  assert.equal(inventory.summaries.replaces, 24);
+  // 23 as of 2026-10-03: 15 in go.mod + 1 in sdk/generation/go.mod + 7 in
+  // sdk/go/go.mod. It was 24 until #1200 dropped the
+  // `github.com/CosmWasm/wasmd => github.com/CosmWasm/wasmd v0.53.4` replace
+  // from sdk/go/go.mod, which is what forced wasmvm v2 to be pulled in
+  // alongside v3. #1200 kept the `require` line (now v0.61.7), so only the
+  // replace went away -- this constant and the regenerated inventory were
+  // updated in the same change.
+  assert.equal(inventory.summaries.replaces, 23);
+
+  // The removed directive must stay removed: #1200 exists precisely to stop
+  // sdk/go from resolving wasmvm v2 alongside v3, and the count above cannot
+  // catch a regenerate that quietly reintroduces it -- any other replace being
+  // added or dropped in the same change would still total 23. Assert the
+  // absence of the directive itself, not just its number. This is the same
+  // shape as the virtengine/ledger-go assertion below: assert the thing, do
+  // not trust a count to notice its absence.
+  assert.equal(
+    inventory.modules.some((module) =>
+      module.replaces.some(
+        (replacement) => replacement.old === "github.com/CosmWasm/wasmd" && replacement.version === "v0.53.4",
+      ),
+    ),
+    false,
+  );
 
   // A replace must never point at the deleted virtengine/ledger-go repository
   // (#848); assert the target rather than trusting the count to catch it.

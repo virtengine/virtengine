@@ -1,0 +1,20 @@
+{
+  "extends": "./tsconfig.build.json",
+  "compilerOptions": {
+    "module": "CommonJS",
+    "moduleResolution": "Node",
+    "esModuleInterop": true,
+    "allowSyntheticDefaultImports": true,
+    "verbatimModuleSyntax": false,
+    "isolatedModules": false,
+    "emitDeclarationOnly": false,
+    "incremental": false
+  },
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.spec.ts",
+    "test/**/*",
+    "script/**/*",
+    "./node_modules/.tmp/virtengine/generated/**/*.ts"
+  ]
+}

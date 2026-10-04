@@ -116,9 +116,90 @@ jobs:
           # (`level=error msg="Timeout exceeded"`, exit 4) after ~12-13m of job wall time.
           # That is a false red - the gate found nothing and failed to finish. 30m matches
           # GO_TEST_TIMEOUT_UNIT below and leaves headroom for the whole-tree push variant.
-          args: --timeout=30m ${{ github.event_name == 'pull_request' && format('--new-from-rev=origin/{0}', github.base_ref) || '' }}
+          #
+          # `--output.json.path` emits a machine-readable report for the per-linter
+          # budget gate below. `.golangci.yaml` now sets max-issues-per-linter=0 and
+          # max-same-issues=0: without that, golangci-lint v2 applies its defaults of
+          # 50 and 3, and the reported debt is an artifact of the display cap rather
+          # than a property of the tree (capped: errcheck=50; uncapped: errcheck=662).
+          #
+          # `--issues-exit-code=0` applies to the PUSH (whole-tree) path ONLY.
+          # Whole-tree, "1721 issues" is pre-existing recorded debt, and a bare
+          # `golangci-lint run` exits 1 purely because findings exist. Left alone
+          # that exit is not a signal, it is a constant: it fails identically at
+          # 1 finding and at 1721, and worse, it ABORTS the job at that step.
+          # Verified in run 37155259055, job 111297271101 (push, develop): the
+          # linter step failed on "1721 issues", so the job's default
+          # success() short-circuited every ungated step after it. The two steps
+          # whose `##[group]` never appears in that job's log are the budget
+          # gate's SELF-TEST (`Test the lint budget gate`) and `Check
+          # formatting` below. The gate itself DID run and reported OK at
+          # 662/662 errcheck, 926/926 goconst -- but under
+          # `continue-on-error: true`, so its verdict changed no check result:
+          # it could not have failed the job even if the debt had grown. That is
+          # the real defect, and it is fixed below independently of this flag.
+          #
+          # So on push the linter reports and the ratchet DECIDES. This is not
+          # lowering the linter set, disabling any linter, or suppressing
+          # findings: every finding is still reported, and
+          # `Lint debt budget (non-regression ratchet)` below is now the enforced
+          # signal -- it fails the job when any linter grows past its named,
+          # expiry-dated baseline (currently 662 errcheck / 926 goconst).
+          # `--issues-exit-code` only remaps the "issues found" verdict; real
+          # failures keep their codes (3 config/parse, 4 timeout, 5 no go files,
+          # 7 internal), so a broken lint setup or a hung run is still red.
+          #
+          # The pull_request path is deliberately EXCLUDED from that flag: it runs
+          # `--new-from-rev` against the base branch, so any finding it reports is
+          # new to the PR, and it must keep its non-zero exit to keep blocking PRs
+          # that introduce lint issues. Only whole-tree debt is pre-debt here.
+          args: >-
+            --timeout=30m
+            --output.json.path=lint-report.json
+            ${{ github.event_name == 'pull_request' && format('--new-from-rev=origin/{0}', github.base_ref) || '' }}
+            ${{ github.event_name != 'pull_request' && '--issues-exit-code=0' || '' }}
 
+      # Self-test for the budget gate, mirroring #1166's coverage gate: the gate
+      # that scores this repository's lint debt must not ship untested.
+      # `if: always()` so this cannot be masked by an earlier step failing -- the
+      # gate that decides the whole-tree lint verdict must be proven on the same
+      # run that applies it.
+      - name: Test the lint budget gate
+        if: always()
+        run: python -m unittest discover -s .github/tests -p "test_lint_budget_gate.py" -v
+
+      # Self-test for the wiring itself. test_lint_budget_gate.py scores a JSON
+      # report and never opens ci.yaml, so nothing in it can catch this job's
+      # wiring regressing -- an `if:` dropped, `continue-on-error` reintroduced,
+      # or `--issues-exit-code=0` leaking onto the pull_request path. Discovered
+      # here rather than left in .github/tests/ where nothing runs it: a test no
+      # workflow executes is a comment. Both suites are pure-Python and
+      # hermetic (yaml.safe_load of a checked-out file, no network, no origin/
+      # ref), so they cost single-digit seconds in a job that already ran the
+      # whole-tree linter for six minutes.
+      - name: Test the lint job push path
+        if: always()
+        run: python -m unittest discover -s .github/tests -p "test_lint_job_push_path.py" -v
+
+      # Per-linter non-regression ratchet over the whole-tree lint report.
+      # This is now ENFORCED (no `continue-on-error`): since the push path no
+      # longer hard-fails on recorded debt above, this gate is the signal that
+      # makes that trade sound. It fails when any linter exceeds its baseline or
+      # its budget has expired, so the 1721 findings can be paid down but never
+      # grown. The event routing (enforced on push, report-only on the
+      # diff-scoped pull_request path, where the `Lint` job's own exit still blocks
+      # new findings) lives in the gate, asserted by the test above.
+      - name: Lint debt budget (non-regression ratchet)
+        if: always()
+        env:
+          GITHUB_EVENT_NAME: ${{ github.event_name }}
+        run: python3 scripts/ci/lint_budget_gate.py lint-report.json
+
+      # `if: always()` for the same reason as above: on the push path this is the
+      # only gofmt gate that ever runs, and it must not be skipped because an
+      # earlier step in this job failed.
       - name: Check formatting
+        if: always()
         run: |
           if [[ "${{ github.event_name }}" == "pull_request" && -n "${{ github.base_ref }}" ]]; then
             changed_go_files="$(git diff --name-only "origin/${{ github.base_ref }}" -- '*.go' | grep -v '^vendor/' | grep -v '^tests/' | grep -v '^scripts/' || true)"
@@ -133,8 +214,23 @@ jobs:
             fi
             exit 0
           fi
-          gofmt -l .
-          test -z "$(gofmt -l .)"
+          # Whole tree, first-party only. `vendor/` MUST be excluded here for the
+          # same reason the pull_request branch above excludes it: `Sync
+          # dependencies` runs `go mod vendor`, so by the time this step executes
+          # the vendor tree exists on disk, and `gofmt -l .` would score it as
+          # our debt. It is genuinely not gofmt-clean -- 254 vendored files fail
+          # under Go 1.19+ comment reformatting (e.g.
+          # vendor/github.com/DataDog/zstd/zstd_ctx.go) -- so an unfiltered whole
+          # tree check fails on third-party code before it ever reaches a file of
+          # ours. Reformatting vendored dependencies is not ours to do.
+          # `[\\/]` matches either path separator; the Linux runner emits `/`.
+          unformatted="$(gofmt -l . | grep -v '^vendor[\\/]' || true)"
+          if [[ -n "$unformatted" ]]; then
+            printf '%s\n' "$unformatted"
+            echo "::error::gofmt reports first-party Go files that are not formatted"
+            exit 1
+          fi
+          echo "No first-party Go files need gofmt"
 
   # ===========================================================================
   # Go Vet Job - Pre-push Parity
@@ -158,8 +254,14 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      # Wrapped, not bare `go mod download`: a module-proxy TRANSPORT fault
+      # (HTTP/2 RST_STREAM, a reset mid-zip, a TLS blip) is not a defect in the
+      # code under test, and a bare download turns every proxy hiccup into a red
+      # that says nothing about the commit. The wrapper retries ONLY signatures a
+      # transport emits and fails fast on anything else, so it cannot manufacture
+      # a pass - see scripts/ci/go-mod-download.sh.
       - name: Download dependencies
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Run go vet
         env:
@@ -189,9 +291,14 @@ jobs:
           go-version: "1.26.8"
           cache: true
 
+      # Wrapped, not bare `go mod download`, for the same reason as the ubuntu
+      # jobs. `shell: bash` (Git Bash) rather than `pwsh`: the wrapper IS a bash
+      # script. That also makes this the job that exercises the Windows half of
+      # the transport regex - the `wsarecv:` / "forcibly closed" reset spellings
+      # exist in the script precisely because a reset surfaces differently here.
       - name: Download dependencies
-        shell: pwsh
-        run: go mod download
+        shell: bash
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Build VirtEngine
         shell: pwsh
@@ -357,9 +464,13 @@ jobs:
         if: github.event_name == 'pull_request'
         run: git fetch origin "${{ github.base_ref }}" --depth=1
 
+      # Wrapped, not bare `go mod download`, for the same reason as the ubuntu
+      # jobs. The `if:` guard is unchanged - it gates whether this job runs a
+      # Go build at all, which is a different concern from retrying transport
+      # faults inside it.
       - name: Download dependencies
         if: steps.detect.outputs.run == 'true'
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Sync dependencies
         if: steps.detect.outputs.run == 'true'
@@ -472,9 +583,13 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
+      # Wrapped, not bare `go mod download`, for the same reason as the ubuntu
+      # jobs. The `if:` guard is unchanged - it gates whether this job runs the
+      # simulation suite at all, which is a different concern from retrying
+      # transport faults inside it.
       - name: Download dependencies
         if: steps.detect.outputs.run == 'true'
-        run: go mod download
+        run: bash scripts/ci/go-mod-download.sh
 
       - name: Run economics simulation suite
         if: steps.detect.outputs.run == 'true'
@@ -958,11 +1073,14 @@ jobs:
       # This was a fixed 100 MiB `MAX_BYTES` literal compared inline against
       # `docker image inspect`. The shipped image is 216,548,169 bytes
       # and the step has zero successful evaluations in the run history -- the
-      # binary alone is 193,314,978 bytes (184.36 MiB, 1.84x the budget) with
+      # binary alone is 193,294,498 bytes (184.34 MiB, 1.84x the budget) with
       # every standard reduction already applied in _build/Dockerfile.virtengine
-      # (CGO_ENABLED=0, -trimpath, -ldflags "-s -w"). Reaching 100 MiB requires
-      # cutting the statically linked cosmos-sdk/ibc/grpc binary by 57.8%, which
-      # is structural work, not a build-flag change.
+      # (CGO_ENABLED=0, -trimpath, -ldflags "-s -w"). That binary is the
+      # *workspace-mode* build: the Dockerfile never sets GOWORK and go.work is
+      # not in .dockerignore, so COPY . . compiles in workspace mode. See
+      # scripts/ci/image_size_gate.py for the re-measure command. Reaching
+      # 100 MiB requires cutting the statically linked cosmos-sdk/ibc/grpc
+      # binary by 57.8%, which is structural work, not a build-flag change.
       #
       # The threshold and its expiry now live in scripts/ci/image_size_gate.py,
       # asserted by .github/tests/test_image_size_gate.py, so the gate is a

@@ -138,6 +138,89 @@ MUTATIONS = [
         "          IMAGE_SIZE_BYTES: ${{ steps.image_size.outputs.size_bytes }}",
         "test_env_does_not_self_reference_the_step_output",
     ),
+    # ---- M19-M29: the recorded-measurement guards ------------------------
+    # These cover the constants added when MEASURED_BINARY_BYTES was corrected
+    # to the workspace-mode build, and the derived runtime layer. They exist
+    # because an earlier version of this suite constrained the unstripped
+    # constant only by `assertGreater(unstripped, stripped)` -- which admits
+    # any LARGER wrong value, so the gate's "stripping already removes 77.03
+    # MiB" line could be fabricated while the suite stayed green.
+    (
+        "M19-unstripped-constant-made-convenient",
+        "MEASURED_UNSTRIPPED_BINARY_BYTES = 274068165",
+        "MEASURED_UNSTRIPPED_BINARY_BYTES = 200000000",
+        "test_recorded_unstripped_binary_is_the_measured_one",
+    ),
+    (
+        # The sharpest version: barely above the stripped size, so stripping
+        # reports 0.00 MiB while the whole point is that it removes 77 MiB.
+        "M20-unstripped-constant-barely-above-stripped",
+        "MEASURED_UNSTRIPPED_BINARY_BYTES = 274068165",
+        "MEASURED_UNSTRIPPED_BINARY_BYTES = 193294499",
+        "test_recorded_unstripped_binary_is_the_measured_one",
+    ),
+    (
+        "M21-unstripped-print-gutted",
+        '''    print(f"Recorded binary unstripped: {MEASURED_UNSTRIPPED_BINARY_BYTES} bytes "
+          f"({MEASURED_UNSTRIPPED_BINARY_BYTES / mib:.2f} MiB), so stripping already "
+          f"removes {(MEASURED_UNSTRIPPED_BINARY_BYTES - MEASURED_BINARY_BYTES) / mib:.2f} MiB")
+''',
+        '    print(f"Recorded binary unstripped: {MEASURED_UNSTRIPPED_BINARY_BYTES} bytes")\n',
+        "test_derived_runtime_layer_is_printed_with_its_provenance",
+    ),
+    (
+        "M22-docstring-runtime-figure-falsified",
+        "23,253,671 B (22.18 MiB), which does fit under the budget on its own",
+        "21,000,000 B (20.03 MiB), which does fit under the budget on its own",
+        "test_docstring_runtime_figure_matches_the_derived_value",
+    ),
+    (
+        # Zeroing the layer and inverting the subtraction both attribute an
+        # impossible (zero / negative) runtime layer to the image.
+        "M23-derived-runtime-zeroed",
+        "    return MEASURED_IMAGE_BYTES - MEASURED_BINARY_BYTES",
+        "    return 0",
+        "test_derived_runtime_layer_is_the_subtraction_and_is_bounded",
+    ),
+    (
+        "M24-derived-runtime-subtraction-inverted",
+        "    return MEASURED_IMAGE_BYTES - MEASURED_BINARY_BYTES",
+        "    return MEASURED_BINARY_BYTES - MEASURED_IMAGE_BYTES",
+        "test_derived_runtime_layer_is_the_subtraction_and_is_bounded",
+    ),
+    (
+        "M25-docstring-stripped-figure-falsified",
+        "193,294,498 B (184.34 MiB)",
+        "193,294,497 B (184.34 MiB)",
+        "test_docstring_runtime_figure_matches_the_derived_value",
+    ),
+    (
+        "M26-docstring-unstripped-figure-falsified",
+        "274,068,165 B (261.37 MiB)",
+        "274,067,495 B (261.37 MiB)",
+        "test_docstring_runtime_figure_matches_the_derived_value",
+    ),
+    (
+        # Output assertions cannot catch these two: hardcoding the CURRENTLY
+        # correct value produces byte-identical output. The literal then rots
+        # silently on the next re-measurement. Caught structurally instead.
+        "M27-derived-runtime-print-hardcoded",
+        "    derived_runtime = derived_runtime_layer_bytes()",
+        "    derived_runtime = 23253671",
+        "test_printed_figures_are_derived_not_hardcoded",
+    ),
+    (
+        "M28-unstripped-print-figure-hardcoded",
+        'f"removes {(MEASURED_UNSTRIPPED_BINARY_BYTES - MEASURED_BINARY_BYTES) / mib:.2f} MiB")',
+        'f"removes 77.03 MiB")',
+        "test_printed_figures_are_derived_not_hardcoded",
+    ),
+    (
+        "M29-derived-runtime-binary-ignored",
+        "    return MEASURED_IMAGE_BYTES - MEASURED_BINARY_BYTES",
+        "    return MEASURED_IMAGE_BYTES",
+        "test_derived_runtime_layer_is_the_subtraction_and_is_bounded",
+    ),
 ]
 
 

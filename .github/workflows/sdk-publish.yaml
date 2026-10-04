@@ -18,7 +18,23 @@
 #   2. restore the `release: types: [published]` trigger below.
 #
 # The npm SDK is unaffected and remains live: @virtengine/chain-sdk
-# (dist-tags alpha + latest = 1.0.0-alpha.20), published by bosun-publish.yaml.
+# (dist-tags alpha + latest = 1.0.0-alpha.20).
+#
+# IMPORTANT — it is NOT published by a workflow. An earlier revision of this
+# comment credited "bosun-publish.yaml"; no such file has ever existed in this
+# repository (`git log --all -- .github/workflows/bosun-publish.yaml` is empty,
+# and the repo carries 37 root workflows, none of them a publisher). The only
+# `npm publish` anywhere in the tree is the manual script
+# `sdk/ts/package.json:39` ("release": "npm run build && npm test && npm
+# publish --tag alpha"), reached through `make -C sdk release-ts`
+# (sdk/make/release-ts.mk:3). The registry agrees: exactly one version,
+# 1.0.0-alpha.20, first published 2026-02-12 and never touched since — the
+# signature of a manual publish, not of automation.
+#
+# So there is no automated npm publish path today. That is a real gap, but it
+# is also a safety property: no tag or release event can push to the public
+# registry. Any future automation must reuse the existing OIDC trusted-
+# publishing path rather than introduce a long-lived NPM_TOKEN.
 #
 # Install instructions for both SDKs are the verified from-source forms in
 # sdk/python/README.md and sdk/rust/README.md.

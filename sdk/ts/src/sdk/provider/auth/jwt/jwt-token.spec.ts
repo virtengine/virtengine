@@ -5,6 +5,7 @@ import fs from "fs";
 import path from "path";
 
 import { toBase64Url } from "./base64.ts";
+import { ACCOUNT_ADDRESS_PREFIX } from "./chain-prefix.ts";
 import type { CreateJWTOptions } from "./jwt-token.ts";
 import { JwtTokenManager } from "./jwt-token.ts";
 import type { ClaimsTestCase, SigningTestCase } from "./test/test-utils.ts";
@@ -12,10 +13,21 @@ import { replaceTemplateValues } from "./test/test-utils.ts";
 import { createOfflineDataSigner } from "./wallet-utils.ts";
 
 describe("JWT Claims Validation", () => {
-  const testdataPath = path.join(__dirname, "../../../../../..", "testdata", "jwt");
-  const jwtMnemonic = fs.readFileSync(path.join(testdataPath, "mnemonic"), "utf-8").trim();
-  const jwtSigningTestCases = JSON.parse(fs.readFileSync(path.join(testdataPath, "cases_es256k.json"), "utf-8")) as SigningTestCase[];
-  const jwtClaimsTestCases = JSON.parse(fs.readFileSync(path.join(testdataPath, "cases_jwt.json.tmpl"), "utf-8")) as ClaimsTestCase[];
+  const testdataPath = path.join(
+    __dirname,
+    "../../../../../..",
+    "testdata",
+    "jwt",
+  );
+  const jwtMnemonic = fs
+    .readFileSync(path.join(testdataPath, "mnemonic"), "utf-8")
+    .trim();
+  const jwtSigningTestCases = JSON.parse(
+    fs.readFileSync(path.join(testdataPath, "cases_es256k.json"), "utf-8"),
+  ) as SigningTestCase[];
+  const jwtClaimsTestCases = JSON.parse(
+    fs.readFileSync(path.join(testdataPath, "cases_jwt.json.tmpl"), "utf-8"),
+  ) as ClaimsTestCase[];
 
   let testWallet: Secp256k1HdWallet;
   let jwtToken: JwtTokenManager;
@@ -23,60 +35,85 @@ describe("JWT Claims Validation", () => {
 
   beforeAll(async () => {
     testWallet = await Secp256k1HdWallet.fromMnemonic(jwtMnemonic, {
-      prefix: "virtengine",
+      // The chain's bech32 account prefix is "ve" (sdk/go/sdkutil/init.go:22,
+      // Bech32PrefixAccAddr = "ve"), so the issuer address this wallet produces
+      // must be ve1... to satisfy the `iss` pattern in sdk/specs/jwt-schema.json
+      // (`^ve1[a-z0-9]{38}$`). The previous "virtengine" prefix yields
+      // virtengine1..., which no chain in this repo emits and which the schema
+      // rejects - 5 of these cases failed inside generateToken, before reaching
+      // an assertion. @cosmjs/amino's own default is "cosmos", so this must be
+      // set explicitly.
+      //
+      // Derived from the shared constant rather than repeated as a literal, so
+      // the wallet and the schema cannot drift apart again.
+      prefix: ACCOUNT_ADDRESS_PREFIX,
     });
     const [account] = await testWallet.getAccounts();
     testAccount = account;
     jwtToken = new JwtTokenManager(testWallet);
   });
 
-  it.each(jwtClaimsTestCases.filter(isSigningWithES256KADR36))("$description", async (testCase) => {
-    const { claims, tokenString } = replaceTemplateValues(testCase, { iss: testAccount.address });
+  it.each(jwtClaimsTestCases.filter(isSigningWithES256KADR36))(
+    "$description",
+    async (testCase) => {
+      const { claims, tokenString } = replaceTemplateValues(testCase, {
+        iss: testAccount.address,
+      });
 
-    // For test cases that should fail, we need to validate the payload first
-    if (testCase.expected.signFail || testCase.expected.verifyFail) {
-      const validationResult = jwtToken.validatePayload(claims);
-      expect(validationResult.isValid).toBe(false);
+      // For test cases that should fail, we need to validate the payload first
+      if (testCase.expected.signFail || testCase.expected.verifyFail) {
+        const validationResult = jwtToken.validatePayload(claims);
+        expect(validationResult.isValid).toBe(false);
 
-      if (validationResult.isValid) {
-        throw new Error("Validation should have failed", { cause: testCase });
+        if (validationResult.isValid) {
+          throw new Error("Validation should have failed", { cause: testCase });
+        }
+
+        return;
       }
 
-      return;
-    }
+      // For test cases that should pass, create and verify the token
+      const token = await jwtToken.generateToken(claims as CreateJWTOptions);
+      const decoded = jwtToken.decodeToken(token);
+      expect(decoded).toBeDefined();
 
-    // For test cases that should pass, create and verify the token
-    const token = await jwtToken.generateToken(claims as CreateJWTOptions);
-    const decoded = jwtToken.decodeToken(token);
-    expect(decoded).toBeDefined();
+      // If the test case has a token string, compare it with the generated token
+      if (tokenString) {
+        expect(token).toEqual(tokenString);
+      }
+    },
+  );
 
-    // If the test case has a token string, compare it with the generated token
-    if (tokenString) {
-      expect(token).toEqual(tokenString);
-    }
-  });
+  it.each(jwtSigningTestCases.filter(isSigningWithES256KADR36))(
+    "$description",
+    async (testCase) => {
+      const [expectedHeader, expectedPayload, expectedSignature]
+        = testCase.tokenString.split(".");
+      expect(expectedHeader).toBeDefined();
+      expect(expectedPayload).toBeDefined();
+      expect(expectedSignature).toBeDefined();
 
-  it.each(jwtSigningTestCases.filter(isSigningWithES256KADR36))("$description", async (testCase) => {
-    const [expectedHeader, expectedPayload, expectedSignature] = testCase.tokenString.split(".");
-    expect(expectedHeader).toBeDefined();
-    expect(expectedPayload).toBeDefined();
-    expect(expectedSignature).toBeDefined();
+      const signingString = `${expectedHeader}.${expectedPayload}`;
 
-    const signingString = `${expectedHeader}.${expectedPayload}`;
+      const signer = createOfflineDataSigner(testWallet);
+      const [account] = await testWallet.getAccounts();
+      const signResponse = await signer.signArbitrary(
+        account.address,
+        signingString,
+      );
+      const signature = toBase64Url(signResponse.signature);
 
-    const signer = createOfflineDataSigner(testWallet);
-    const [account] = await testWallet.getAccounts();
-    const signResponse = await signer.signArbitrary(account.address, signingString);
-    const signature = toBase64Url(signResponse.signature);
+      if (!testCase.mustFail) {
+        expect(signature).toMatchSnapshot(testCase.description);
+      } else {
+        expect(signature).not.toBe(expectedSignature);
+      }
+    },
+  );
 
-    if (!testCase.mustFail) {
-      expect(signature).toMatchSnapshot(testCase.description);
-    } else {
-      expect(signature).not.toBe(expectedSignature);
-    }
-  });
-
-  function isSigningWithES256KADR36(testCase: SigningTestCase | ClaimsTestCase): boolean {
+  function isSigningWithES256KADR36(
+    testCase: SigningTestCase | ClaimsTestCase,
+  ): boolean {
     return !testCase.expected.alg || testCase.expected.alg === "ES256KADR36";
   }
 });

@@ -14,13 +14,13 @@ const common = {
     // This repo-owned transformer compiles just faker's `.js` to CJS with
     // the TypeScript compiler already in devDependencies (first match wins).
     "@faker-js[/\\\\]faker[/\\\\].+\\.js$": "<rootDir>/test/jest-faker-transform.cjs",
-    "^.+\\.(t|j)s$": ["ts-jest", { tsconfig: "./tsconfig.spec.json" }],
+    "^.+\\.(t|j)s$": ["ts-jest", { tsconfig: "./tsconfig.spec.cjs.json" }],
   } as Config["transform"],
   rootDir: ".",
   moduleNameMapper: {
     ...MAP_ALIASES,
   },
-  resolver: "ts-jest-resolver",
+  resolver: "<rootDir>/test/jest-resolver.cjs",
   // Faker is transpiled via the entry above, so it must not be excluded here;
   // everything else in node_modules stays excluded. (Character classes keep
   // this matching on both POSIX and Windows separators.)

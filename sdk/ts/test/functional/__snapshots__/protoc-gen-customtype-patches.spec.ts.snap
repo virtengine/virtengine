@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`protoc-gen-customtype-patches plugin generates \`Set\` instance with all the types that have reference to fields with custom type option 1`] = `
 "import type * as _protos_customtype from "../protos/customtype.ts";

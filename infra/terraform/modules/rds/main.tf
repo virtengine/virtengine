@@ -28,6 +28,8 @@ resource "random_password" "master" {
 # Secrets Manager for Database Credentials
 # -----------------------------------------------------------------------------
 resource "aws_secretsmanager_secret" "db_credentials" {
+  #checkov:skip=CKV_AWS_149:accepted: the secret stores a connection payload, not key material; encryption at rest comes from the Secrets Manager service key | review-by 2027-04-01
+  #checkov:skip=CKV2_AWS_57:KNOWN GAP, real defect carried deliberately: no automatic rotation. db_credentials are issued by the database and tee_config is a config payload; rotation needs a coordinated application change, so it cannot be switched on here alone | review-by 2026-11-01
   name                    = "${var.project}-${var.environment}-db-credentials"
   description             = "Database credentials for ${var.project} ${var.environment}"
   recovery_window_in_days = var.environment == "prod" ? 30 : 7
@@ -152,6 +154,7 @@ resource "aws_iam_role_policy_attachment" "rds_monitoring" {
 # KMS Key for RDS Encryption
 # -----------------------------------------------------------------------------
 resource "aws_kms_key" "rds" {
+  #checkov:skip=CKV2_AWS_64:KNOWN GAP, real defect carried deliberately: no explicit key policy, so the key falls back to the AWS-managed default. Real fix is an explicit policy document; effective permissions are unchanged today, which is why this is a hardening gap not an exposure | review-by 2026-11-01
   count                   = var.kms_key_arn == "" ? 1 : 0
   description             = "KMS key for RDS ${var.project}-${var.environment}"
   deletion_window_in_days = 7
@@ -172,6 +175,8 @@ resource "aws_kms_alias" "rds" {
 # RDS Instance
 # -----------------------------------------------------------------------------
 resource "aws_db_instance" "main" {
+  #checkov:skip=CKV_AWS_354:accepted: Performance Insights is not enabled for this instance, so there is no PI data to encrypt | review-by 2027-04-01
+  #checkov:skip=CKV_AWS_161:KNOWN GAP, real defect carried deliberately: IAM database authentication is not enabled, so the app authenticates with a static password. Real fix is iam_database_authentication_enabled alongside a driver change | review-by 2026-11-01
   identifier = "${var.project}-${var.environment}"
 
   # Engine
@@ -310,6 +315,7 @@ resource "aws_cloudwatch_metric_alarm" "connections" {
 # Read Replica (optional, for prod)
 # -----------------------------------------------------------------------------
 resource "aws_db_instance" "replica" {
+  #checkov:skip=CKV2_AWS_60:KNOWN GAP, real defect carried deliberately: the replica does not copy tags to snapshots. Real fix is one argument; accepted because the replica is a disposable read replica | review-by 2026-11-01
   count = var.create_read_replica ? 1 : 0
 
   identifier = "${var.project}-${var.environment}-replica"

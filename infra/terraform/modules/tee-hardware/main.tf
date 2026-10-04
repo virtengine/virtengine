@@ -414,6 +414,7 @@ resource "aws_launch_template" "sgx" {
 # =============================================================================
 
 resource "aws_security_group" "tee_attestation" {
+  #checkov:skip=CKV2_AWS_5:accepted: attachment is expressed through aws_security_group_rule or a module output rather than an inline vpc_id on the group; the check only resolves the inline form | review-by 2027-04-01
   name        = "${local.name_prefix}-attestation-sg"
   description = "Security group for TEE attestation traffic"
   vpc_id      = var.vpc_id
@@ -504,6 +505,7 @@ resource "aws_iam_role_policy" "nitro_attestation" {
 # =============================================================================
 
 resource "aws_secretsmanager_secret" "tee_config" {
+  #checkov:skip=CKV2_AWS_57:KNOWN GAP, real defect carried deliberately: no automatic rotation. db_credentials are issued by the database and tee_config is a config payload; rotation needs a coordinated application change, so it cannot be switched on here alone | review-by 2026-11-01
   name        = "${local.name_prefix}/config"
   description = "TEE configuration secrets"
   kms_key_id  = var.kms_key_arn

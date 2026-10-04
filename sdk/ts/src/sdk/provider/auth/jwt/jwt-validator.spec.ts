@@ -1,15 +1,39 @@
 import { beforeEach, describe, expect, it } from "@jest/globals";
 
+import {
+  ACCOUNT_ADDRESS_PATTERN_SOURCE,
+  ACCOUNT_ADDRESS_PREFIX,
+  BECH32_SEPARATOR,
+} from "./chain-prefix.ts";
 import { JwtValidator } from "./jwt-validator.ts";
 
-const issuer = "virtengine1365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63";
-const provider = "virtengine18qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4";
+// Prefix `ve` per the chain's bech32 account prefix (sdk/go/sdkutil/init.go:22,
+// `Bech32PrefixAccAddr = "ve"`), which is what sdk/specs/jwt-schema.json validates
+// with `^ve1[a-z0-9]{38}$`. The previous `virtengine1` fixtures matched no longer, so
+// every payload in this file failed on `iss` before reaching a single assertion.
+//
+// The addresses stay fixed here (deterministic across runs) but take their prefix
+// from the shared constant rather than a duplicated literal.
+const issuer = `${ACCOUNT_ADDRESS_PREFIX}${BECH32_SEPARATOR}365yvmc4s7awdyj3n2sav7xfx76adc6dnmlx63`;
+const provider = `${ACCOUNT_ADDRESS_PREFIX}${BECH32_SEPARATOR}8qa2a2ltfyvkyj0ggj3hkvuj6twzyumuaru9s4`;
+
+// Guards the fixture itself: if the address shape ever stops matching the
+// schema again, this fails at module scope with a precise message rather than
+// surfacing as a confusing "valid token was rejected" assertion.
+if (!new RegExp(ACCOUNT_ADDRESS_PATTERN_SOURCE, "u").test(issuer)) {
+  throw new Error(
+    `issuer fixture ${issuer} does not match the chain address pattern ${ACCOUNT_ADDRESS_PATTERN_SOURCE}`,
+  );
+}
 
 function toBase64Url(value: Record<string, unknown>) {
   return Buffer.from(JSON.stringify(value)).toString("base64url");
 }
 
-function createToken(header: Record<string, unknown>, payload: Record<string, unknown>) {
+function createToken(
+  header: Record<string, unknown>,
+  payload: Record<string, unknown>,
+) {
   return `${toBase64Url(header)}.${toBase64Url(payload)}.signature`;
 }
 
@@ -55,23 +79,27 @@ describe("JwtValidator", () => {
   });
 
   it("should validate required fields in header", () => {
-    const result = validator.validateToken(createToken(
-      { typ: "JWT" },
-      {
-        iss: issuer,
-        iat: 1654000000,
-        exp: 1654003600,
-        nbf: 1654000000,
-        version: "v1",
-        leases: { access: "full" },
-      },
-    ));
+    const result = validator.validateToken(
+      createToken(
+        { typ: "JWT" },
+        {
+          iss: issuer,
+          iat: 1654000000,
+          exp: 1654003600,
+          nbf: 1654000000,
+          version: "v1",
+          leases: { access: "full" },
+        },
+      ),
+    );
     expect(result.isValid).toBe(false);
     expect(result.errors).toContain("Missing required field in header: alg");
   });
 
   it("should validate required fields in payload", () => {
-    const result = validator.validateToken("eyJhbGciOiJFUzI1NksiLCJ0eXAiOiJKV1QifQ.eyJmb28iOiJiYXIifQ.signature");
+    const result = validator.validateToken(
+      "eyJhbGciOiJFUzI1NksiLCJ0eXAiOiJKV1QifQ.eyJmb28iOiJiYXIifQ.signature",
+    );
     expect(result.isValid).toBe(false);
     expect(result.errors).toContain("Missing required field: \"iss\".");
     expect(result.errors).toContain("Missing required field: \"iat\".");
@@ -79,7 +107,9 @@ describe("JwtValidator", () => {
     expect(result.errors).toContain("Missing required field: \"nbf\".");
     expect(result.errors).toContain("Missing required field: \"version\".");
     expect(result.errors).toContain("Missing required field: \"leases\".");
-    expect(result.errors).toContain("Additional property \"foo\" is not allowed.");
+    expect(result.errors).toContain(
+      "Additional property \"foo\" is not allowed.",
+    );
   });
 
   it("should validate leases object when present", () => {
@@ -96,7 +126,9 @@ describe("JwtValidator", () => {
     );
     const result = validator.validateToken(token);
     expect(result.isValid).toBe(false);
-    expect(result.errors).toContain("Missing required field: \"access\" at \"/leases\".");
+    expect(result.errors).toContain(
+      "Missing required field: \"access\" at \"/leases\".",
+    );
   });
 
   it("should validate granular access requires permissions", () => {

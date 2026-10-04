@@ -184,12 +184,6 @@
           "version": "v1.7.0-virtengine.1"
         },
         {
-          "old": "github.com/CosmWasm/wasmd",
-          "oldVersion": "",
-          "new": "github.com/CosmWasm/wasmd",
-          "version": "v0.53.4"
-        },
-        {
           "old": "github.com/gogo/protobuf",
           "oldVersion": "",
           "new": "github.com/regen-network/protobuf",
@@ -8200,7 +8194,7 @@
   "summaries": {
     "modules": 6,
     "toolModules": 1,
-    "replaces": 24,
+    "replaces": 23,
     "goMessages": 228,
     "gateways": 28,
     "gatewayStubs": 0,

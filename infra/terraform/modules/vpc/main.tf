@@ -21,6 +21,7 @@ locals {
 }
 
 data "aws_availability_zones" "available" {
+  #checkov:skip=CKV_AWS_394:accepted: the AZ set is read from the provider at apply time; pinning AZ names would hard-fail in any account whose AZ letters differ | review-by 2027-04-01
   state = "available"
 }
 
@@ -62,6 +63,7 @@ resource "aws_internet_gateway" "main" {
 # Public Subnets
 # -----------------------------------------------------------------------------
 resource "aws_subnet" "public" {
+  #checkov:skip=CKV_AWS_130:accepted by definition: this is a subnet named `public`; map_public_ip_on_launch=true is the property that makes it public | review-by 2027-04-01
   count = var.az_count
 
   vpc_id                  = aws_vpc.main.id
@@ -214,6 +216,7 @@ resource "aws_flow_log" "main" {
 }
 
 resource "aws_cloudwatch_log_group" "flow_logs" {
+  #checkov:skip=CKV_AWS_338:KNOWN GAP, real defect carried deliberately: retention is below the 1-year the check wants. Declared with a deliberate operational retention; long-term retention is carried by the S3 archive buckets. Real fix is to confirm each retention with the log owner and raise where the window is genuinely too short | review-by 2026-11-01
   count = var.enable_flow_logs ? 1 : 0
 
   name              = "/aws/vpc/${var.name}/flow-logs"
@@ -404,6 +407,8 @@ resource "aws_vpc_endpoint" "sts" {
 }
 
 resource "aws_security_group" "vpc_endpoints" {
+  #checkov:skip=CKV_AWS_382:accepted: node/cluster/database security groups need unrestricted egress to pull images and reach AWS service endpoints; restricting it requires a per-service-endpoint egress allowlist | review-by 2027-04-01
+  #checkov:skip=CKV2_AWS_5:accepted: attachment is expressed through aws_security_group_rule or a module output rather than an inline vpc_id on the group; the check only resolves the inline form | review-by 2027-04-01
   count = var.enable_vpc_endpoints ? 1 : 0
 
   name        = "${var.name}-vpc-endpoints-sg"

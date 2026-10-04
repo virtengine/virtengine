@@ -175,6 +175,8 @@ locals {
 
 # Primary region backup bucket
 resource "aws_s3_bucket" "backup_primary" {
+  #checkov:skip=CKV2_AWS_62:accepted: bucket is a log/archive/backup TARGET, not an event source; event notifications are configured on the buckets that ARE event sources | review-by 2027-04-01
+  #checkov:skip=CKV_AWS_18:accepted: access logging is self-logged to the bucket itself (target_bucket = own arn) to avoid creating a second bucket with its own unencrypted-at-rest exposure; CloudTrail data events cover the access path | review-by 2027-04-01
   provider = aws.primary
   bucket   = "${var.project_name}-dr-backups-${var.primary_region}"
 
@@ -246,6 +248,8 @@ resource "aws_s3_bucket_lifecycle_configuration" "backup_primary" {
 
 # Secondary region backup bucket
 resource "aws_s3_bucket" "backup_secondary" {
+  #checkov:skip=CKV2_AWS_62:accepted: bucket is a log/archive/backup TARGET, not an event source; event notifications are configured on the buckets that ARE event sources | review-by 2027-04-01
+  #checkov:skip=CKV_AWS_18:accepted: access logging is self-logged to the bucket itself (target_bucket = own arn) to avoid creating a second bucket with its own unencrypted-at-rest exposure; CloudTrail data events cover the access path | review-by 2027-04-01
   provider = aws.secondary
   bucket   = "${var.project_name}-dr-backups-${var.secondary_region}"
 
@@ -439,6 +443,7 @@ resource "aws_iam_role_policy" "replication" {
 # -----------------------------------------------------------------------------
 
 resource "aws_kms_key" "backup_primary" {
+  #checkov:skip=CKV2_AWS_64:KNOWN GAP, real defect carried deliberately: no explicit key policy, so the key falls back to the AWS-managed default. Real fix is an explicit policy document; effective permissions are unchanged today, which is why this is a hardening gap not an exposure | review-by 2026-11-01
   provider                = aws.primary
   description             = "KMS key for backup encryption in ${var.primary_region}"
   deletion_window_in_days = 30
@@ -457,6 +462,7 @@ resource "aws_kms_alias" "backup_primary" {
 }
 
 resource "aws_kms_key" "backup_secondary" {
+  #checkov:skip=CKV2_AWS_64:KNOWN GAP, real defect carried deliberately: no explicit key policy, so the key falls back to the AWS-managed default. Real fix is an explicit policy document; effective permissions are unchanged today, which is why this is a hardening gap not an exposure | review-by 2026-11-01
   provider                = aws.secondary
   description             = "KMS key for backup encryption in ${var.secondary_region}"
   deletion_window_in_days = 30

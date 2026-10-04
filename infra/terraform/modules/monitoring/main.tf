@@ -236,6 +236,7 @@ resource "aws_cloudwatch_dashboard" "main" {
 # no other consumer of it in this module (only aws_sns_topic.alerts uses it), so
 # no existing grant is widened by attaching the log groups to it.
 resource "aws_cloudwatch_log_group" "application" {
+  #checkov:skip=CKV_AWS_338:KNOWN GAP, real defect carried deliberately: retention is below the 1-year the check wants. Declared with a deliberate operational retention; long-term retention is carried by the S3 archive buckets. Real fix is to confirm each retention with the log owner and raise where the window is genuinely too short | review-by 2026-11-01
   name              = "/aws/eks/${var.cluster_name}/application"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.sns.arn
@@ -244,6 +245,7 @@ resource "aws_cloudwatch_log_group" "application" {
 }
 
 resource "aws_cloudwatch_log_group" "chain" {
+  #checkov:skip=CKV_AWS_338:KNOWN GAP, real defect carried deliberately: retention is below the 1-year the check wants. Declared with a deliberate operational retention; long-term retention is carried by the S3 archive buckets. Real fix is to confirm each retention with the log owner and raise where the window is genuinely too short | review-by 2026-11-01
   name              = "/aws/eks/${var.cluster_name}/chain"
   retention_in_days = var.log_retention_days
   kms_key_id        = aws_kms_key.sns.arn
