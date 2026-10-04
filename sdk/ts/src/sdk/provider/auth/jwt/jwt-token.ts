@@ -22,7 +22,7 @@ export class JwtTokenManager {
    * @returns The signed JWT token
    * @example
    * const wallet = await Secp256k1HdWallet.fromMnemonic(jwtMnemonic, {
-   *   prefix: "virtengine"
+   *   prefix: "ve"
    * });
    * const jwtToken = new JwtTokenManager(wallet);
    * // OR ON FRONTEND
@@ -30,7 +30,7 @@ export class JwtTokenManager {
    * const jwt = new JwtTokenManager(wallet);
    * const token = await jwtToken.generateToken({
    *   version: "v1",
-   *   iss: wallet.address, // virtengine1...
+   *   iss: wallet.address, // ve1...
    *   exp: Math.floor(Date.now() / 1000) + 3600, // 1 hour from now
    *   iat: Math.floor(Date.now() / 1000), // current timestamp
    * });
