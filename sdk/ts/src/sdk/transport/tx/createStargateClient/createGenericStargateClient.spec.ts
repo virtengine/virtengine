@@ -96,7 +96,10 @@ describe(createGenericStargateClient.name, () => {
     });
 
     it("calls `getMessageType` when signing message with types that are not registered", async () => {
-      const getMessageType = jest.fn(() => ({
+      // jest 30 types a zero-parameter `jest.fn` as `Mock<() => T>`, and
+      // `toHaveBeenCalledWith` requires the mock's parameters to be known, so the
+      // declared parameter list must include the argument the caller passes.
+      const getMessageType = jest.fn((_typeUrl: string) => ({
         typeUrl: MESSAGE_TYPE,
         encode: () => new Uint8Array(0),
         decode: () => ({}),

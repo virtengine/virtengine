@@ -158,6 +158,69 @@ If there is a need to run regenerate protobuf (in case of API or documentation c
 
 Releases indicate changes to the repository itself. API versions are defined within each module.
 
+### Published SDK packages
+
+Only `sdk/ts` is published to a public registry. The other SDKs are **source-only**
+and are deliberately not published:
+
+| SDK | Published? | Registry | Install |
+| --- | --- | --- | --- |
+| `sdk/go` | yes (Go modules) | `pkg.go.dev` via module path | `go get github.com/virtengine/virtengine/sdk/go/...` |
+| `sdk/ts` | yes, **manually and rarely** | npm `@virtengine/chain-sdk` | `npm install @virtengine/chain-sdk@alpha` |
+| `sdk/python` | **no** — source-only | — | build from this repo |
+| `sdk/rust` | **no** — source-only | — | build from this repo |
+| `sdk/portal` | **no** — source-only | — | internal portal workspace |
+
+`sdk/python` and `sdk/rust` are source-only by operator decision, not by oversight.
+`.github/workflows/sdk-publish.yaml` used to trigger on `release: types: [published]`
+and run `poetry publish` / `cargo publish`; because the repository has only ever had a
+2021 **draft** release, that event never fired and the path was never exercised. Cutting
+a real first release would have fired a live, irreversible publish as an unattended side
+effect of tagging. The workflow is now `workflow_dispatch`-only and its job refuses to
+publish. Do not reintroduce a `release: published` trigger without a human decision.
+
+### `sdk/release-please-config.json` is NOT in use
+
+`sdk/release-please-config.json` declares a `ts` package (`@virtengine/chain-sdk`,
+prerelease alpha). **No workflow in this repository consumes it** — verified: no file
+under `.github/` references `release-please`. It is retained as intent for a future
+release-please rollout, not as a description of current behaviour. It does not version
+the package and nothing reads `changelog-path` from it.
+
+### Publishing `@virtengine/chain-sdk` (current manual path)
+
+There is **no automated npm publish path** in this repository. The only recipe is the
+`release-ts` target in `sdk/make/release-ts.mk:1-2`, which runs `npm run release`
+(build, then test, then `npm publish --tag alpha`). The root Makefile has no
+`release-ts` target, so `make release-ts` from the repo root fails with
+`make: *** No rule to make target 'release-ts'.  Stop.`
+
+```shell
+# From the sdk/ directory. NOTE: sdk/Makefile requires direnv and stops with
+# "No direnv in <PATH>" if it is absent, so `direnv allow` must have run first.
+cd sdk && direnv allow && make release-ts
+```
+
+Before running it, note three things:
+
+1. It **publishes**. `npm run release` ends in `npm publish --tag alpha`, so a dry run
+   is not available on this path.
+2. It requires npm publish credentials in your environment (`NPM_TOKEN`, or an
+   interactive login). The repository configures no `registry-url` and holds no npm
+   token secret, because no workflow publishes to npm.
+3. It also runs `modvendor` and `buf` as prerequisites, so it mutates the working tree
+   before publishing.
+
+`npm publish` is refused by an unconfigured or already-published version, so the
+`package.json` version must be bumped first. The current published version and the
+in-repo version are both `1.0.0-alpha.20`; npm has exactly one version, first published
+2026-02-12, and it has not moved since. Consumers pinning `@alpha` are therefore on a
+package that is months behind this repository — confirm intent before publishing again.
+
+Automating this path requires a credential decision that a bot must not make
+unattended: npm trusted publishing (OIDC, no long-lived token) versus a stored
+`NPM_TOKEN`, and whether alpha tags should be auto-published at all.
+
 ## Contributing
 
 Please submit issues on this repository: <https://github.com/virtengine/virtengine/issues>.

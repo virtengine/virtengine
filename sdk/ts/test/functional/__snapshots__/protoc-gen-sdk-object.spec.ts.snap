@@ -1,4 +1,4 @@
-// Jest Snapshot v1, https://goo.gl/fbAQLP
+// Jest Snapshot v1, https://jestjs.io/docs/snapshot-testing
 
 exports[`protoc-sdk-objec plugin generates SDK object from proto files 1`] = `
 "import { createServiceLoader } from "../sdk/client/createServiceLoader.ts";

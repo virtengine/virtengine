@@ -95,6 +95,22 @@ test("repository inventory has exact Go module replaces and TypeScript proto par
   // updated in the same change.
   assert.equal(inventory.summaries.replaces, 23);
 
+  // The removed directive must stay removed: #1200 exists precisely to stop
+  // sdk/go from resolving wasmvm v2 alongside v3, and the count above cannot
+  // catch a regenerate that quietly reintroduces it -- any other replace being
+  // added or dropped in the same change would still total 23. Assert the
+  // absence of the directive itself, not just its number. This is the same
+  // shape as the virtengine/ledger-go assertion below: assert the thing, do
+  // not trust a count to notice its absence.
+  assert.equal(
+    inventory.modules.some((module) =>
+      module.replaces.some(
+        (replacement) => replacement.old === "github.com/CosmWasm/wasmd" && replacement.version === "v0.53.4",
+      ),
+    ),
+    false,
+  );
+
   // A replace must never point at the deleted virtengine/ledger-go repository
   // (#848); assert the target rather than trusting the count to catch it.
   assert.equal(
