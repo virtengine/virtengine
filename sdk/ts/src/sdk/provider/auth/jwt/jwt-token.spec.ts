@@ -23,7 +23,15 @@ describe("JWT Claims Validation", () => {
 
   beforeAll(async () => {
     testWallet = await Secp256k1HdWallet.fromMnemonic(jwtMnemonic, {
-      prefix: "virtengine",
+      // The chain's bech32 account prefix is "ve" (sdk/go/sdkutil/init.go:22,
+      // Bech32PrefixAccAddr = "ve"), so the issuer address this wallet produces
+      // must be ve1... to satisfy the `iss` pattern in sdk/specs/jwt-schema.json
+      // (`^ve1[a-z0-9]{38}$`). The previous "virtengine" prefix yields
+      // virtengine1..., which no chain in this repo emits and which the schema
+      // rejects - 5 of these cases failed inside generateToken, before reaching
+      // an assertion. @cosmjs/amino's own default is "cosmos", so this must be
+      // set explicitly.
+      prefix: "ve",
     });
     const [account] = await testWallet.getAccounts();
     testAccount = account;
