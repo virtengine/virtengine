@@ -1,6 +1,11 @@
 import { describe, expect, it } from "@jest/globals";
 
 import {
+  BECH32_PREFIX_ACC_ADDR,
+  BECH32_PREFIX_CONS_ADDR,
+  BECH32_PREFIX_VAL_ADDR,
+} from "../encoding/bech32Prefixes.ts";
+import {
   VIRTENGINE_MAINNET,
   VIRTENGINE_TESTNET,
 } from "./VirtEngineClient.ts";
@@ -17,7 +22,11 @@ describe("VirtEngineClient", () => {
       });
 
       it("should have correct bech32 prefix", () => {
-        expect(VIRTENGINE_MAINNET.bech32Config.bech32PrefixAccAddr).toBe("virt");
+        // "virt" was never a valid VirtEngine HRP. The chain declares
+        // Bech32PrefixAccAddr = "ve" (sdk/go/sdkutil/init.go), and the chain's
+        // own encoder rejects "virt1..." at the bech32 checksum. Asserted
+        // against the shared constant so this cannot drift from the signer.
+        expect(VIRTENGINE_MAINNET.bech32Config.bech32PrefixAccAddr).toBe(BECH32_PREFIX_ACC_ADDR);
       });
 
       it("should have correct coin type", () => {
@@ -51,7 +60,7 @@ describe("VirtEngineClient", () => {
       });
 
       it("should have correct bech32 prefix", () => {
-        expect(VIRTENGINE_TESTNET.bech32Config.bech32PrefixAccAddr).toBe("virt");
+        expect(VIRTENGINE_TESTNET.bech32Config.bech32PrefixAccAddr).toBe(BECH32_PREFIX_ACC_ADDR);
       });
 
       it("should use testnet RPC endpoints", () => {
@@ -77,8 +86,8 @@ describe("VirtEngineClient", () => {
 
     it("should have consistent prefix naming", () => {
       const config = VIRTENGINE_MAINNET;
-      expect(config.bech32Config.bech32PrefixValAddr).toBe("virtvaloper");
-      expect(config.bech32Config.bech32PrefixConsAddr).toBe("virtvalcons");
+      expect(config.bech32Config.bech32PrefixValAddr).toBe(BECH32_PREFIX_VAL_ADDR);
+      expect(config.bech32Config.bech32PrefixConsAddr).toBe(BECH32_PREFIX_CONS_ADDR);
     });
   });
 });

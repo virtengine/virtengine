@@ -11,7 +11,7 @@ import type { ChainStatus, VeidStatus } from "../types/chain";
  * so it cannot import the SDK's constant. It must therefore declare its own —
  * but a bare literal is exactly how the retired `virtengine1` prefix survived
  * here. This file exists so the portal keeps ONE declaration, and the guard in
- * `chain.bech32.spec.ts` asserts it against the Go chain SDK's real constant
+ * `chain.test.ts` asserts it against the Go chain SDK's real constant
  * (`sdk/go/sdkutil.Bech32PrefixAccAddr`), so the two cannot drift silently.
  */
 const BECH32_PREFIX_ACC_ADDR = "ve";
