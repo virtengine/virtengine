@@ -90,9 +90,22 @@ PR_EVENT = "pull_request"
 #     goconst 926  errcheck 662  staticcheck 61  gosec 51
 #     prealloc  13  govet       6  gocritic  2
 #
-# Only the two linters with real backlog are budgeted. The rest are recorded
-# for context and enforced at their measured count, so the gate also catches
-# them growing.
+# Every linter `.golangci.yaml` enables has an entry here, so no enabled linter
+# can report findings without a budget that decides what happens to them. The
+# six that measure 0 are budgeted at 0 precisely BECAUSE they are clean: an
+# unbudgeted linter only emits a `::warning::` and exits 0, so on the push path
+# (where `--issues-exit-code=0` is set) growth in an unbudgeted linter would be
+# silently accepted. Budgeting a clean linter at 0 is what turns the warning
+# into a hard failure, and it costs nothing while the tree stays clean.
+#
+# Re-measured on `develop` at 0df6b86d8 with the same pinned toolchain
+# (golangci-lint v2.13.2, Go 1.26.8): copyloopvar 0, errchkjson 0, ineffassign
+# 0, misspell 0, unparam 0, unused 0 -- unchanged. The `gosec` baseline is
+# measured on the LINUX runner the `Lint` job uses; a windows host additionally
+# reports 3 findings in `//go:build windows` files (G115 x2 in
+# pkg/data_vault/internal/pathnorm/pathnorm_windows.go, G204 x1 in
+# pkg/data_vault/fixture_shortname_windows_test.go) that the ubuntu job never
+# analyses, hence 51 and not 54.
 #
 # Each entry: (measured findings, tracked issue, expiry).
 #   - Raise a baseline ONLY by fixing findings in the tree.
@@ -107,6 +120,14 @@ BASELINES: dict[str, tuple[int, str, str]] = {
     "prealloc": (13, "#1122", "2027-01-15"),
     "govet": (6, "#1122", "2027-01-15"),
     "gocritic": (2, "#1122", "2027-01-15"),
+    # Clean today, and enforced as such: the first finding any of these reports
+    # is a regression, not pre-existing debt, and must fail the push path.
+    "copyloopvar": (0, "#1122", "2027-01-15"),
+    "errchkjson": (0, "#1122", "2027-01-15"),
+    "ineffassign": (0, "#1122", "2027-01-15"),
+    "misspell": (0, "#1122", "2027-01-15"),
+    "unparam": (0, "#1122", "2027-01-15"),
+    "unused": (0, "#1122", "2027-01-15"),
 }
 
 # Slack between the enforced budget and the measured value, so float noise in a
