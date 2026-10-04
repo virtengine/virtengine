@@ -31,6 +31,10 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9090"
         prometheus.io/path: "/metrics"
+        # The pinned package below is NOT published, so this pod cannot pull
+        # it today. See the trailing comment in this file for the evidence and
+        # the owner decision that has to close it.
+        virtengine.com/image-pin-status: unpublished-awaiting-publish-path
     spec:
       serviceAccountName: provider-daemon
       securityContext:
@@ -334,15 +338,33 @@ metadata:
   namespace: virtengine
   labels:
     app.kubernetes.io/name: provider-daemon
-# ghcr.io/virtengine/provider-daemon returned NO anonymous pull token on
-# 2026-10-03, so the node's kubelet cannot fetch this image unassisted and every
-# provider pod would sit in ImagePullBackOff. The init container runs the same
-# package, so it is covered by the same credential.
+# ghcr.io/virtengine/provider-daemon IS NOT PUBLISHED, so the node's kubelet
+# cannot fetch this image and every provider pod would sit in ImagePullBackOff.
+# The init container runs the same package, so it is covered by the same
+# resolution.
 #
-# Provision the secret VALUE out of band in namespace `virtengine` (by name
-# only, never committed), following the same convention as
-# infra/kubernetes/dr/backup-cronjobs.yaml -- one read-only pull secret per
-# ghcr.io/virtengine package, named `<package>-ghcr-pull`:
+# Evidence (2026-10-05, control-validated): an anonymous GHCR token exchange for
+# repository:virtengine/provider-daemon:pull returns 403 DENIED, while the public
+# control virtengine/virtengine returns a token on the same credential and IP.
+# GHCR returns a byte-identical 403 DENIED for a package that was never
+# published, so the token probe alone cannot separate private from nonexistent.
+#
+# What settles it: nothing in .github/workflows/ pushes provider-daemon. The
+# complete set of publishers is ci.yaml (virtengine) and dr-tools-image.yaml
+# (dr-tools). _build/Dockerfile.provider-daemon exists but is only ever built
+# and scanned locally, never pushed -- so a pull secret could not help even if
+# the package were private, and it certainly cannot create a package.
+# The pin is declared unpullable via the
+# virtengine.com/image-pin-status: unpublished-awaiting-publish-path annotation.
+#
+# WHAT MUST HAPPEN (owner decision): publish provider-daemon from this
+# repository and re-pin to the digest that publish proves by pulling it back, or
+# remove the pin. Enforced by
+# .github/tests/test_container_image_pin_publisher_binding.py.
+#
+# IF a provider-daemon package is ever published and is private, then the
+# credential below becomes the right fix, provisioned out of band in namespace
+# `virtengine` (by name only, never committed), following the repo convention:
 #
 #   kubectl -n virtengine create secret docker-registry provider-daemon-ghcr-pull \
 #     --docker-server=ghcr.io \

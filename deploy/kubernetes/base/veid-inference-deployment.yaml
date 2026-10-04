@@ -140,12 +140,36 @@ metadata:
     # Production overlays set a workload-identity role limited to the receipt
     # signing key. The private key itself is never mounted in this workload.
     virtengine.com/receipt-signer: kms-or-hsm-required
-# ghcr.io/virtengine/veid-inference returned NO anonymous pull token on
-# 2026-10-03, so the node's kubelet cannot fetch this image unassisted and the
-# pod would sit in ImagePullBackOff. Provision the secret VALUE out of band in
-# namespace `virtengine` (by name only, never committed), following the same
-# convention as infra/kubernetes/dr/backup-cronjobs.yaml -- one read-only pull
-# secret per ghcr.io/virtengine package, named `<package>-ghcr-pull`:
+# ghcr.io/virtengine/veid-inference IS NOT PUBLISHED, and its pin is an all-zero
+# placeholder, so the node's kubelet cannot fetch this image and the pod sits in
+# ImagePullBackOff. Two independent reasons, either of which alone is fatal:
+#
+#   1. The pinned digest is 64 zeros -- the shape of a real SHA-256 pin naming no
+#      possible image. No credential can fetch it, ever.
+#   2. No workflow in .github/workflows/ pushes veid-inference. The complete set
+#      of publishers is ci.yaml (virtengine) and dr-tools-image.yaml (dr-tools).
+#      deploy/veid-inference/Dockerfile and its Makefile CAN build the image
+#      locally, but nothing publishes it, so a pull secret could not help even
+#      if a private package existed. Verified 2026-10-05 with a control-validated
+#      probe: an anonymous token exchange for veid-inference returns 403 DENIED,
+#      the public control virtengine/virtengine returns a token on the same
+#      credential and IP, and GHCR returns byte-identical 403 DENIED for a never-
+#      published package -- so absence of a token alone cannot separate private
+#      from nonexistent, and the publisher absence is what settles it.
+#
+# The pin is declared unpullable via the virtengine.com/image-pin-status
+# annotation on the pod template, and this block is what keeps that declaration
+# reviewable rather than a free pass.
+#
+# WHAT MUST HAPPEN (owner decision): add a publishing workflow for
+# veid-inference -- build deploy/veid-inference/Dockerfile, push it with
+# provenance, pull the digest back to prove it, then re-pin to that digest and
+# REMOVE both the placeholder digest and the annotation. Or remove this
+# workload. Enforced by .github/tests/test_container_image_pin_publisher_binding.py.
+#
+# IF a veid-inference package is ever published and is private, then the
+# credential below becomes the right fix, provisioned out of band in namespace
+# `virtengine` (by name only, never committed), following the repo convention:
 #
 #   kubectl -n virtengine create secret docker-registry veid-inference-ghcr-pull \
 #     --docker-server=ghcr.io \
@@ -154,15 +178,6 @@ metadata:
 #
 # If your cluster already names this secret differently, change this reference
 # to that name rather than creating a second secret.
-#
-# HONEST LIMIT: this workload is NOT pullable yet regardless of the credential.
-# Its image is pinned to the all-zero placeholder digest above, which matches the
-# shape of a real pin while naming no possible image -- no credential can fetch
-# it. This secret is therefore necessary but NOT sufficient: it becomes the thing
-# that makes the pull work the moment release automation substitutes a real
-# digest, and nothing more. That pin substitution is the remaining blocker, and
-# the `virtengine.com/image-pin-status` annotation on the pod template records it
-# in a machine-checked way rather than leaving it to be discovered at runtime.
 imagePullSecrets:
   - name: veid-inference-ghcr-pull
 ---

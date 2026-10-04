@@ -36,6 +36,10 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9090"
         prometheus.io/path: "/metrics"
+        # The pinned package below is NOT published, so this pod cannot pull
+        # it today. See the trailing comment in this file for the evidence and
+        # the owner decision that has to close it.
+        virtengine.com/image-pin-status: unpublished-awaiting-publish-path
     spec:
       serviceAccountName: tee-enclave
       securityContext:
@@ -341,15 +345,33 @@ metadata:
   annotations:
     # Add the environment-specific IRSA annotation in the cluster overlay when
     # the TEE workload needs direct AWS API access.
-# ghcr.io/virtengine/tee-enclave returned NO anonymous pull token on 2026-10-03,
-# so the node's kubelet cannot fetch this image unassisted and every enclave pod
-# would sit in ImagePullBackOff. The hardware-detect init container runs the same
-# package, so it is covered by the same credential.
+# ghcr.io/virtengine/tee-enclave IS NOT PUBLISHED, so the node's kubelet cannot
+# fetch this image and every enclave pod would sit in ImagePullBackOff. The
+# hardware-detect init container runs the same package, so it is covered by the
+# same resolution.
 #
-# Provision the secret VALUE out of band in namespace `virtengine` (by name
-# only, never committed), following the same convention as
-# infra/kubernetes/dr/backup-cronjobs.yaml -- one read-only pull secret per
-# ghcr.io/virtengine package, named `<package>-ghcr-pull`:
+# Evidence (2026-10-05, control-validated): an anonymous GHCR token exchange for
+# repository:virtengine/tee-enclave:pull returns 403 DENIED, while the public
+# control virtengine/virtengine returns a token on the same credential and IP.
+# GHCR returns a byte-identical 403 DENIED for a package that was never
+# published, so the token probe alone cannot separate private from nonexistent.
+#
+# What settles it: nothing in .github/workflows/ pushes tee-enclave, and there
+# is no Dockerfile for it anywhere in the tree. There is also no `tee-enclave`
+# entry point under cmd/ -- the enclave server this manifest invokes
+# (`tee-enclave serve --config=...`) has no Go binary in this repository at all,
+# so the image cannot be built here even on demand. The pin is declared
+# unpullable via the
+# virtengine.com/image-pin-status: unpublished-awaiting-publish-path annotation.
+#
+# WHAT MUST HAPPEN (owner decision): either stand up the enclave server binary
+# and a publishing workflow and re-pin to the digest that publish proves, or
+# remove this workload from the production-consumable set. Enforced by
+# .github/tests/test_container_image_pin_publisher_binding.py.
+#
+# IF a tee-enclave package is ever published and is private, then the credential
+# below becomes the right fix, provisioned out of band in namespace `virtengine`
+# (by name only, never committed), following the repo convention:
 #
 #   kubectl -n virtengine create secret docker-registry tee-enclave-ghcr-pull \
 #     --docker-server=ghcr.io \

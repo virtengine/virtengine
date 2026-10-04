@@ -340,6 +340,91 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/ci/check-deploy-env-policies.mjs
 
+  # Every guard test under .github/tests is a POLICY: it encodes a rule about
+  # how this repository is allowed to be built and shipped. A policy that no
+  # workflow invokes is a comment with a `test_` prefix. These were orphaned --
+  # written, merged, and never run by anything, including every guard about
+  # container image pins. So this job discovers ALL of them and runs the whole
+  # directory, which means a newly added guard is covered by construction
+  # instead of by remembering to wire it up.
+  guard-policy-tests:
+    name: guard-policy-tests
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install guard test dependencies
+        # .github/tests is not a packaged module; pyyaml is the only third-party
+        # import the discovery pass needs. A guard that imports something else
+        # fails loudly here rather than being silently skipped.
+        run: python -m pip install --disable-pip-version-check --quiet pyyaml
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Set up Go
+        # Several guards shell out to `node` (the .mjs supply-chain gates) and to
+        # `go` (the gosec-coverage end-to-end check). Both skip silently when the
+        # toolchain is absent -- a skip is not a failure, so a runner without Go
+        # would report green while testing materially less than it claims. The
+        # toolchains are therefore installed, and the next step forbids skips.
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Run every guard-policy test
+        # Whole-directory discovery, not a hand-maintained list. The failure
+        # mode this replaces was a list that silently fell behind the tests.
+        #
+        # `set -o pipefail` is REQUIRED here, not decorative: `... | tee` returns
+        # tee's status, so without it a failing guard test would be logged and
+        # then reported as a passing step. That is the exact failure this job
+        # exists to eliminate, reintroduced by its own plumbing.
+        run: |
+          set -o pipefail
+          python -m unittest discover -s .github/tests -p "test_*.py" -v 2>&1 | tee guard-tests.log
+
+      - name: Assert the orphan class is closed
+        # Proves THIS job is what runs them, and that it runs them for real.
+        # Without it, deleting a guard file or narrowing the discovery pattern
+        # would leave the job green while quietly testing nothing -- the same
+        # silent-vacuity failure this job exists to end, one level up.
+        run: |
+          set -euo pipefail
+          guards=$(find .github/tests -maxdepth 1 -name 'test_*.py' | wc -l)
+          echo "guard test files discovered: ${guards}"
+          if [ "${guards}" -lt 19 ]; then
+            echo "::error::only ${guards} guard test files found; this suite has shrunk"
+            exit 1
+          fi
+          reported=$(grep -cE '\.\.\. ok' guard-tests.log || true)
+          echo "guard tests that RAN and passed: ${reported}"
+          if [ "${reported}" -lt 100 ]; then
+            echo "::error::only ${reported} guard tests ran; discovery is not running the suite"
+            exit 1
+          fi
+          # A skipped guard is a policy nobody is enforcing right now. Skips are
+          # allowed only for the two that name a network dependency, and they
+          # must be few enough to stay recognisable.
+          skipped=$(grep -cE '\.\.\. skipped' guard-tests.log || true)
+          echo "guard tests skipped: ${skipped}"
+          if [ "${skipped}" -gt 2 ]; then
+            echo "::error::${skipped} guard tests skipped; a skip is not an enforcement"
+            grep -E '\.\.\. skipped' guard-tests.log
+            exit 1
+          fi
+
   economics-sim:
     name: economics-sim
     runs-on: ubuntu-latest
@@ -608,6 +693,9 @@ jobs:
       - build
       - test-go
       - agents-docs
+      - guard-policy-tests
+      - infra-contracts
+      - deploy-env-policies
       - economics-sim
       - gosec-scan
       - gitleaks-scan
@@ -648,6 +736,27 @@ jobs:
 
           if [ "${{ needs.test-go.result }}" != "success" ]; then
             echo "::error::test-go failed"
+            failed=1
+          fi
+
+          # Unconditional: these three encode repository-wide policy rather than
+          # a change-gated check. `if: always()` on this summary does NOT make a
+          # job blocking -- a job absent from `needs` is simply never consulted,
+          # so it can go red forever without failing the gate. infra-contracts
+          # and deploy-env-policies were in exactly that state before this: real
+          # jobs, real failures, no effect on the verdict.
+          if [ "${{ needs.guard-policy-tests.result }}" != "success" ]; then
+            echo "::error::guard-policy-tests failed"
+            failed=1
+          fi
+
+          if [ "${{ needs.infra-contracts.result }}" != "success" ]; then
+            echo "::error::infra-contracts failed"
+            failed=1
+          fi
+
+          if [ "${{ needs.deploy-env-policies.result }}" != "success" ]; then
+            echo "::error::deploy-env-policies failed"
             failed=1
           fi
 

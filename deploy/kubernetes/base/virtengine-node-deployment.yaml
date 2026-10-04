@@ -37,6 +37,12 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "26660"
         prometheus.io/path: "/metrics"
+        # The pinned package below is NOT published, so this pod cannot pull
+        # it today. See the trailing comment in this file for the full
+        # evidence and the owner decision that has to close it. The annotation
+        # exists so the gap is visible in `kubectl get` and in review instead
+        # of being implied by a comment nobody reads.
+        virtengine.com/image-pin-status: unpublished-awaiting-publish-path
     spec:
       serviceAccountName: virtengine-validator
       securityContext:
@@ -343,6 +349,9 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "26660"
         prometheus.io/path: "/metrics"
+        # Same unpublished package as the validator pod above; see the comment
+        # on its annotation and the trailing comment in this file.
+        virtengine.com/image-pin-status: unpublished-awaiting-publish-path
     spec:
       serviceAccountName: virtengine-node
       securityContext:
@@ -509,34 +518,57 @@ metadata:
   labels:
     app.kubernetes.io/name: virtengine-validator
     app.kubernetes.io/component: validator
-# ghcr.io/virtengine/virtengine-node returned NO anonymous pull token on
-# 2026-10-03 (an unauthenticated token exchange for it is refused), so the
-# node's kubelet cannot fetch this image on its own. Without the credential
-# below every validator pod sits in ImagePullBackOff from its first schedule
-# onward -- `imagePullPolicy: IfNotPresent` cannot help, the image is simply
-# unfetchable.
+# ghcr.io/virtengine/virtengine-node IS NOT PUBLISHED, so this pod cannot pull
+# the pinned image and every validator pod sits in ImagePullBackOff from its
+# first schedule onward. `imagePullPolicy: IfNotPresent` cannot help; the image
+# is simply unfetchable.
 #
-# NOTE this is NOT fixable by re-pinning the digest. The pin is proven correct
-# by an AUTHENTICATED pull in CI, and that proves nothing about pod
-# pullability: the cluster pulls with no credentials of its own.
+# Evidence (2026-10-05, control-validated). An anonymous GHCR token exchange
+# for repository:virtengine/virtengine-node:pull returns 403 DENIED. The public
+# control virtengine/virtengine returns a token on the same credential and IP, so
+# the probe is sound. A deliberately nonexistent control repo returns a
+# BYTE-IDENTICAL 403 DENIED, which is the documented GHCR behaviour for a
+# package that has never been published as well as for a private one: absence of
+# a token cannot separate the two.
 #
-# The secret VALUE is deliberately not in this repository. Provision it out of
-# band in namespace `virtengine`, exactly as `dr-tools-ghcr-pull` is provisioned
-# for the DR CronJobs (by name only, never committed), then re-apply:
+# What settles it is that NOTHING IN THIS REPOSITORY PUBLISHES THE PACKAGE.
+# .github/workflows/ is the complete set of image publishers; ci.yaml pushes
+# virtengine, dr-tools-image.yaml pushes dr-tools, and no workflow pushes
+# virtengine-node. There is no Dockerfile for it either. So the "provision a
+# pull secret" instruction below cannot work: a pull secret is a credential for
+# a package that EXISTS, and this one does not. Provisioning a principal with
+# read:packages on virtengine-node yields nothing, because there is no package
+# to grant access to.
+#
+# This is why the pin carries
+#   virtengine.com/image-pin-status: unpublished-awaiting-publish-path
+# on both pod templates: the pin is declared unpullable rather than implied.
+#
+# WHAT MUST HAPPEN (owner decision -- deliberately not actioned here):
+# publish a release-grade multi-arch image for virtengine-node from this
+# repository and re-pin to the digest that publish proves by pulling it back,
+# or drop the pin. Re-pointing these workloads at the only published package,
+# ghcr.io/virtengine/virtengine@sha256:da0ac87c..., was explicitly considered and
+# REJECTED: that digest is amd64-only and labelled with a nightly revision, and
+# silently changing which binary a production consensus validator runs is not a
+# change a bot should make. Enforced by
+# .github/tests/test_container_image_pin_publisher_binding.py.
+#
+# IF a virtengine-node package is ever published and is private, then -- and only
+# then -- the credential below becomes the right fix, and it follows the repo
+# convention (one read-only pull secret per package, named
+# `<package>-ghcr-pull`, value provisioned out of band, never committed):
 #
 #   kubectl -n virtengine create secret docker-registry virtengine-node-ghcr-pull \
 #     --docker-server=ghcr.io \
 #     --docker-username='<principal with read:packages on virtengine-node>' \
 #     --docker-password='<token>'
 #
-# This is the SAME convention as infra/kubernetes/dr/backup-cronjobs.yaml:
-# one read-only pull secret per ghcr.io/virtengine package, named
-# `<package>-ghcr-pull`, referenced by name. Both the validator and the sentry
-# run the same package, so both cite one secret rather than creating a second.
-# If your cluster already names this secret differently, change these references
-# to that name instead of creating a second secret. Use a READ-ONLY credential:
-# this Secret is mounted into unattended pods and the token outlives the
-# manifest.
+# Both the validator and the sentry run the same package, so both cite one secret
+# rather than creating a second. If your cluster already names this secret
+# differently, change these references to that name instead of creating a second
+# secret. Use a READ-ONLY credential: this Secret is mounted into unattended pods
+# and the token outlives the manifest.
 imagePullSecrets:
   - name: virtengine-node-ghcr-pull
 ---
