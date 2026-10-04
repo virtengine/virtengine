@@ -164,3 +164,30 @@ jobs:
       # is the correctness lane.
       - name: Build
         run: npm run build
+
+      # `npm run build` above runs `compile:validators`, which esbuild-bundles
+      # ajv into two COMMITTED artifacts:
+      #
+      #   src/sdk/provider/auth/jwt/validateJwtPayload.ts
+      #   src/sdl/SDL/validateSDL/validateSDLInput.ts
+      #
+      # No contracts-gate drift check covers either path -- proto-generation.yaml
+      # step 8 and scripts/verify-proto-generation.sh both scope to
+      # sdk/go/node, sdk/ts/src/generated, sdk/artifacts/proto and api/openapi,
+      # while these live under src/sdk/** and src/sdl/**. So when the bundler
+      # emitted a working-directory-derived module id (it did: one file
+      # committed `node_modules/ajv/...`, its sibling committed
+      # `../../../virtengine/sdk/ts/node_modules/ajv/...` from a dev box at a
+      # different checkout depth), regeneration rewrote a file nothing could
+      # see and this workflow reported green.
+      #
+      # The script now pins esbuild's absWorkingDir to sdk/ts, and this step is
+      # the regression test for that: it runs the real generator from two
+      # different working directories and requires byte-identical output, then
+      # requires the committed bytes to equal what the generator produces.
+      # Run from the repo root as well, which is the case that used to drift.
+      - name: Generated validator determinism
+        run: |
+          set -euo pipefail
+          npm run test:validators
+          (cd ../.. && node --test sdk/ts/script/compile-json-schema-to-ts.test.mjs)
