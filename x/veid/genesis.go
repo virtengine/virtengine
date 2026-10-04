@@ -50,6 +50,17 @@ func InitGenesis(ctx sdk.Context, k keeper.Keeper, data *types.GenesisState) {
 			}
 		}
 	}
+
+	// Initialize assurance vectors.
+	//
+	// Only accounts that HAVE a vector get one. Nothing is synthesised for the
+	// rest, so an account absent from genesis keeps the "no assurance claim"
+	// state until it is actually verified.
+	for _, vector := range data.AssuranceVectors {
+		if err := k.SetAssuranceVector(ctx, vector); err != nil {
+			panic(err)
+		}
+	}
 }
 
 // ExportGenesis exports the veid module's state to a genesis state.
@@ -84,11 +95,21 @@ func ExportGenesis(ctx sdk.Context, k keeper.Keeper) *types.GenesisState {
 		return false
 	})
 
+	// Get all assurance vectors. Accounts with no vector are simply absent, which
+	// round-trips the "no assurance claim" state exactly.
+	var assuranceVectors []*types.AssuranceVector
+	for _, record := range identityRecords {
+		if vector, found := k.GetAssuranceVector(ctx, record.AccountAddress); found {
+			assuranceVectors = append(assuranceVectors, vector)
+		}
+	}
+
 	return &types.GenesisState{
-		IdentityRecords: identityRecords,
-		Scopes:          scopes,
-		ApprovedClients: approvedClients,
-		Params:          params,
+		IdentityRecords:  identityRecords,
+		Scopes:           scopes,
+		ApprovedClients:  approvedClients,
+		AssuranceVectors: assuranceVectors,
+		Params:           params,
 	}
 }
 

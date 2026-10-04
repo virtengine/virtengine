@@ -264,6 +264,18 @@ var (
 	// Key: PrefixProofRevocation | proof_id -> ProofRevocation
 	PrefixProofRevocation = []byte{0xE0}
 
+	// PrefixAssuranceVector is the prefix for per-factor assurance vectors
+	// Key: PrefixAssuranceVector | address -> AssuranceVector (current epoch)
+	PrefixAssuranceVector = []byte{0xE1}
+
+	// PrefixAssuranceVectorEpoch is the prefix for assurance-vector history
+	// Key: PrefixAssuranceVectorEpoch | address | block_height -> AssuranceVector
+	//
+	// The current vector lives under PrefixAssuranceVector for O(1) reads; this
+	// prefix keeps every superseded epoch so a verifier can prove a vector was
+	// replaced rather than edited in place.
+	PrefixAssuranceVectorEpoch = []byte{0xE2}
+
 	// ============================================================================
 	// Waldur Integration Keys (VE-226)
 	// ============================================================================
@@ -1498,6 +1510,53 @@ func EvidenceSummaryKey(address []byte, blockHeight int64) []byte {
 func EvidenceSummaryPrefixKey(address []byte) []byte {
 	key := make([]byte, 0, len(PrefixEvidenceSummary)+len(address)+1)
 	key = append(key, PrefixEvidenceSummary...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	return key
+}
+
+// ============================================================================
+// Assurance Vector Key Functions
+// ============================================================================
+
+// AssuranceVectorKey returns the store key for an account's CURRENT assurance
+// vector. There is exactly one per address, so a re-verification overwrites it
+// and the prior epoch is retained under AssuranceVectorEpochKey.
+func AssuranceVectorKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixAssuranceVector)+len(address))
+	key = append(key, PrefixAssuranceVector...)
+	key = append(key, address...)
+	return key
+}
+
+// AssuranceVectorEpochKey returns the store key for one assurance vector at a
+// given block height. The height is big-endian so iteration over an address's
+// vector history is ordered by height.
+func AssuranceVectorEpochKey(address []byte, blockHeight int64) []byte {
+	heightBytes := make([]byte, 8)
+	// Use big-endian for proper ordering
+	heightBytes[0] = byte(blockHeight >> 56) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 56) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[1] = byte(blockHeight >> 48) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 48) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[2] = byte(blockHeight >> 40) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 40) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[3] = byte(blockHeight >> 32) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 32) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[4] = byte(blockHeight >> 24) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 24) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[5] = byte(blockHeight >> 16) // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 16) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[6] = byte(blockHeight >> 8)  // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight >> 8) writes a single byte of the shifted value by design and the written byte is never used arithmetically
+	heightBytes[7] = byte(blockHeight)       // #nosec G115 -- fixed-width big-endian encoding: byte(blockHeight) writes the low byte into the buffer by design; the truncated value is not used arithmetically
+
+	key := make([]byte, 0, len(PrefixAssuranceVectorEpoch)+len(address)+1+8)
+	key = append(key, PrefixAssuranceVectorEpoch...)
+	key = append(key, address...)
+	key = append(key, byte('/'))
+	key = append(key, heightBytes...)
+	return key
+}
+
+// AssuranceVectorEpochPrefixKey returns the prefix for all assurance vector
+// epochs recorded for an address.
+func AssuranceVectorEpochPrefixKey(address []byte) []byte {
+	key := make([]byte, 0, len(PrefixAssuranceVectorEpoch)+len(address)+1)
+	key = append(key, PrefixAssuranceVectorEpoch...)
 	key = append(key, address...)
 	key = append(key, byte('/'))
 	return key
