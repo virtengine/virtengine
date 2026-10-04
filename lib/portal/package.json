@@ -29,7 +29,7 @@
     "jsdom": "^24.0.0",
     "react-dom": "^18.3.1",
     "typescript": "^5.5.4",
-    "vitest": "^4.0.18"
+    "vitest": "^4.1.11"
   },
   "peerDependencies": {
     "react": "^18.2.0"
