@@ -73,9 +73,9 @@ func TestWaldurMarketplaceLifecycle(t *testing.T) {
 	}
 
 	for _, tc := range []struct {
-		name       string
-		action     func() error
-		wantState  waldur.ResourceState
+		name      string
+		action    func() error
+		wantState waldur.ResourceState
 	}{
 		{
 			name: "stop",

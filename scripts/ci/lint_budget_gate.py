@@ -27,14 +27,21 @@ What this gate does NOT do, deliberately:
 
 * It does not disable, silence, or scope any linter. Every finding golangci-lint
   reports is still reported; `.golangci.yaml` still enables all 13.
-* It does not touch the exit status of the `Lint` job. That job is already red on
-  `develop` for this debt and stays red; this gate runs alongside it and adds a
-  second, non-regression signal. Merging it changes no check result.
 * It does not lower a number to go green. Raising the baseline to accommodate
   growth is exactly the coverage gate's forbidden move.
 
-The baseline is pinned 1 below the measured value so ordinary run-to-run float
-noise cannot flip the gate, while any real growth fails. `--report-only` prints
+What it DOES do: on the push/whole-tree path it now FAILS the `Lint` job when a
+budget is exceeded or has expired. It previously ran with `continue-on-error:
+true`, which made it advisory-only -- in run 37155259055 (job 111297271101) it
+printed OK at 662/662 errcheck while the debt sat behind a permanently-failing
+linter step, so its verdict changed no check result and it could not have
+caught growth even had the debt increased. The linter's own exit is remapped to
+0 on that path (see the `--issues-exit-code` note in ci.yaml), so this gate is
+now the enforced signal rather than a report printed next to a red.
+
+The enforced limit is the measured value plus SLACK=1, so ordinary run-to-run
+float noise cannot flip the gate, while any real growth fails. `--report-only`
+prints
 the verdict and exits 0 for measurement runs that must not gate.
 
 Every baseline below carries the issue that tracks paying it down and the date it

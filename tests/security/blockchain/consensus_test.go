@@ -41,9 +41,11 @@ func (s consensusTestScorer) Close() error            { return nil }
 
 type consensusTestKeyProvider struct{}
 
-func (consensusTestKeyProvider) GetPrivateKey() ([]byte, error) { return []byte("validator-private-key"), nil }
-func (consensusTestKeyProvider) GetKeyFingerprint() string      { return "validator-fingerprint" }
-func (consensusTestKeyProvider) Close() error                   { return nil }
+func (consensusTestKeyProvider) GetPrivateKey() ([]byte, error) {
+	return []byte("validator-private-key"), nil
+}
+func (consensusTestKeyProvider) GetKeyFingerprint() string { return "validator-fingerprint" }
+func (consensusTestKeyProvider) Close() error              { return nil }
 
 func TestBC001_ConsensusVerifierRejectsDivergentResults(t *testing.T) {
 	params := veidkeeper.DefaultConsensusParams()
