@@ -6,8 +6,9 @@ route is intended, or the in-module `WorkloadGovernanceProposal` path is intende
 wrong, because *both* routes are structurally impossible on this chain. The real defect is
 one layer deeper and larger than the card describes.
 
-Verified against `origin/develop` @ `0c558acf888ed536b973a42641838e8031757938`, worktree
-`wt/t_f3da965c`, Go 1.26.8, `GOWORK=off GOFLAGS=-mod=mod`.
+Verified against `origin/develop` @ `60767240e77d900b92d118f801985d056fc49196` (the merge of
+this doc), worktree `wt/t_f3da965c`, Go 1.26.8, `GOWORK=off GOFLAGS=-mod=mod`.
+The probe output below was re-measured on that exact tree during review, not carried over.
 
 ---
 
@@ -31,24 +32,53 @@ types. They have no `Descriptor()`, no `XXX_MessageName`, and no `proto.Register
 
 ### Proof (real `app.Setup()` full app, e2e.integration build tag)
 
+The strongest form of the evidence is not "the router has no handler" — it is that the
+message **cannot even be put on the wire**. Because `ProtoMessage()` is hand-implemented and
+there is no `Descriptor()`, `sdk.MsgTypeURL` collapses to the empty string:
+
+```
+MsgTypeURL(MsgApproveWorkloadTemplate)        = "/"
+codectypes.NewAnyWithValue(approve).TypeUrl   = "/"
+MsgTypeURL(bank MsgSend, control)             = "/cosmos.bank.v1beta1.MsgSend"   <- control
+```
+
+So the failure sits at the **tx parse layer**, strictly upstream of the router and of every
+x/gov gate — the bytes encode and then fail to decode:
+
+```
+TxEncoder -> 11 bytes, err=<nil>
+TxDecoder -> err=unable to resolve type URL /: tx parse error
+             [virtengine/cosmos-sdk@v0.53.4-virtengine.2/x/auth/tx/decoder.go:44]
+```
+
+Full probe output (source inlined below, so this is re-runnable rather than a claim):
+
 ```
 === RUN   TestProbeTemplateApprovalRouteEstablishes
-    HPC keeper authority = ve10d07y265gmmuvt4z0w9aw880jnsr700jxlg3em
-    GetMsgV1Signers(MsgApproveWorkloadTemplate) -> signers=[] err=protoFiles does not have descriptor /: proto: not found
-    MsgServiceRouter handler for MsgApproveWorkloadTemplate = <nil>
-    user-signed variant GetMsgV1Signers err=protoFiles does not have descriptor /: proto: not found
---- PASS
-
+    MsgTypeURL(MsgApproveWorkloadTemplate) = "/"
+    codectypes.NewAnyWithValue(approve).TypeUrl = "/"
+    MsgTypeURL(bank MsgSend, control)      = "/cosmos.bank.v1beta1.MsgSend"
+    cdc.GetMsgV1Signers(approve) -> signers=[] err=protoFiles does not have descriptor /: proto: not found
+    MsgServiceRouter.Handler(approve) = <nil>
+    InterfaceRegistry.Resolve("/") err=unable to resolve type URL /
+    TxEncoder -> 11 bytes, err=<nil>
+    TxDecoder -> err=unable to resolve type URL /: tx parse error [virtengine/cosmos-sdk@v0.53.4-virtengine.2/x/auth/tx/decoder.go:44]
+    LegacyAmino().MarshalJSON(approve) -> {"authority":"ve1074y0eqvtepqxlahkp04rknfeuagyjcd4g5yl7","template_id":"tmpl-1","version":"1.0.0"} err=<nil>
+--- PASS: TestProbeTemplateApprovalRouteEstablishes (0.51s)
 === RUN   TestProbeTemplateSubsystemIsInert
-    MsgApproveWorkloadTemplate       router handler = <nil>
-    MsgRejectWorkloadTemplate        router handler = <nil>
-    MsgDeprecateWorkloadTemplate     router handler = <nil>
-    MsgRevokeWorkloadTemplate        router handler = <nil>
-    MsgSubmitJobFromTemplate         router handler = <nil>
-    MsgCreateWorkloadTemplate        router handler = <nil>
-    MsgUpdateWorkloadTemplate        router handler = <nil>
---- PASS
+    *types.MsgApproveWorkloadTemplate router handler = <nil>
+    *types.MsgRejectWorkloadTemplate router handler = <nil>
+    *types.MsgDeprecateWorkloadTemplate router handler = <nil>
+    *types.MsgRevokeWorkloadTemplate router handler = <nil>
+    *types.MsgSubmitJobFromTemplate router handler = <nil>
+    *types.MsgCreateWorkloadTemplate router handler = <nil>
+    *types.MsgUpdateWorkloadTemplate router handler = <nil>
+--- PASS: TestProbeTemplateSubsystemIsInert (0.08s)
 ```
+
+Note the `LegacyAmino` line, not the last one: the **legacy amino** JSON encoding succeeds.
+That is a decoy — it buys nothing on the wire, which is why the amino registration at
+`codec.go:42-48` without a matching `RegisterInterfaces` entry is not evidence the messages work.
 
 **All seven template messages are unroutable. The entire template subsystem is inert — not
 just approval.** No template can be *created*, *updated*, *approved*, *rejected*, *deprecated*,
@@ -60,25 +90,30 @@ just approval.** No template can be *created*, *updated*, *approved*, *rejected*
 
 x/gov v1 `MsgSubmitProposal` is available (the app wires the v1 keeper:
 `app/types/app.go:418` `govkeeper.NewKeeper(..., bApp.MsgServiceRouter(), govConfig,
-authtypes.NewModuleAddress(govtypes.ModuleName).String())`). But submission runs three hard
-gates per carried message, in `x/gov/keeper/proposal.go` (SDK
-`v0.53.4-virtengine.2`), and `MsgApproveWorkloadTemplate` fails the first two:
+authtypes.NewModuleAddress(govtypes.ModuleName).String())`). But the message never reaches
+that keeper, because it cannot be decoded out of a transaction in the first place
+(proof above: `TxDecoder -> unable to resolve type URL /: tx parse error`). Submission is
+therefore impossible for a reason that is **upstream of all of x/gov's own gates**.
 
-1. **`cdc.GetMsgV1Signers(msg)`** (proposal.go:56) — resolves the signer via the proto
-   descriptor. Fails: `protoFiles does not have descriptor /: proto: not found`. This is
-   *submission-time*, so the tx is rejected in `ValidateBasic`/`SubmitProposal` — it can
-   never be recorded, let alone pass.
-2. **sole-signer must be the gov module account** (proposal.go:61-65) — unreachable,
-   because gate 1 already returned an error.
-3. **`k.router.Handler(msg) != nil`** (proposal.go:68-71) — `nil`, proven above.
+For completeness, those gates would each reject it anyway. In
+`x/gov/keeper/proposal.go` (SDK `virtengine/cosmos-sdk@v0.53.4-virtengine.2`):
+
+1. **`signers, _, err := k.cdc.GetMsgV1Signers(msg)`** (`:53`) — fails:
+   `protoFiles does not have descriptor /: proto: not found`. This is *submission-time*, so the
+   proposal can never be recorded, let alone pass.
+2. **sole signer must be the gov module account** (`:58`, `:62-63`) — unreachable, because gate 1
+   already returned an error.
+3. **`handler := k.router.Handler(msg); if handler == nil`** (`:67-69`) — `nil`, proven above.
 
 There is **no** legacy fallback either: `git grep "RegisterLegacyProposalHandler"` across
 `app/` and `x/hpc` returns nothing, so `MsgExecLegacyContent` cannot rescue these messages
 either.
 
 Consequence: the card's route (a) cannot be made to work by writing a proposal JSON. The
-message would need a protobuf descriptor first. **There is no working `--authority`
-invocation to document.**
+message would need a protobuf descriptor first. **There is no `--authority` invocation to
+document — and this is not an omission in the documentation, it is a property of the chain:**
+with `MsgTypeURL` collapsing to `"/"`, no proposal payload expressing this message can even be
+parsed.
 
 ## Why route (b) — the in-module `WorkloadGovernanceProposal` path — also cannot work
 
@@ -200,13 +235,148 @@ and require explicit user sign-off per the chain-core standing rules. I have NOT
 them; this card asked for the route determination, and the determination is that neither
 exists.
 
-## Test command (reproduce)
+## How to re-derive this (the probe is inlined below)
+
+There is **no in-tree test for this finding**, deliberately: a test asserting `router.Handler(msg) == nil`
+passes *because* the bug exists, so committing it would mean shipping a green test that pins the
+defect in place. The probe below is the artifact instead — it is complete and self-contained, so
+anyone can materialize it and re-derive every number above.
+
+**Do not just run the `go test` line against the repo as-is.** Without the probe file present that
+command exits 0 with `testing: warning: no tests to run` — a *false green* that verifies nothing.
+
+Materialize the probe, then run it:
 
 ```bash
-git checkout wt/t_f3da965c
-GOWORK=off GOFLAGS=-mod=mod go test -tags="e2e.integration" -run TestProbeTemplate \
+# 1. Save the probe below as tests/integration/hpc/zz_probe_scratch_test.go
+# 2. Run it:
+GOWORK=off GOFLAGS=-mod=mod go test -tags="e2e.integration" -run 'TestProbeTemplate' \
   -v -timeout 900s ./tests/integration/hpc/
+# 3. Remove it again (untracked scratch; do not commit it):
+rm tests/integration/hpc/zz_probe_scratch_test.go
 ```
-The probe asserted `require.Nil(router.Handler(msg))` and `require.Error(GetMsgV1Signers)`
-for all seven messages; both passed. (Probe removed after measurement — it asserted a bug,
-so it must not be left as a passing test in the tree.)
+
+Expect `--- PASS` on both tests. **A PASS here means the bug is still present.** If someone
+fixes the wiring, these assertions will start failing — that is the intended signal.
+
+The `LegacyAmino` line prints a randomly generated address that differs on every run; the
+doc's captured value is one sample, not a fixed expectation.
+
+Verified on `origin/develop` @ `60767240e7`, Go 1.26.8, `GOWORK=off GOFLAGS=-mod=mod`.
+The build tag matters: without `-tags="e2e.integration"` the file compiles to nothing.
+
+### The static half (no probe needed)
+
+These greps re-derive the root cause on their own and need no app:
+
+```bash
+grep -rn "WorkloadTemplate" sdk/proto/node/virtengine/hpc/v1/*.proto   # -> 0 hits (root cause)
+grep -rn "ProcessWorkloadProposals" --include=*.go .                   # -> definition only
+grep -rn "AddTxCommands" --include=*.go .                             # -> 0 hits (CLI never wired)
+grep -rn "RegisterInterfaces" -A 20 x/hpc/types/codec.go               # -> none of the 7 msgs listed
+```
+
+### The probe source
+
+```go
+//go:build e2e.integration
+
+package hpc
+
+import (
+	"testing"
+
+	"github.com/stretchr/testify/require"
+
+	"cosmossdk.io/math"
+	codectypes "github.com/cosmos/cosmos-sdk/codec/types"
+	sdk "github.com/cosmos/cosmos-sdk/types"
+	banktypes "github.com/cosmos/cosmos-sdk/x/bank/types"
+
+	"github.com/virtengine/virtengine/app"
+	sdktestutil "github.com/virtengine/virtengine/sdk/go/testutil"
+	hpctypes "github.com/virtengine/virtengine/x/hpc/types"
+)
+
+func TestProbeTemplateApprovalRouteEstablishes(t *testing.T) {
+	a := app.Setup(app.WithChainID("virtengine-probe-1"))
+	t.Cleanup(func() { _ = a.Close() })
+
+	govAuthority := sdktestutil.AccAddress(t).String()
+	approve := hpctypes.NewMsgApproveWorkloadTemplate(govAuthority, "tmpl-1", "1.0.0")
+
+	// Proof 1: no protobuf descriptor => sdk.MsgTypeURL collapses to "/".
+	t.Logf("MsgTypeURL(MsgApproveWorkloadTemplate) = %q", sdk.MsgTypeURL(approve))
+	anyMsg, err := codectypes.NewAnyWithValue(approve)
+	require.NoError(t, err)
+	t.Logf("codectypes.NewAnyWithValue(approve).TypeUrl = %q", anyMsg.TypeUrl)
+
+	// Control: a generated message has a real type URL.
+	control := banktypes.NewMsgSend(
+		sdktestutil.AccAddress(t), sdktestutil.AccAddress(t),
+		sdk.NewCoins(sdk.NewCoin("uvve", math.NewInt(1))),
+	)
+	t.Logf("MsgTypeURL(bank MsgSend, control)      = %q", sdk.MsgTypeURL(control))
+	require.NotEqual(t, "/", sdk.MsgTypeURL(control))
+
+	// Proof 2: the x/gov submission-time signer gate cannot resolve it.
+	signers, _, err := a.AppCodec().GetMsgV1Signers(approve)
+	t.Logf("cdc.GetMsgV1Signers(approve) -> signers=%v err=%v", signers, err)
+	require.Error(t, err)
+
+	// Proof 3: no MsgServiceRouter handler.
+	require.Nil(t, a.MsgServiceRouter().Handler(approve))
+	t.Logf("MsgServiceRouter.Handler(approve) = %v", a.MsgServiceRouter().Handler(approve))
+
+	// Proof 4: not resolvable in the interface registry either.
+	_, err = a.InterfaceRegistry().Resolve("/")
+	t.Logf("InterfaceRegistry.Resolve(\"/\") err=%v", err)
+
+	// Proof 5 (STRONGEST): the bytes encode and then fail to decode.
+	builder := a.TxConfig().NewTxBuilder()
+	require.NoError(t, builder.SetMsgs(approve))
+	rawTx, encErr := a.TxConfig().TxEncoder()(builder.GetTx())
+	t.Logf("TxEncoder -> %d bytes, err=%v", len(rawTx), encErr)
+	require.NoError(t, encErr)
+	_, decErr := a.TxConfig().TxDecoder()(rawTx)
+	t.Logf("TxDecoder -> err=%v", decErr)
+	require.Error(t, decErr)
+
+	// Decoy: legacy amino JSON encodes fine and buys nothing on the wire.
+	aminoJSON, aminoErr := a.LegacyAmino().MarshalJSON(approve)
+	t.Logf("LegacyAmino().MarshalJSON(approve) -> %s err=%v", string(aminoJSON), aminoErr)
+}
+
+func TestProbeTemplateSubsystemIsInert(t *testing.T) {
+	a := app.Setup(app.WithChainID("virtengine-probe-2"))
+	t.Cleanup(func() { _ = a.Close() })
+
+	authority := sdktestutil.AccAddress(t).String()
+	tpl := &hpctypes.WorkloadTemplate{TemplateID: "tmpl-1", Version: "1.0.0"}
+
+	msgs := []sdk.Msg{
+		hpctypes.NewMsgApproveWorkloadTemplate(authority, "tmpl-1", "1.0.0"),
+		hpctypes.NewMsgRejectWorkloadTemplate(authority, "tmpl-1", "1.0.0", "no"),
+		hpctypes.NewMsgDeprecateWorkloadTemplate(authority, "tmpl-1", "1.0.0", "old"),
+		hpctypes.NewMsgRevokeWorkloadTemplate(authority, "tmpl-1", "1.0.0", "bad"),
+		hpctypes.NewMsgSubmitJobFromTemplate(authority, "tmpl-1", "1.0.0", nil),
+		hpctypes.NewMsgCreateWorkloadTemplate(authority, tpl),
+		hpctypes.NewMsgUpdateWorkloadTemplate(authority, tpl),
+	}
+
+	for _, m := range msgs {
+		h := a.MsgServiceRouter().Handler(m)
+		t.Logf("%-30T router handler = %v", m, h)
+		require.Nil(t, h, "%T must have no router handler", m)
+		_, _, sErr := a.AppCodec().GetMsgV1Signers(m)
+		require.Error(t, sErr, "%T must have no resolvable signers", m)
+	}
+}
+```
+
+### A note on where this probe must not live
+
+`tests/integration/hpc/` is swept by `make test-integration` and by the CI `integration` job
+(`.github/workflows/ci.yaml:856`), both of which run `-tags="e2e.integration"` over
+`./tests/integration/...`. If the probe were committed there it would become a permanent green
+test pinning the defect. Keep it as a materialized-then-deleted scratch file, as above.
