@@ -19,9 +19,14 @@ classifiers = [
 packages = [
     { include = "virtengine" },
     { include = "cosmos" },
+    # cometbft is imported by the generated cosmos/* gencode
+    # (cosmos/base/abci/v1beta1/abci_pb2.py:26 imports cometbft.abci.v2), so
+    # the built wheel is unusable without it. It was present in the tree but
+    # absent from this list, so `pip install ./sdk/python` produced a package
+    # that raised ModuleNotFoundError: No module named 'cometbft' on import.
+    { include = "cometbft" },
     { include = "cosmos_proto" },
     { include = "gogoproto" },
-    { include = "google" },
     { include = "amino" },
     { include = "k8s_io" },
 ]
@@ -30,7 +35,19 @@ include = ["virtengine/py.typed"]
 [tool.poetry.dependencies]
 python = "^3.10"
 grpcio = "^1.60.0"
-protobuf = "^5.29.6"
+# The checked-in gencode is mixed-version: of the 194 tracked *_pb2.py
+# files, 179 carry "# Protobuf Python Version: 6.33.5" and 15 carry
+# 7.36.2 (see sdk/README.md). Every protobuf >=5 runtime validates gencode
+# at import time and hard-fails on a version older than its own, so the
+# runtime must be at or above the NEWEST gencode in the tree. 7.36.2 is the
+# measured floor: with it, `pytest tests/ --collect-only` exits 0. Do not
+# lower this pin without regenerating the whole tree from one protoc.
+protobuf = ">=7.36.2,<8"
+# Supplies google/api/* (annotations_pb2, http_pb2). That tree is NOT checked
+# in any more: the deleted sdk/python/google/ package shadowed the protobuf
+# runtime (see sdk/README.md), so `from google.api import annotations_pb2`
+# must now resolve from this dependency. Without it collection fails 3/3.
+googleapis-common-protos = "^1.75.0"
 bip-utils = "^2.9.0"
 cryptography = "^46.0.5"
 bech32 = "^1.2.0"

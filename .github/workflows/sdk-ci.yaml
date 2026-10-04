@@ -11,23 +11,32 @@ name: SDK CI
 #               proto-generation.yaml, which can run them (see the typescript
 #               job for why they cannot run on a bare checkout).
 #   sdk/portal  is gated by portal-ci.yaml (job "SDK Portal"), not here.
-#   sdk/python  is NOT gated here, and the reason is sharper than "it is
-#               broken": sdk/python/google/protobuf/ is a 0-byte __init__.py
-#               plus generated *_pb2 modules and no descriptor.py, so it
-#               SHADOWS the runtime protobuf package whenever sdk/python is
-#               first on sys.path. Measured: `pytest tests/ --collect-only`
-#               -> 3 collection errors, ImportError on
-#               `from google.protobuf import descriptor`. Every other test
-#               module fails the same way. Not fixable by adding a gate.
+#   sdk/python  is NOT gated here, but it is no longer broken. Its suite is
+#               measured green: `pytest tests/ --collect-only` exits 0 (5 tests)
+#               and `pytest tests/` passes 5/5, on Python 3.11 and 3.12. The
+#               reason it stays ungated is a packaging one, not a red check:
+#               sdk/python has no lockfile and no supported generation contract
+#               (see the "Known gap" block in sdk/README.md), so a gate here
+#               would resolve fresh dependency ranges every run instead of
+#               testing a pinned tree. Note the removed trap that used to force
+#               this: sdk/python/google/protobuf/ was a 0-byte __init__.py that
+#               SHADOWED the runtime protobuf package whenever sdk/python was
+#               first on sys.path, failing 3/3 modules on
+#               `from google.protobuf import descriptor`. That package is now
+#               deleted and google/api comes from googleapis-common-protos.
 #   sdk/rust    is NOT gated here because it is not a supported contract at
 #               all: sdk/generation/generate.sh refuses it by name
 #               (`python|rust)` -> "not a supported release contract; see
-#               sdk/generation/toolchain.json"). Its checked-in
-#               rust/src/proto/mod.rs:123 contains `pub mod mod {` - `mod` is
-#               a Rust keyword, so it cannot compile - which is consistent
-#               with generated-but-never-verified output, not a regression.
-#               Wiring either in red would fail every SDK PR while telling
-#               nobody why. Tracked in sdk/README.md.
+#               sdk/generation/toolchain.json"). It is also KNOWN to not
+#               compile: `cargo check --all-targets` fails with 6 errors,
+#               including `pub mod mod {` at rust/src/proto/mod.rs:123 (`mod` is
+#               a Rust keyword) and four E0428 duplicate-module errors in the
+#               generated tonic stubs. That module is orphan output - no
+#               `package mod` or mod.proto exists in the repo and no make
+#               target regenerates sdk/rust/src/proto/. It is deliberately left
+#               unhand-patched; the full error table is in sdk/README.md.
+#               Wiring it in red would fail every SDK PR while telling nobody
+#               why.
 
 on:
   push:
