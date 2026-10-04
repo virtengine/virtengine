@@ -8,6 +8,11 @@ import YAML from "js-yaml";
 import { compile as compileSchemaToTypes } from 'json-schema-to-typescript'
 import esbuild from "esbuild";
 
+// The directory esbuild prints bundled module ids relative to. Must be the
+// sdk/ts package root so the emitted ids are `node_modules/...` regardless of
+// where the repository is checked out -- see the absWorkingDir note below.
+const sdkTsDir = path.join(import.meta.dirname, "..");
+
 const SCHEMAS = {
   jwtTokenPayload: {
     output: path.join(import.meta.dirname, "../src/sdk/provider/auth/jwt/validateJwtPayload.ts"),
@@ -51,11 +56,35 @@ for (const schemaConfig of Object.values(SCHEMAS)) {
   moduleCode += `\n\nexport const schema = ${schemaMatches[1]};`;
 
   // bundle result because it contains imports from ajv library
+  //
+  // `absWorkingDir` is pinned to the sdk/ts directory on purpose. esbuild
+  // emits each bundled module's id RELATIVE to absWorkingDir, and that id is
+  // written verbatim into the `__commonJS({ "<id>"(exports) { ... } })` key
+  // and its leading comment -- so with absWorkingDir left at its default
+  // (the Node host's process.cwd()), the committed bytes depend on WHERE the
+  // repository happens to be checked out. Both of these are "correct" output
+  // of this script and both are committed on develop today:
+  //
+  //   sdk/ts/src/sdk/provider/auth/jwt/validateJwtPayload.ts
+  //     // node_modules/ajv/dist/runtime/ucs2length.js
+  //   sdk/ts/src/sdl/SDL/validateSDL/validateSDLInput.ts
+  //     // ../../../virtengine/sdk/ts/node_modules/ajv/dist/runtime/ucs2length.js
+  //
+  // The second is the artifact of a checkout at <user>/virtengine rather than
+  // <repo>/sdk/ts, so regenerating on another machine rewrites a file that no
+  // drift gate covers (see script/compile-json-schema-to-ts.test.mjs).
+  //
+  // Pinning absWorkingDir makes the emitted id the location-independent
+  // `node_modules/...` form, so every checkout on every platform regenerates
+  // byte-identical output. Note `resolveDir` above still resolves the ajv
+  // import from this script's own directory; absWorkingDir only fixes what is
+  // printed, not what is found.
   const result = await esbuild.build({
     stdin: {
       contents: moduleCode,
       resolveDir: import.meta.dirname,
     },
+    absWorkingDir: sdkTsDir,
     write: false,
     bundle: true,
     format: "esm",
