@@ -24,9 +24,9 @@ import (
 
 	mfapb "github.com/virtengine/virtengine/sdk/go/node/mfa/v1"
 	veidv1 "github.com/virtengine/virtengine/sdk/go/node/veid/v1"
+	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 	veidkeeper "github.com/virtengine/virtengine/x/veid/keeper"
 	veidtypes "github.com/virtengine/virtengine/x/veid/types"
-	mfatypes "github.com/virtengine/virtengine/x/mfa/types"
 )
 
 type auditWalletEnv struct {
