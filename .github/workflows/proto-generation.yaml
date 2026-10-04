@@ -65,7 +65,24 @@ jobs:
       - name: Regenerate all contracts
         run: ./scripts/proto-generate.sh all
       - name: Verify generated drift
-        run: git diff --exit-code -- sdk/go/node sdk/ts/src/generated sdk/artifacts/proto api/openapi/virtengine-proto.swagger.json
+        # The two validators are here because step 7 ALREADY REWRITES THEM:
+        # generate_typescript() ends with `npm --prefix ts run build`
+        # (sdk/generation/generate.sh), whose `compile:validators` writes both
+        # files. They were unreachable from this pathspec only because they live
+        # under sdk/ts/src/sdk/** and sdk/ts/src/sdl/** rather than under
+        # sdk/ts/src/generated, so regeneration could rewrite them and this gate
+        # still reported green -- the blind spot behind virtengine#1234 and
+        # t_1f660be5. Naming the files (not sdk/ts/src/sdk, which is
+        # hand-written SDK source) keeps the blast radius to the exact
+        # generator outputs.
+        run: |
+          git diff --exit-code -- \
+            sdk/go/node \
+            sdk/ts/src/generated \
+            sdk/artifacts/proto \
+            api/openapi/virtengine-proto.swagger.json \
+            sdk/ts/src/sdk/provider/auth/jwt/validateJwtPayload.ts \
+            sdk/ts/src/sdl/SDL/validateSDL/validateSDLInput.ts
       - name: Verify deterministic second run
         run: ./scripts/verify-proto-generation.sh
       - name: Compatibility fixtures
