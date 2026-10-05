@@ -134,15 +134,22 @@ def iter_action_refs(workflow_file: str) -> list[ActionRef]:
             with_indent = indent
             with_key_indent = 0
             continue
-        # Leaving the `with:` block. A `with:` takes a mapping, never a list
-        # item, so a line starting with `- ` ALWAYS ends the block -- and that
-        # includes the inline one-line step form `      - uses: owner/repo@v1`.
-        # Without this the block stayed open, the next step was swallowed by the
-        # input branch below, and the step was never recorded as a pin AT ALL:
-        # a whole action, inputs included, audited by nothing. Only the two-line
-        # step form (`- name:` then `uses:`) escaped, which is why the tree
-        # looked clean -- the bug was live, just not yet triggered.
-        if in_with and (indent <= with_indent or stripped.startswith("-")):
+        # Leaving the `with:` block: a dedent back to (or past) the `with:` key's
+        # own indent ends it. That alone closes the block for the inline
+        # one-line step form `      - uses: owner/repo@v1`, because a step's `-`
+        # sits at an indent BELOW its own `with:` -- so no `- ` rule is needed
+        # here, and adding one is actively harmful.
+        #
+        # A previous version ended the block on ANY line starting with `- `,
+        # justified as "a `with:` takes a mapping, never a list item". That is
+        # false for the most common shape a `with:` block has: a multi-line
+        # scalar. `body: |` and `labels: |` bodies are full of `- ` lines
+        # (`- Updated CHANGELOG.md ...`), and the first one closed the block, so
+        # every key after the scalar was charged to nothing. On this tree that
+        # silently unaudited `branch`, `base`, `labels` and `delete-branch` on
+        # both `create-pull-request` steps -- an undeclared input there would
+        # fail the job at run time and this audit would report the tree clean.
+        if in_with and indent <= with_indent:
             in_with = False
 
         if in_with:
