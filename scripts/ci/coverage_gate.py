@@ -41,6 +41,7 @@ test against real event payloads, rather than re-derived by reading YAML.
 
 from __future__ import annotations
 
+import math
 import os
 import subprocess
 import sys
@@ -98,12 +99,38 @@ def resolve_baseline() -> float:
     """Branch floor. Overridable so a ratchet bump needs no code edit.
 
     The override exists to let the floor be RAISED as coverage improves. It
-    must never be able to remove it: a non-positive value would switch the
-    ratchet off, and `COVERAGE_BASELINE=0` in a workflow env block is a
-    one-character edit that no test on this tree caught before
-    2026-10-05 (round 8, mutation M6 -- see
-    `test_resolve_baseline_cannot_be_silenced_to_zero`). Such a value is
-    refused and reported rather than silently honoured.
+    must never be able to remove it, and the rule below is the invariant that
+    makes that true rather than a promise.
+
+    The obvious rule -- refuse `value <= 0.0` -- is necessary and NOT
+    sufficient, and this module shipped that version. Two measured holes:
+
+      * `0.0001` and `1e-300` are POSITIVE, so they passed the positivity check
+        and then made `coverage < baseline` false for every real measurement.
+        The ratchet was off, at a floor of 0.0001%.
+      * `nan` is worse, because every comparison against it is false. `nan`
+        passes `<= 0.0` and would pass a bare positivity check too, and then
+        `coverage < nan` is false for EVERY coverage value -- including 0.0 --
+        so the gate cannot fire at all. Its log line reads
+        `OK: Repository coverage 45.0% holds the nan% non-regression floor`.
+
+    Both were measured on `origin/develop` (8aa3adc578) against a profile
+    measuring 45.0%, i.e. below the 46.0% floor, driven as a process exactly
+    as `ci.yaml` drives it: `rc=0`, no `::error::`, ratchet off.
+
+    So the accepted rule is the invariant itself -- the override may only RAISE
+    the floor above the recorded default -- checked as `isfinite` first (NaN and
+    +/-inf are refused there, and no comparison can be trusted to catch them)
+    and the strict raise second. One rule; every degenerate value refused;
+    `inf` refused too, which the raise-only rule alone would not do, since an
+    infinite floor makes the gate permanently red and bricks the pipeline.
+
+    Rejecting a LOWER floor is a behaviour change from the raw `float(raw)`
+    that predate this. Nothing sets it: `grep -rn COVERAGE_BASELINE` finds one
+    comment in `ci.yaml` and no assignment, so no consumer is relying on being
+    able to lower it -- and the recorded policy has always been
+    "raise `COVERAGE_BASELINE` as coverage improves. Lowering it is a coverage
+    regression and must not be done to make a run green."
     """
     raw = os.environ.get("COVERAGE_BASELINE", "").strip()
     if not raw:
@@ -117,11 +144,13 @@ def resolve_baseline() -> float:
             file=sys.stderr,
         )
         return DEFAULT_BASELINE_COVERAGE
-    if value <= 0.0:
+    if not math.isfinite(value) or value <= DEFAULT_BASELINE_COVERAGE:
         print(
-            f"::warning::COVERAGE_BASELINE={raw!r} would remove the "
-            f"non-regression floor entirely; using {DEFAULT_BASELINE_COVERAGE}. "
-            "The override may only raise the floor as coverage improves.",
+            f"::warning::COVERAGE_BASELINE={raw!r} does not raise the "
+            f"non-regression floor above the recorded default "
+            f"{DEFAULT_BASELINE_COVERAGE}; using {DEFAULT_BASELINE_COVERAGE}. "
+            "The override may only RAISE the floor as coverage improves -- "
+            "never lower it, switch it off, or saturate it.",
             file=sys.stderr,
         )
         return DEFAULT_BASELINE_COVERAGE
