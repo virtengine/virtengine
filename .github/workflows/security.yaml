@@ -127,6 +127,19 @@ jobs:
           python -m unittest discover -s .github/tests \
             -p "test_govulncheck_verdict_ledger*.py"
 
+      - name: Run matrix-output aggregation tests
+        # GitHub CONCATENATES matrix job outputs verbatim, so the shard verdicts
+        # arrive as `{"core":"clean"}{"platform":"clean"}...` and must be
+        # reassembled with `fromJSON`. Measured on run 37295691699: `json.loads`
+        # on that concatenation raised "Extra data", the gate received only the
+        # LAST shard, and Policy Validation went red for a transport reason
+        # while reading like a shard finding. These pin the reassembly - and the
+        # last test in the file pins that plain json.loads STILL rejects the
+        # concatenation, so the suite cannot pass against the broken design.
+        run: |
+          python -m unittest discover -s .github/tests \
+            -p "test_matrix_output_aggregation*.py"
+
       - name: Verify every declared govulncheck shard reported a verdict
         # The summary job already fails on a non-success matrix result, so this
         # is NOT a second copy of that check: the matrix aggregate is a single
@@ -165,7 +178,17 @@ jobs:
           merged="$RUNNER_TEMP/merged-ledger"
           mkdir -p "$merged"
           awk '{print $1}' /tmp/govulncheck-shards.txt > "$merged/shards.manifest"
-          printf '%s' "${{ needs.go-vuln-scan.outputs.govulncheck_verdicts }}" \
+          # `fromJSON` reassembles GitHub's verbatim CONCATENATION of the
+          # per-shard one-element objects into a single object. The `|| '{}'`
+          # default covers a wholly cancelled matrix, where the output is EMPTY
+          # (not `{}`) and fromJSON('') would throw.
+          #
+          # Measured on run 37295691699: without this the step handed the raw
+          # concatenation to json.loads, which raised "Extra data", the gate saw
+          # only `{tests-and-sim:clean}`, and Policy Validation went red for a
+          # transport reason while reading like a shard finding.
+          printf '%s' \
+            '${{ toJSON(fromJSON(needs.go-vuln-scan.outputs.govulncheck_verdicts || '{}')) }}' \
             > "$merged/verdicts.json"
           echo "== declared shards vs reported verdicts =="
           cat "$merged/shards.manifest"
@@ -343,7 +366,11 @@ jobs:
           - shard: tests-and-sim
             patterns: "./tests/... ./testutil/... ./sim/... ./upgrades/... ./sdk/... ./util/..."
     outputs:
-      govulncheck_shards: ${{ steps.shard-names.outputs.names }}
+      # Each shard emits a ONE-ELEMENT JSON object. GitHub CONCATENATES matrix
+      # outputs verbatim, so this arrives as
+      # `{"core":"clean"}{"platform":"clean"}{"tooling":"clean"}...` and the
+      # CONSUMER reassembles it with fromJSON. A job cannot reference `needs` in
+      # its own outputs, so the reassembly happens downstream.
       govulncheck_verdicts: ${{ steps.shard-verdicts.outputs.verdicts }}
     steps:
       - name: Checkout repository
@@ -492,14 +519,11 @@ jobs:
         env:
           VERDICT: ${{ steps.verdict.outputs.value }}
         run: |
+          # ONE ELEMENT object per shard. GitHub concatenates matrix outputs
+          # verbatim, so the job output above wraps the result in `fromJSON` to
+          # reassemble them into a single object.
           echo "verdicts=$(printf '{"%s":"%s"}' '${{ matrix.shard }}' "$VERDICT")" \
             >> "$GITHUB_OUTPUT"
-
-      - name: Expose this shard's name
-        id: shard-names
-        if: always()
-        run: |
-          echo "names=[\"${{ matrix.shard }}\"]" >> "$GITHUB_OUTPUT"
 
   python-vuln-scan:
     name: Python Vulnerability Scan
