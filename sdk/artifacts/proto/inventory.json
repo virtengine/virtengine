@@ -219,8 +219,8 @@
       "services": 65,
       "queryServices": 32,
       "msgServices": 29,
-      "methods": 455,
-      "httpBindings": 237
+      "methods": 457,
+      "httpBindings": 239
     },
     "files": [
       {
@@ -6661,6 +6661,34 @@
                     "body": "",
                     "method": "GET",
                     "path": "/virtengine/veid/v1/model_params"
+                  }
+                ]
+              },
+              {
+                "name": "AssuranceVector",
+                "fullName": "virtengine.veid.v1.Query.AssuranceVector",
+                "grpcPath": "/virtengine.veid.v1.Query/AssuranceVector",
+                "requestType": "virtengine.veid.v1.QueryAssuranceVectorRequest",
+                "responseType": "virtengine.veid.v1.QueryAssuranceVectorResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/veid/v1/assurance_vector/{account_address}"
+                  }
+                ]
+              },
+              {
+                "name": "AssuranceVectorHistory",
+                "fullName": "virtengine.veid.v1.Query.AssuranceVectorHistory",
+                "grpcPath": "/virtengine.veid.v1.Query/AssuranceVectorHistory",
+                "requestType": "virtengine.veid.v1.QueryAssuranceVectorHistoryRequest",
+                "responseType": "virtengine.veid.v1.QueryAssuranceVectorHistoryResponse",
+                "http": [
+                  {
+                    "body": "",
+                    "method": "GET",
+                    "path": "/virtengine/veid/v1/assurance_vector_history/{account_address}"
                   }
                 ]
               }
