@@ -78,6 +78,18 @@ export function makefileLinkmode(cwd, env = {}) {
       //    Windows; the ubuntu action exports VE_ROOT), so pinning them adds
       //    nothing new but makes the query work on a plain macOS/Linux shell.
       //
+      //  - GOTOOLCHAIN, because `make/init.mk:93-99` hard-errors with
+      //    `"GOTOOLCHAIN is not set"` unless it is non-empty on a non-Windows
+      //    host. It is NOT free from the runner: `actions/setup-go` exports
+      //    `GOTOOLCHAIN=local`, and the jobs that shell out to make here all run
+      //    setup-go. The `build-linkmode selftest` job deliberately does not — it
+      //    needs no Go toolchain, only node and make — so the query died at
+      //    `init.mk:97` before it could answer anything, on every ubuntu runner.
+      //    Inherit it when the runner supplied one and fall back to the same
+      //    value setup-go would have used. The value cannot affect the answer:
+      //    print-linkmode reads GO_LINKMODE, and init.mk only tests this
+      //    variable for emptiness.
+      //
       // `OS` is deliberately NOT overridden — see `deriveForRunner` below, which
       // neutralises the Windows_NT branch in the derived value instead.
       env: {
@@ -85,6 +97,7 @@ export function makefileLinkmode(cwd, env = {}) {
         CGO_ENABLED: '1',
         VE_DIRENV_SET: '1',
         VE_ROOT: cwd,
+        GOTOOLCHAIN: process.env.GOTOOLCHAIN || 'local',
         ...env,
       },
       stdio: ['ignore', 'pipe', 'pipe'],
@@ -125,7 +138,16 @@ export function deriveForRunner(cwd, cgoEnabled = '1') {
       encoding: 'utf8',
       // CGO_ENABLED is pinned rather than inherited for the same reason it is in
       // `makefileLinkmode`: the derivation must not depend on the host.
-      env: { ...process.env, CGO_ENABLED: cgoEnabled, VE_DIRENV_SET: '1', VE_ROOT: cwd },
+      // GOTOOLCHAIN is pinned for the reason given in `makefileLinkmode`: the
+      // job that runs this guard does not install a Go toolchain, so
+      // `make/init.mk:93-99` would stop the query before it could answer.
+      env: {
+        ...process.env,
+        CGO_ENABLED: cgoEnabled,
+        VE_DIRENV_SET: '1',
+        VE_ROOT: cwd,
+        GOTOOLCHAIN: process.env.GOTOOLCHAIN || 'local',
+      },
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     return out.trim();

@@ -175,7 +175,14 @@ func TestIsolatedNodeIsolatesExactlyOne(t *testing.T) {
 		t.Fatalf("Groups = %v, want exactly 2", spec.Groups)
 	}
 	sizes := []int{len(spec.Groups[0]), len(spec.Groups[1])}
-	if !(sizes[0] == 1 && sizes[1] == 2) && !(sizes[0] == 2 && sizes[1] == 1) {
+	// The acceptable shapes are (1,2) and (2,1), so the condition is stated
+	// positively and negated as a whole: staticcheck QF1001 rewrites any
+	// negated `&&`/`||` compound (`!(a && b)`, `!(x || y)`) into De Morgan form,
+	// and this lint runs `--new-from-rev=origin/main`, so one such finding in a
+	// test file fails the whole lint job. Negating a named boolean is the same
+	// assertion with nothing for QF1001 to rewrite.
+	isolatedPlusPair := (sizes[0] == 1 && sizes[1] == 2) || (sizes[0] == 2 && sizes[1] == 1)
+	if !isolatedPlusPair {
 		t.Errorf("group sizes = %v, want one isolated node and one group of 2", sizes)
 	}
 }
