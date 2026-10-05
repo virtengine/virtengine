@@ -95,12 +95,21 @@ EXIT_USAGE = 2
 
 
 def resolve_baseline() -> float:
-    """Branch floor. Overridable so a ratchet bump needs no code edit."""
+    """Branch floor. Overridable so a ratchet bump needs no code edit.
+
+    The override exists to let the floor be RAISED as coverage improves. It
+    must never be able to remove it: a non-positive value would switch the
+    ratchet off, and `COVERAGE_BASELINE=0` in a workflow env block is a
+    one-character edit that no test on this tree caught before
+    2026-10-05 (round 8, mutation M6 -- see
+    `test_resolve_baseline_cannot_be_silenced_to_zero`). Such a value is
+    refused and reported rather than silently honoured.
+    """
     raw = os.environ.get("COVERAGE_BASELINE", "").strip()
     if not raw:
         return DEFAULT_BASELINE_COVERAGE
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError:
         print(
             f"::warning::COVERAGE_BASELINE={raw!r} is not a number; "
@@ -108,6 +117,15 @@ def resolve_baseline() -> float:
             file=sys.stderr,
         )
         return DEFAULT_BASELINE_COVERAGE
+    if value <= 0.0:
+        print(
+            f"::warning::COVERAGE_BASELINE={raw!r} would remove the "
+            f"non-regression floor entirely; using {DEFAULT_BASELINE_COVERAGE}. "
+            "The override may only raise the floor as coverage improves.",
+            file=sys.stderr,
+        )
+        return DEFAULT_BASELINE_COVERAGE
+    return value
 
 
 def resolve_event_name() -> str:
@@ -213,7 +231,10 @@ def main(argv: list[str], repo_root: Path | None = None) -> int:
     coverage_file = Path(argv[1])
 
     if not coverage_file.is_file():
-        print(f"::error::Coverage file not found: {coverage_file}", file=sys.stderr)
+        print(
+            f"{ANNOTATION_PREFIX}Coverage file not found: {coverage_file}",
+            file=sys.stderr,
+        )
         return EXIT_FAILED
 
     event = resolve_event_name()
@@ -228,7 +249,7 @@ def main(argv: list[str], repo_root: Path | None = None) -> int:
     coverage = resolve_coverage(coverage_file)
     if coverage is None:
         print(
-            "::error::Could not measure total coverage from "
+            f"{ANNOTATION_PREFIX}Could not measure total coverage from "
             f"{coverage_file}; refusing to pass the gate unmeasured",
             file=sys.stderr,
         )

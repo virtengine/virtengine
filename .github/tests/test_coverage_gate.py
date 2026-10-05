@@ -65,6 +65,7 @@ import importlib.util
 import io
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -135,6 +136,95 @@ def no_gate_annotations():
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
         yield buf
+
+
+# --------------------------------------------------------------------------
+# Reading the suite's OWN output the way GitHub reads it.
+#
+# Round-8 review defect: the subprocess guard rebuilt this suite's argv by
+# hand, so it drifted from `ci.yaml`, which runs it with `-v`. Under `-v`
+# unittest echoes each test's METHOD docstring, and a docstring whose first
+# line is a workflow command therefore reaches the log line-initial -- exactly
+# the shape GitHub renders as a failure annotation, and exactly the phantom
+# this file exists to kill. The guard was blind to it because the child it
+# spawned was not the child CI runs. A guard that does not reproduce the real
+# invocation is a guard with a hole in exactly the place it was written to
+# close; this is the same defect class as round 7, one level of indirection up.
+#
+# Two rules follow, and both are enforced below:
+#   1. the argv comes from the WORKFLOW, parsed -- never hand-typed, so the
+#      guard cannot fall behind `ci.yaml` the way a copy did; and
+#   2. the assertion matches LINE-INITIAL commands only. That is the exact set
+#      GitHub renders (a command must open the line; it is echoed mid-sentence
+#      otherwise), so substring matching would flag this file's own prose --
+#      which necessarily quotes the literal it is discussing -- and a guard
+#      that false-positives on its own documentation is a guard that gets
+#      deleted rather than satisfied.
+# --------------------------------------------------------------------------
+
+
+def workflow_suite_argv(workflow_step_run: str) -> list[str]:
+    """The argv `ci.yaml` uses to run this suite, from the step's own text.
+
+    Parsed with `shlex` so quoted arguments survive, then `python`/`python3` is
+    replaced with `sys.executable` -- the interpreter identity is irrelevant to
+    what the suite PRINTS, and using the running interpreter keeps the child on
+    the same environment. A parse failure is raised rather than defaulted: a
+    silent fallback would reintroduce the very drift this exists to remove.
+    """
+    argv = shlex.split(workflow_step_run, posix=True)
+    if not argv or Path(argv[0]).name not in ("python", "python3", "python.exe"):
+        raise AssertionError(
+            f"cannot read the suite's argv out of {workflow_step_run!r}: it does "
+            "not start with a python interpreter"
+        )
+    return [sys.executable, *argv[1:]]
+
+
+def leaked_annotations(output: str) -> list[str]:
+    """Lines GitHub would render as failure annotations.
+
+    Line-initial only, and only the `::error::` command: that is the exact set
+    of lines this suite is forbidden to emit. Substring matching would also
+    catch `::error::` quoted mid-sentence (this file's docstrings, and
+    `test_this_file_declares_no_bare_error_annotation` itself), which GitHub
+    does not render and which the suite must be able to discuss.
+    """
+    return [
+        line for line in output.splitlines()
+        if line.lstrip().startswith(ANNOTATION_ERROR)
+    ]
+
+
+# The routing step's name, shared by `WorkflowWiringTest` (which parses
+# `ci.yaml`) and `GateAnnotationHygieneTest` (which needs the argv that step
+# carries). Duplicated here rather than reaching across classes so the two
+# cannot disagree about which step they mean.
+ROUTING_STEP_NAME = "Test coverage gate routing"
+
+
+def routing_step_run() -> str:
+    """The `run` of the `ci.yaml` step that executes this suite.
+
+    Parsed from the live workflow every call rather than cached, so an edit to
+    `ci.yaml` is reflected immediately -- and, more importantly, so a test that
+    asserts on the workflow cannot be satisfied by a stale copy of it.
+    """
+    doc = yaml.safe_load(
+        (REPO_ROOT / ".github" / "workflows" / "ci.yaml").read_text(encoding="utf-8")
+    )
+    matches = [
+        step for step in doc["jobs"]["test-go"]["steps"]
+        if isinstance(step, dict) and step.get("name") == ROUTING_STEP_NAME
+    ]
+    if len(matches) != 1:
+        raise AssertionError(
+            f"expected exactly one step named {ROUTING_STEP_NAME!r} in "
+            f"jobs.test-go, found {len(matches)}: the suite's own runner must "
+            "exist under that exact name, or the guard below is not inspecting "
+            "the invocation CI really uses"
+        )
+    return str(matches[0]["run"])
 
 # --------------------------------------------------------------------------
 # What a gate step is allowed to be.
@@ -649,6 +739,106 @@ class CoverageGateRoutingTest(unittest.TestCase):
             self.assertEqual(self.gate.evaluate_branch(46.0, 46.0), 0)
             self.assertEqual(self.gate.evaluate_branch(60.0, 46.0), 0)
 
+    def test_a_real_regression_is_ANNOUNCED_not_merely_failed(self):
+        """Round-8: the return code is not the only thing a floor must do.
+
+        Measured bypass on this tree, on BOTH `origin/develop` and the round-8
+        branch, so it predates this change and was never reported:
+
+          M5  replace `{ANNOTATION_PREFIX}Repository coverage regressed...`
+              with the same sentence and no prefix
+              -> 32 tests green. The gate still returns 1, so every existing
+              assertion passed.
+
+        That is a silent-failure guard, and this file exists because a silent
+        signal was read as a real incident (round 7) and because a gate that
+        quietly stops ratcheting is this card's actual subject. A floor that
+        exits 1 while printing nothing produces a red job whose log does not say
+        why -- and the next reader cannot tell a real regression from a broken
+        scorer.
+
+        So the breach is asserted as OUTPUT, driven through the gate exactly as
+        `ci.yaml` drives it, and `leaked_annotations` is used deliberately here:
+        this is the one place in the suite where a line-initial `::error::` is
+        the required behaviour, so it is captured and asserted, not tolerated.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            profile = Path(tmp) / "coverage.out"
+            # 45.0% covered: below the recorded floor, so this must be reported.
+            profile.write_text(
+                "mode: atomic\n"
+                "example.com/m/covered.go:1.1,1.10 450 1\n"
+                "example.com/m/uncovered.go:1.1,1.10 550 0\n",
+                encoding="utf-8",
+            )
+            proc = subprocess.run(
+                [sys.executable, str(SCRIPT_PATH), str(profile)],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                env={**os.environ, "GITHUB_EVENT_NAME": "push"},
+            )
+            combined = proc.stdout + proc.stderr
+            self.assertEqual(
+                proc.returncode, 1,
+                f"a profile below the floor must fail, not pass:\n{combined}",
+            )
+            announced = leaked_annotations(combined)
+            self.assertTrue(
+                announced,
+                "the gate failed but ANNOUNCED nothing. A red job that does "
+                "not say why is indistinguishable from a broken scorer -- the "
+                "same unreadable-log defect as round 7, and it is how a real "
+                f"regression gets missed.\nGot:\n{combined}",
+            )
+            self.assertTrue(
+                any("45.0%" in line for line in announced),
+                f"the annotation must name the coverage that breached the "
+                f"floor:\n{combined}",
+            )
+
+    def test_resolve_baseline_cannot_be_silenced_to_zero(self):
+        """Round-8, M6: the ratchet itself must not be switchable off.
+
+        Measured bypass: replacing the `return DEFAULT_BASELINE_COVERAGE`
+        fallback in `resolve_baseline()` with `return 0.0` left every test
+        green, on this tree and on `origin/develop`. `evaluate_branch` takes
+        `baseline` as a parameter, so the suite's negative controls
+        (`evaluate_branch(45.0, 46.0)`) never call `resolve_baseline()` at all
+        -- the ratchet's real entry point was untested.
+
+        Consequence: deleting the floor entirely would not turn any test red.
+        This card's DONE WHEN says the floor must not be lowered to make CI
+        pass; this is the assertion that makes that claim enforceable rather
+        than a promise.
+
+        Note the env var is only an *override for a ratchet bump* -- it may
+        raise the floor, never remove it, which is why both directions are
+        pinned: an unset, empty, malformed, negative or zero value all resolve
+        to the recorded default rather than to "no floor".
+        """
+        self.assertEqual(self.gate.resolve_baseline(), 46.0)
+        for hostile in ("", "   ", "not-a-number", "0", "0.0", "-1", "-99.5"):
+            with self.subTest(baseline=hostile):
+                with mock.patch.dict(
+                    os.environ, {"COVERAGE_BASELINE": hostile}, clear=False
+                ):
+                    resolved = self.gate.resolve_baseline()
+                self.assertGreater(
+                    resolved, 0.0,
+                    f"COVERAGE_BASELINE={hostile!r} resolved to {resolved}: "
+                    "a zero or negative floor is not a ratchet",
+                )
+                self.assertEqual(
+                    resolved, self.gate.DEFAULT_BASELINE_COVERAGE,
+                    f"COVERAGE_BASELINE={hostile!r} must fall back to the "
+                    f"recorded default {self.gate.DEFAULT_BASELINE_COVERAGE}, "
+                    f"not to {resolved}",
+                )
+        # And the override may still RAISE the floor, which is its purpose.
+        with mock.patch.dict(os.environ, {"COVERAGE_BASELINE": "52.5"}, clear=False):
+            self.assertEqual(self.gate.resolve_baseline(), 52.5)
+
     def test_baseline_is_overridable_and_rejects_junk(self):
         with mock.patch.dict(os.environ, {"COVERAGE_BASELINE": "52.5"}, clear=False):
             self.assertEqual(self.gate.resolve_baseline(), 52.5)
@@ -841,7 +1031,9 @@ class WorkflowWiringTest(unittest.TestCase):
     # passed (round-5 review, mutation R4). A guard that follows its own target
     # is not a guard.
     COVERAGE_STEP_NAME = "Check coverage threshold"
-    ROUTING_STEP_NAME = "Test coverage gate routing"
+    # `ROUTING_STEP_NAME` is intentionally NOT redefined here: it is a module
+    # global shared with `routing_step_run()`, and two copies of a step name is
+    # one more place for the two guards to drift apart.
 
     @classmethod
     def setUpClass(cls):
@@ -873,7 +1065,7 @@ class WorkflowWiringTest(unittest.TestCase):
 
     def find_routing_step(self):
         """The single parsed step that runs this suite. Fails if it is gone."""
-        return self.find_step(self.ROUTING_STEP_NAME, "the routing-suite step")
+        return self.find_step(ROUTING_STEP_NAME, "the routing-suite step")
 
     def find_profile_producer(self):
         """The step whose `run` writes the coverprofile the gate consumes."""
@@ -1037,7 +1229,7 @@ class WorkflowWiringTest(unittest.TestCase):
         including the gate and the suite guarding it.
         """
         problems = job_problems(
-            self.job, (self.COVERAGE_STEP_NAME, self.ROUTING_STEP_NAME),
+            self.job, (self.COVERAGE_STEP_NAME, ROUTING_STEP_NAME),
         )
         self.assertEqual(
             problems, [],
@@ -1068,7 +1260,7 @@ class WorkflowWiringTest(unittest.TestCase):
             [],
         )
         self.assertEqual(
-            job_problems(self.job, (self.COVERAGE_STEP_NAME, self.ROUTING_STEP_NAME)), [],
+            job_problems(self.job, (self.COVERAGE_STEP_NAME, ROUTING_STEP_NAME)), [],
         )
 
         invocation = "python3 scripts/ci/coverage_gate.py coverage.out"
@@ -1199,7 +1391,7 @@ class WorkflowWiringTest(unittest.TestCase):
         )
 
         # And the job-level guards.
-        names = (self.COVERAGE_STEP_NAME, self.ROUTING_STEP_NAME)
+        names = (self.COVERAGE_STEP_NAME, ROUTING_STEP_NAME)
         clean_job = {"steps": [{"name": n} for n in names]}
         self.assertEqual(job_problems(clean_job, names), [])
         job_bypasses = {
@@ -1207,7 +1399,7 @@ class WorkflowWiringTest(unittest.TestCase):
             "job always": {**clean_job, "if": "always()"},
             "job needs list": {**clean_job, "needs": ["never-runs"]},
             "job needs scalar": {**clean_job, "needs": "never-runs"},
-            "gate step gone": {"steps": [{"name": self.ROUTING_STEP_NAME}]},
+            "gate step gone": {"steps": [{"name": ROUTING_STEP_NAME}]},
             "routing step gone": {"steps": [{"name": self.COVERAGE_STEP_NAME}]},
         }
         for label, job in job_bypasses.items():
@@ -1329,10 +1521,19 @@ class GateAnnotationHygieneTest(unittest.TestCase):
         """THE LOAD-BEARING ONE: run this suite and read its stdout.
 
         The wrapper above is discipline; this is the check. It executes this
-        exact file as a subprocess -- the same way `ci.yaml` does -- and fails
-        if a single `::error::` reaches stdout. So the leak cannot return via a
-        new call site, a renamed helper, or a future edit that makes the scorer
-        annotate somewhere else.
+        exact file as a subprocess -- by reading the argv out of the `ci.yaml`
+        step that really runs it, `-v` and all -- and fails if a single
+        line-initial `::error::` reaches that output. So the leak cannot return
+        via a new call site, a renamed helper, or a future edit that makes the
+        scorer annotate somewhere else.
+
+        Two round-8 corrections, both from trying to break this:
+          * the argv is PARSED FROM `ci.yaml`, not restated here. Restating it
+            is how this guard came to run a non-verbose child while CI ran a
+            verbose one, and a docstring leak sailed straight through.
+          * the assertion is LINE-INITIAL, not substring. Under `-v` this file's
+            own prose quotes `::error::` mid-sentence, which GitHub never
+            renders; matching substrings turned CI red on a correct tree.
 
         Recursion, and how it is stopped: this test runs the suite, and the suite
         contains this test, so an unguarded version spawns itself until the
@@ -1353,23 +1554,21 @@ class GateAnnotationHygieneTest(unittest.TestCase):
 
         env = {**os.environ, SUITE_CHILD_ENV: "1"}
         proc = subprocess.run(
-            [sys.executable, "-m", "unittest", "discover", "-s", ".github/tests",
-             "-p", "test_coverage_gate.py"],
+            workflow_suite_argv(routing_step_run()),
             cwd=REPO_ROOT,
             env=env,
             capture_output=True,
             text=True,
         )
-        leaked = [
-            line for line in (proc.stdout + proc.stderr).splitlines()
-            if ANNOTATION_ERROR in line
-        ]
+        leaked = leaked_annotations(proc.stdout + proc.stderr)
         self.assertEqual(
             leaked, [],
             "this suite leaked a GitHub error annotation into the CI log:\n  "
             + "\n  ".join(leaked)
             + "\nEvery fixture verdict must be captured with "
-            "`no_gate_annotations()`; only a real gate run may annotate.",
+            "`no_gate_annotations()`; only a real gate run may annotate. Note "
+            "that `-v` echoes each test method's docstring, so a docstring "
+            "beginning with a workflow command leaks exactly this way.",
         )
         # The control: a green suite. Without this the assertion above could
         # pass because the suite failed to run at all, which would make the
