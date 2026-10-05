@@ -65,6 +65,30 @@ DEFAULT_BASELINE_COVERAGE = 46.0
 
 PR_EVENT = "pull_request"
 
+# GitHub renders a `::error::` workflow command wherever it appears in a step's
+# stdout, independently of that step's exit status. The routing suite
+# (`.github/tests/test_coverage_gate.py`) must prove the floor BITES, so it calls
+# the scorer directly with below-floor values and asserts the return code. That
+# call used to print the real `::error::` line into the `Go Tests` log, so a
+# perfectly GREEN job carried an error annotation reading
+#
+#   ::error::Repository coverage regressed to 45.0%, below the 46.0% floor
+#
+# Nothing had regressed -- 45.0 was the suite's own fixture -- but the log said
+# otherwise, and that line was read as a real coverage failure on
+# virtengine/virtengine (kanban t_93bf2133, run 37268464612) and sent two agents
+# chasing a ratchet regression that does not exist. A gate whose negative
+# controls announce themselves as live failures is a gate whose log cannot be
+# trusted to tell you whether it is enforcing.
+#
+# `ANNOTATION_ERROR` is the real enforcement prefix; the suite redirects its
+# fixture verdicts to a throwaway buffer via `evaluate_branch(..., stream=)`, so
+# the only thing that reaches a CI log is a verdict that actually happened.
+# Keeping the two paths on one prefix constant is what stops this drifting back:
+# a second hardcoded literal in the suite is what let it happen.
+ANNOTATION_ERROR = "::error::"
+ANNOTATION_PREFIX = ANNOTATION_ERROR
+
 EXIT_OK = 0
 EXIT_FAILED = 1
 EXIT_USAGE = 2
@@ -142,11 +166,18 @@ def run_pr_diff_gate(coverage_file: Path, repo_root: Path) -> int:
     return proc.returncode
 
 
-def evaluate_branch(coverage: float, baseline: float) -> int:
-    """Non-regression ratchet for the whole repository."""
-    print(f"Total coverage: {coverage:.1f}%")
-    print(f"Repository target (INFRA-003, informational): {REPO_TARGET_COVERAGE:.0f}%")
-    print(f"Enforced non-regression floor: {baseline:.1f}%")
+def evaluate_branch(coverage: float, baseline: float, stream=None) -> int:
+    """Non-regression ratchet for the whole repository.
+
+    `stream` defaults to stdout. It exists so a caller that is exercising the
+    gate's decision logic rather than *enforcing* it -- the routing suite's
+    negative controls, which assert `evaluate_branch(45.0, 46.0) == 1` -- can
+    send the verdict somewhere GitHub does not render. See `ANNOTATION_PREFIX`.
+    """
+    out = stream if stream is not None else sys.stdout
+    print(f"Total coverage: {coverage:.1f}%", file=out)
+    print(f"Repository target (INFRA-003, informational): {REPO_TARGET_COVERAGE:.0f}%", file=out)
+    print(f"Enforced non-regression floor: {baseline:.1f}%", file=out)
 
     if coverage < REPO_TARGET_COVERAGE:
         gap = REPO_TARGET_COVERAGE - coverage
@@ -154,13 +185,15 @@ def evaluate_branch(coverage: float, baseline: float) -> int:
             f"::warning::Repository coverage {coverage:.1f}% is {gap:.1f} points "
             f"below the {REPO_TARGET_COVERAGE:.0f}% INFRA-003 target. The floor is "
             "enforced as a non-regression ratchet; raise COVERAGE_BASELINE as "
-            "coverage improves."
+            "coverage improves.",
+            file=out,
         )
 
     if coverage < baseline:
         print(
-            f"::error::Repository coverage regressed to {coverage:.1f}%, "
-            f"below the {baseline:.1f}% floor"
+            f"{ANNOTATION_PREFIX}Repository coverage regressed to {coverage:.1f}%, "
+            f"below the {baseline:.1f}% floor",
+            file=out,
         )
         return EXIT_FAILED
 
