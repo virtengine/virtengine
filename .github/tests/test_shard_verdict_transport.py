@@ -198,10 +198,11 @@ class TestWorkflowWiring(unittest.TestCase):
     def test_empty_verdict_collection_cannot_pass(self):
         """An empty collection must fail the gate.
 
-        `actions/download-artifact@v6` has NO `if-no-files-found` input - that
+        `actions/download-artifact` has NO `if-no-files-found` input - that
         belongs to upload-artifact, and CI proved it on run 37303621734
         ("input \\"if-no-files-found\\" is not defined in action
-        actions/download-artifact@v6"). The fail-closed behaviour therefore has
+        actions/download-artifact@v6" - the pin at the time). The fail-closed
+        behaviour therefore has
         to come from the ledger requiring one verdict per DECLARED shard, so
         this asserts the download step does not reintroduce the bogus input and
         that the gate step is what enforces completeness.

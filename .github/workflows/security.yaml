@@ -158,12 +158,17 @@ jobs:
         # download` on run 37292268699.
         #
         # `if-no-files-found: error` is NOT available here - it is an
-        # upload-artifact input, and download-artifact@v6 does not define it (CI
+        # upload-artifact input, and download-artifact does not define it (CI
         # rejected exactly this on run 37303621734). An empty collection is
         # rejected by the gate step below instead, which requires one verdict per
         # DECLARED shard.
+        #
+        # Pinned to v7 (node24). v6 declared `using: node20`, which the Action
+        # Node Runtime Audit rejects, and node20 is end-of-life. v7 keeps the
+        # `pattern` + `merge-multiple` inputs this step relies on and is the pin
+        # the rest of the tree already uses.
         if: always()
-        uses: actions/download-artifact@v6
+        uses: actions/download-artifact@v7
         with:
           pattern: govulncheck-verdict-*
           path: ${{ runner.temp }}/verdicts
@@ -194,7 +199,7 @@ jobs:
         #     shards green at every step. No expression-level fix exists for
         #     overwrite.
         #
-        # `actions/download-artifact@v6` has NO `if-no-files-found` input (that
+        # `actions/download-artifact` has NO `if-no-files-found` input (that
         # belongs to upload-artifact), so an empty collection cannot be rejected
         # by the action itself. It is rejected here instead: the ledger requires
         # one verdict per DECLARED shard, so zero collected artifacts means every
