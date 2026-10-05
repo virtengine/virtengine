@@ -31,7 +31,7 @@ MUTATIONS = [
     ),
     (
         # The regression CI actually hit: `if-no-files-found` is an
-        # upload-artifact input, and download-artifact@v6 does not define it.
+        # upload-artifact input, and download-artifact does not define it.
         "M3-bogus-input-on-download-step",
         "          pattern: govulncheck-verdict-*",
         "          pattern: govulncheck-verdict-*\n"
