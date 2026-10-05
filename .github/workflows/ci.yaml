@@ -50,8 +50,36 @@ on:
       - "_docs/**"
       - ".github/AGENTS.md"
 
+# A push to develop must PUBLISH a verdict, and `cancel-in-progress` on a
+# per-ref group cannot guarantee one.
+#
+# Measured on 2026-10-06: every ci.yaml develop *push* run for 32 hours ended
+# `cancelled` -- 35 consecutive runs, none of which published a conclusion.
+# Cause: `group: ${{ github.workflow }}-${{ github.ref }}` puts every push to
+# `develop` in the SAME group, and `cancel-in-progress: true` means each new
+# commit kills the in-flight run. A develop run takes ~1h39m (37360715885:
+# created 19:04:19Z, updated 20:43:27Z); commits land on develop faster than
+# that, so the run is always cancelled before it can finish. The result is
+# self-sustaining -- the more the fleet merges, the longer develop goes with
+# NO validated signal at all, and a cancelled run is not a green run.
+#
+# The fix keeps PR runs cancellable (that is what makes iteration fast) and
+# makes only the push path per-commit, so each push gets its own group and
+# cannot cancel its predecessor:
+#
+#   pull_request -> ${{ github.workflow }}-${{ github.ref }}
+#   push         -> ${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}
+#
+# `github.sha` is the pushed commit, so push runs never share a group.
+# This is the same trade the repo already made in infrastructure.yaml,
+# dr-tools-image.yaml and dr-failover-test.yaml, which all set
+# `cancel-in-progress: false`.
+#
+# Pinned by .github/tests/test_ci_concurrency_verdict.py, which reads this
+# workflow's PARSED `concurrency` block -- a text assertion could not tell a
+# live setting from a comment quoting the old one.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
   cancel-in-progress: true
 
 env:
@@ -180,6 +208,31 @@ jobs:
       - name: Test the lint job push path
         if: always()
         run: python -m unittest discover -s .github/tests -p "test_lint_job_push_path.py" -v
+
+      # Self-test for this workflow's OWN concurrency block.
+      #
+      # `concurrency: group: ${{ workflow }}-${{ ref }}` with
+      # `cancel-in-progress: true` put every push to `develop` in one group,
+      # so each commit cancelled the run in flight. A develop run takes ~1h39m
+      # and commits land faster than that, which produced 35 consecutive
+      # `cancelled` runs over 32 hours (2026-10-06) and THREE commits on
+      # `develop` that nothing had reported on. A cancelled run publishes no
+      # verdict, so this was the absence of a signal rather than a red one --
+      # and an agent reading "CI agrees" was reading that absence.
+      #
+      # It lives here, not in `.github/tests/` where nothing runs it, for the
+      # reason the two steps above give: an unexecuted test is a comment. This
+      # job is the one that already parses ci.yaml, it costs well under a
+      # second (pure yaml.safe_load, no network, no `origin/` ref), and
+      # `if: always()` keeps it from being masked by the linter failing above.
+      #
+      # NOTE ON A LIMIT THIS GUARD CANNOT LIFT: no test can force GitHub to
+      # publish a verdict. It pins the workflow text so the routing cannot
+      # silently regress. Proving the signal actually returns needs one real
+      # completed develop push run -- see t_5b0c7ab2.
+      - name: Test the CI concurrency verdict routing
+        if: always()
+        run: python -m unittest discover -s .github/tests -p "test_ci_concurrency_verdict.py" -v
 
       # Per-linter non-regression ratchet over the whole-tree lint report.
       # This is now ENFORCED (no `continue-on-error`): since the push path no
