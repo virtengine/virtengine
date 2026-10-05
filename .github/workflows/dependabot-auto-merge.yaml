@@ -18,7 +18,28 @@ permissions:
 jobs:
     dependabot:
         runs-on: ubuntu-latest
-        if: github.actor == 'dependabot[bot]'
+        # Two conditions, both required.
+        #
+        # 1. Only Dependabot's own PRs.
+        # 2. ONLY PRs based on `develop`. Estate policy is that `main` is
+        #    human-only: `bin/safe-merge.py` merges tier-1 work onto `develop`
+        #    and refuses protected-branch merges, and the standing
+        #    `develop` -> `main` PR is tier-2 and human-gated. Without this
+        #    condition this workflow would `gh pr merge` a bot-authored
+        #    dependency bump straight into `main` whenever Dependabot filed a
+        #    PR against the default branch -- which it did on every entry in
+        #    `.github/dependabot.yml`, because none of them set `target-branch`
+        #    and the default branch is `main`. The guard is on the JOB, not on
+        #    the merge step, so the approve and merge steps are both
+        #    unreachable for a `main`-based PR rather than only the merge being
+        #    skipped after the PR was already approved.
+        #
+        # `.github/dependabot.yml` now sets `target-branch: "develop"` on every
+        # update entry, so this condition is a second, independent barrier --
+        # config drift cannot silently restore a bot merge into `main`.
+        if: >-
+          github.actor == 'dependabot[bot]' &&
+          github.base_ref == 'develop'
         steps:
             - name: Check auto-merge toggle
               id: toggle

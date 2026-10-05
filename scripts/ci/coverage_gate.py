@@ -41,6 +41,7 @@ test against real event payloads, rather than re-derived by reading YAML.
 
 from __future__ import annotations
 
+import math
 import os
 import subprocess
 import sys
@@ -65,18 +66,77 @@ DEFAULT_BASELINE_COVERAGE = 46.0
 
 PR_EVENT = "pull_request"
 
+# GitHub renders a `::error::` workflow command wherever it appears in a step's
+# stdout, independently of that step's exit status. The routing suite
+# (`.github/tests/test_coverage_gate.py`) must prove the floor BITES, so it calls
+# the scorer directly with below-floor values and asserts the return code. That
+# call used to print the real `::error::` line into the `Go Tests` log, so a
+# perfectly GREEN job carried an error annotation reading
+#
+#   ::error::Repository coverage regressed to 45.0%, below the 46.0% floor
+#
+# Nothing had regressed -- 45.0 was the suite's own fixture -- but the log said
+# otherwise, and that line was read as a real coverage failure on
+# virtengine/virtengine (kanban t_93bf2133, run 37268464612) and sent two agents
+# chasing a ratchet regression that does not exist. A gate whose negative
+# controls announce themselves as live failures is a gate whose log cannot be
+# trusted to tell you whether it is enforcing.
+#
+# `ANNOTATION_ERROR` is the real enforcement prefix; the suite redirects its
+# fixture verdicts to a throwaway buffer via `evaluate_branch(..., stream=)`, so
+# the only thing that reaches a CI log is a verdict that actually happened.
+# Keeping the two paths on one prefix constant is what stops this drifting back:
+# a second hardcoded literal in the suite is what let it happen.
+ANNOTATION_ERROR = "::error::"
+ANNOTATION_PREFIX = ANNOTATION_ERROR
+
 EXIT_OK = 0
 EXIT_FAILED = 1
 EXIT_USAGE = 2
 
 
 def resolve_baseline() -> float:
-    """Branch floor. Overridable so a ratchet bump needs no code edit."""
+    """Branch floor. Overridable so a ratchet bump needs no code edit.
+
+    The override exists to let the floor be RAISED as coverage improves. It
+    must never be able to remove it, and the rule below is the invariant that
+    makes that true rather than a promise.
+
+    The obvious rule -- refuse `value <= 0.0` -- is necessary and NOT
+    sufficient, and this module shipped that version. Two measured holes:
+
+      * `0.0001` and `1e-300` are POSITIVE, so they passed the positivity check
+        and then made `coverage < baseline` false for every real measurement.
+        The ratchet was off, at a floor of 0.0001%.
+      * `nan` is worse, because every comparison against it is false. `nan`
+        passes `<= 0.0` and would pass a bare positivity check too, and then
+        `coverage < nan` is false for EVERY coverage value -- including 0.0 --
+        so the gate cannot fire at all. Its log line reads
+        `OK: Repository coverage 45.0% holds the nan% non-regression floor`.
+
+    Both were measured on `origin/develop` (8aa3adc578) against a profile
+    measuring 45.0%, i.e. below the 46.0% floor, driven as a process exactly
+    as `ci.yaml` drives it: `rc=0`, no `::error::`, ratchet off.
+
+    So the accepted rule is the invariant itself -- the override may only RAISE
+    the floor above the recorded default -- checked as `isfinite` first (NaN and
+    +/-inf are refused there, and no comparison can be trusted to catch them)
+    and the strict raise second. One rule; every degenerate value refused;
+    `inf` refused too, which the raise-only rule alone would not do, since an
+    infinite floor makes the gate permanently red and bricks the pipeline.
+
+    Rejecting a LOWER floor is a behaviour change from the raw `float(raw)`
+    that predate this. Nothing sets it: `grep -rn COVERAGE_BASELINE` finds one
+    comment in `ci.yaml` and no assignment, so no consumer is relying on being
+    able to lower it -- and the recorded policy has always been
+    "raise `COVERAGE_BASELINE` as coverage improves. Lowering it is a coverage
+    regression and must not be done to make a run green."
+    """
     raw = os.environ.get("COVERAGE_BASELINE", "").strip()
     if not raw:
         return DEFAULT_BASELINE_COVERAGE
     try:
-        return float(raw)
+        value = float(raw)
     except ValueError:
         print(
             f"::warning::COVERAGE_BASELINE={raw!r} is not a number; "
@@ -84,6 +144,17 @@ def resolve_baseline() -> float:
             file=sys.stderr,
         )
         return DEFAULT_BASELINE_COVERAGE
+    if not math.isfinite(value) or value <= DEFAULT_BASELINE_COVERAGE:
+        print(
+            f"::warning::COVERAGE_BASELINE={raw!r} does not raise the "
+            f"non-regression floor above the recorded default "
+            f"{DEFAULT_BASELINE_COVERAGE}; using {DEFAULT_BASELINE_COVERAGE}. "
+            "The override may only RAISE the floor as coverage improves -- "
+            "never lower it, switch it off, or saturate it.",
+            file=sys.stderr,
+        )
+        return DEFAULT_BASELINE_COVERAGE
+    return value
 
 
 def resolve_event_name() -> str:
@@ -142,11 +213,18 @@ def run_pr_diff_gate(coverage_file: Path, repo_root: Path) -> int:
     return proc.returncode
 
 
-def evaluate_branch(coverage: float, baseline: float) -> int:
-    """Non-regression ratchet for the whole repository."""
-    print(f"Total coverage: {coverage:.1f}%")
-    print(f"Repository target (INFRA-003, informational): {REPO_TARGET_COVERAGE:.0f}%")
-    print(f"Enforced non-regression floor: {baseline:.1f}%")
+def evaluate_branch(coverage: float, baseline: float, stream=None) -> int:
+    """Non-regression ratchet for the whole repository.
+
+    `stream` defaults to stdout. It exists so a caller that is exercising the
+    gate's decision logic rather than *enforcing* it -- the routing suite's
+    negative controls, which assert `evaluate_branch(45.0, 46.0) == 1` -- can
+    send the verdict somewhere GitHub does not render. See `ANNOTATION_PREFIX`.
+    """
+    out = stream if stream is not None else sys.stdout
+    print(f"Total coverage: {coverage:.1f}%", file=out)
+    print(f"Repository target (INFRA-003, informational): {REPO_TARGET_COVERAGE:.0f}%", file=out)
+    print(f"Enforced non-regression floor: {baseline:.1f}%", file=out)
 
     if coverage < REPO_TARGET_COVERAGE:
         gap = REPO_TARGET_COVERAGE - coverage
@@ -154,13 +232,15 @@ def evaluate_branch(coverage: float, baseline: float) -> int:
             f"::warning::Repository coverage {coverage:.1f}% is {gap:.1f} points "
             f"below the {REPO_TARGET_COVERAGE:.0f}% INFRA-003 target. The floor is "
             "enforced as a non-regression ratchet; raise COVERAGE_BASELINE as "
-            "coverage improves."
+            "coverage improves.",
+            file=out,
         )
 
     if coverage < baseline:
         print(
-            f"::error::Repository coverage regressed to {coverage:.1f}%, "
-            f"below the {baseline:.1f}% floor"
+            f"{ANNOTATION_PREFIX}Repository coverage regressed to {coverage:.1f}%, "
+            f"below the {baseline:.1f}% floor",
+            file=out,
         )
         return EXIT_FAILED
 
@@ -180,7 +260,10 @@ def main(argv: list[str], repo_root: Path | None = None) -> int:
     coverage_file = Path(argv[1])
 
     if not coverage_file.is_file():
-        print(f"::error::Coverage file not found: {coverage_file}", file=sys.stderr)
+        print(
+            f"{ANNOTATION_PREFIX}Coverage file not found: {coverage_file}",
+            file=sys.stderr,
+        )
         return EXIT_FAILED
 
     event = resolve_event_name()
@@ -195,7 +278,7 @@ def main(argv: list[str], repo_root: Path | None = None) -> int:
     coverage = resolve_coverage(coverage_file)
     if coverage is None:
         print(
-            "::error::Could not measure total coverage from "
+            f"{ANNOTATION_PREFIX}Could not measure total coverage from "
             f"{coverage_file}; refusing to pass the gate unmeasured",
             file=sys.stderr,
         )

@@ -40,15 +40,22 @@ def make_tree() -> str:
 PROBE = "zz-audit-probe.yaml"
 
 
-def run_audit(root: str, full: bool = False, env_extra: dict | None = None) -> tuple[int, str]:
+def run_audit(root: str, full: bool = False, env_extra: dict | None = None, report: bool = True) -> tuple[int, str]:
     """Run the SHIPPED script as a subprocess; return (rc, combined output).
 
     ``full=False`` audits only the planted probe file. The probe is a copy of the
     production scanner run through the production entry point, so the verdict is
     the real one -- not a reconstruction -- while staying fast enough to run a
     case per network call.
+
+    ``report=False`` drops ``--report`` so the EXIT CODE is the real gate
+    behaviour. Any assertion about a check that must fail a job has to go
+    through that mode: under ``--report`` every run exits 0 by construction, so a
+    text match alone would pass even if the verdict branch were deleted.
     """
-    cmd = [sys.executable, os.path.join(root, ".github", "scripts", "audit_node_runtime.py"), "--report"]
+    cmd = [sys.executable, os.path.join(root, ".github", "scripts", "audit_node_runtime.py")]
+    if report:
+        cmd.append("--report")
     if not full:
         cmd += ["--workflow", PROBE]
     env = dict(os.environ)
@@ -160,6 +167,153 @@ def main() -> int:
                     )
             print(f"  {'ok  ' if ok else 'FAIL'} {name}")
 
+        # The INPUT half of the audit. `consumed_inputs()` shipped as dead code
+        # for months while the module docstring promised this exact check, so
+        # these cases are the only thing standing between the next refactor and
+        # the same silent hole. The bug they guard is not hypothetical: #1272 was
+        # a `download-artifact` step passing an input v6 does not declare, caught
+        # by CI rather than by this audit.
+        #
+        # `amondnet/vercel-action@v42` is the node24 pin from the cases above:
+        # declaring no runtime finding is precisely the point -- a node24 pin is
+        # what a safe bump looks like, so it is the only place a false positive
+        # would show up.
+
+        # 1. An input the action does NOT declare must be reported. `fetch-depth`
+        # is declared on actions/checkout, not on vercel-action.
+        plant(root, WORKFLOW.format(
+            name="undeclared-input",
+            steps=step("amondnet/vercel-action@v42", extra="        with:\n          fetch-depth: 0\n"),
+        ))
+        code, out = run_audit(root)
+        ok = "UNDECLARED_INPUT" in out and "fetch-depth" in out
+        if not ok:
+            failures.append(
+                "undeclared-input-is-caught: a `with:` key the action does not declare "
+                f"must be reported; got rc={code}:\n{out}\n  (why: this is the check the "
+                "docstring promises and the one #1272 needed)"
+            )
+        print(f"  {'ok  ' if ok else 'FAIL'} undeclared-input-is-caught")
+
+        # 2. ...and it must fail the gate, not merely be printed. Under --report
+        # every run exits 0, so the exit code has to be checked for real.
+        code, out = run_audit(root, report=False)
+        ok = code == 1 and "undeclared input" in out
+        if not ok:
+            failures.append(
+                "undeclared-input-fails-the-gate: an undeclared input must exit 1; "
+                f"got rc={code}:\n{out}"
+            )
+        print(f"  {'ok  ' if ok else 'FAIL'} undeclared-input-fails-the-gate")
+
+        # 3. A DECLARED input must stay silent, or the check is pure noise and the
+        # gate will be switched off at the first false positive. `target` is
+        # declared on vercel-action@v42 -- verified against its real manifest,
+        # because asserting on an input name invented from memory is how a check
+        # like this rots into a check that asserts nothing.
+        plant(root, WORKFLOW.format(
+            name="declared-input",
+            steps=step("amondnet/vercel-action@v42", extra="        with:\n          target: production\n"),
+        ))
+        code, out = run_audit(root)
+        ok = "UNDECLARED_INPUT" not in out
+        if not ok:
+            failures.append(f"declared-input-is-silent: got:\n{out}")
+        print(f"  {'ok  ' if ok else 'FAIL'} declared-input-is-silent")
+
+        # 4. A COMPOSITE action must be reported as UNCHECKED rather than
+        # silently passed. `runs.steps` is not an input manifest, so the audit
+        # genuinely cannot validate it -- but "cannot check" must never render as
+        # "checked and clean", which is the exact failure this card is about.
+        plant(root, WORKFLOW.format(
+            name="composite-inputs-unchecked",
+            steps=step("actions/upload-pages-artifact@v5", extra="        with:\n          totally-not-an-input: x\n"),
+        ))
+        code, out = run_audit(root)
+        ok = "INPUTS_UNCHECKED" in out and "UNDECLARED_INPUT" not in out
+        if not ok:
+            failures.append(
+                "composite-inputs-are-unchecked-not-clean: a composite pin's inputs cannot "
+                f"be validated from the manifest and must be labelled as such; got:\n{out}"
+            )
+        print(f"  {'ok  ' if ok else 'FAIL'} composite-inputs-are-unchecked-not-clean")
+
+        # 5. A `with:` block must attach to the step it belongs to, and the NEXT step
+        # must still be recorded as a pin. Both halves matter: two inline
+        # `- uses:` steps, the first passing an input the second's action does
+        # not declare. Charging the key to the wrong pin would invent a failure,
+        # and swallowing the second step would audit nothing at all -- which is
+        # exactly what the scanner did until the `with:`/step boundary was fixed.
+        two_steps = (
+            step("amondnet/vercel-action@v42", extra="        with:\n          target: production\n")
+            + step("amondnet/vercel-action@v42", extra="        with:\n          fetch-depth: 0\n")
+        )
+        plant(root, WORKFLOW.format(name="attribution", steps=two_steps))
+        code, out = run_audit(root)
+        ok = "audited 2 `uses:` references" in out
+        if not ok:
+            failures.append(
+                "step-after-a-with-block-is-still-a-pin: the second step was swallowed by "
+                f"the first step's `with:` block, so an action went unaudited; got:\n{out}"
+            )
+        print(f"  {'ok  ' if ok else 'FAIL'} step-after-a-with-block-is-still-a-pin")
+
+        # 6. And the bad key must be reported ONCE, against the step that actually owns
+        # it (line 12, the second step) -- not zero (key dropped), not twice, and
+        # not against line 9 (the first step, which passes only `target`, a
+        # declared input). Charging the key to the wrong step would invent a
+        # failure on a correct workflow.
+        findings = [ln for ln in out.splitlines() if "UNDECLARED_INPUT" in ln]
+        ok = len(findings) == 1 and ":12)" in findings[0] and "fetch-depth" in findings[0]
+        if not ok:
+            failures.append(
+                "inputs-attach-to-their-own-step: expected exactly one finding, on the step "
+                f"that owns the key (line 12); got {len(findings)} finding(s):\n{out}"
+            )
+        print(f"  {'ok  ' if ok else 'FAIL'} inputs-attach-to-their-own-step")
+
+        # 7. A `with:` block containing a MULTI-LINE SCALAR must keep charging
+        # keys after the scalar. This is the shape the shipped scanner got wrong:
+        # it ended the block on any `- ` line, and the body of `body: |` is full
+        # of them, so `branch`, `base`, `labels` and `delete-branch` were dropped
+        # and the audit reported a clean tree for a step that would fail at run
+        # time. The flat one-line fixtures above cannot see this -- every value
+        # they use ends on its own line.
+        #
+        # Asserted in BOTH directions: the key after the scalar is caught when it
+        # is undeclared (it is not silently dropped) AND the `- ` line itself is
+        # not mistaken for an input (it is scalar text, not a `with:` entry).
+        scalar_with = (
+            "        with:\n"
+            "          target: production\n"
+            "          body: |\n"
+            "            - Updated CHANGELOG.md with all changes\n"
+            "            - Generated release notes\n"
+            "          totally-not-an-input: changelog/x\n"
+        )
+        plant(root, WORKFLOW.format(
+            name="scalar-body",
+            steps=step("amondnet/vercel-action@v42", extra=scalar_with),
+        ))
+        code, out = run_audit(root)
+        ok = "UNDECLARED_INPUT" in out and "totally-not-an-input" in out
+        if not ok:
+            failures.append(
+                "key-after-a-multi-line-scalar-is-still-charged: a `- ` line inside a "
+                "`body: |` scalar ended the `with:` block, so every key after it went "
+                f"unaudited; got rc={code}:\n{out}"
+            )
+        # The scalar's own lines must not be charged as inputs: they are text
+        # the action receives as the VALUE of `body`, not `with:` keys.
+        stray = [ln for ln in out.splitlines()
+                 if "UNDECLARED_INPUT" in ln and "Updated CHANGELOG.md" in ln]
+        if stray:
+            failures.append(
+                "multi-line-scalar-body-is-not-read-as-inputs: `- ` lines inside a "
+                f"scalar body were charged as `with:` keys:\n{out}"
+            )
+        print(f"  {'ok  ' if ok and not stray else 'FAIL'} key-after-a-multi-line-scalar-is-still-charged")
+
         # A pin that cannot exist upstream must NOT be graded as a pass.
         plant(root, WORKFLOW.format(name="missing", steps=step("virtengine/definitely-not-a-real-action-xyz@v1")))
         code, out = run_audit(root)
@@ -173,6 +327,15 @@ def main() -> int:
         if "RESULT: no node20" not in out:
             failures.append(f"baseline: shipped tree is not clean\n{out}")
         print(f"  {'FAIL' if any(f.startswith('baseline') for f in failures) else 'ok  '} baseline-tree-is-clean")
+
+        # The input check must not have made the clean tree quietly incomplete:
+        # a run that could not read a manifest is not a pass, so this asserts the
+        # INPUT sweep reports incompleteness on its own account.
+        code, out = run_audit(root, full=True)
+        ok = "INCOMPLETE" not in out
+        if not ok:
+            failures.append(f"baseline-input-sweep-is-complete: shipped tree reported INCOMPLETE\n{out}")
+        print(f"  {'FAIL' if not ok else 'ok  '} baseline-input-sweep-is-complete")
 
         # An unauthenticated `gh` is the condition that shipped this job red on
         # a clean tree. It must be refused UP FRONT with one actionable line,
@@ -190,7 +353,7 @@ def main() -> int:
 
     for f in failures:
         print("FAIL:", f)
-    total = len(CASES) + 3
+    total = len(CASES) + 10
     print(f"{total - len({f.split(':')[0] for f in failures})}/{total} checks passed")
     return 1 if failures else 0
 

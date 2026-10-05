@@ -15,8 +15,18 @@ The audit is deliberately *behavioural* rather than a list of blessed pins:
 * it resolves COMPOSITE actions recursively, because ``upload-pages-artifact``
   is ``using: composite`` and its embedded ``actions/upload-artifact@v4``
   is the thing that actually runs node20,
-* and it compares the action's declared INPUTS against the inputs the
-  workflow passes, so a bump is only ever reported as safe when it is.
+* and it compares the INPUTS a JS action's manifest declares against the
+  inputs the workflow actually passes, so an undeclared ``with:`` key is
+  caught by this audit rather than by the job that trips over it.
+
+What this audit does NOT check: composite and docker actions' input names.
+``runs.steps`` is not an input manifest and a docker action takes its arguments
+through ``args:``, not ``with:``, so neither can be validated from the
+manifest alone. Only JS actions are enforced -- those declare a flat
+``inputs:`` map that GitHub rejects an unknown key against, with
+``input "x" is not defined in action owner/repo@ref``. A composite or docker
+pin is reported as ``INPUTS_UNCHECKED`` rather than passed in silence: "cannot
+be checked" must never render as "checked and clean".
 
 Usage
 -----
@@ -93,27 +103,65 @@ def iter_action_refs(workflow_file: str) -> list[ActionRef]:
 
     in_with = False
     with_indent = 0
+    # Indent of the FIRST key inside the current `with:` block. Only keys at
+    # exactly this indent are the step's own inputs: a deeper line belongs to a
+    # nested map or to the body of a multi-line scalar, and counting it invents
+    # an input name the workflow never passes.
+    with_key_indent = 0
+    # The step `uses:` the current `with:` belongs to. Deliberately NOT simply
+    # `out[-1]`: a job-level `uses:` (a reusable-workflow call) is filtered out
+    # below, so without this reset its `with:` keys would be charged to whatever
+    # step happened to come last in the PREVIOUS job -- an invented input on an
+    # unrelated pin. Reset at every job boundary, so an unrecorded `with:` is
+    # attributed to nobody, which is the truth.
+    last_step: ActionRef | None = None
+    in_jobs = False
+
     for idx, raw in enumerate(lines):
         stripped = raw.strip()
         if not stripped:
             continue
 
         indent = len(raw) - len(raw.lstrip())
+        if indent == 0:
+            in_jobs = stripped.startswith("jobs:")
+            last_step = None
+        elif in_jobs and indent == 2 and re.match(r"^[A-Za-z0-9_-]+:\s*$", stripped):
+            last_step = None  # a new job starts; the previous job's `uses:` is gone
+
         if stripped.startswith("with:"):
             in_with = True
             with_indent = indent
+            with_key_indent = 0
             continue
-        # Leaving the `with:` block: any dedent past its key ends it.
-        if in_with and indent <= with_indent and not stripped.startswith("-"):
+        # Leaving the `with:` block: a dedent back to (or past) the `with:` key's
+        # own indent ends it. That alone closes the block for the inline
+        # one-line step form `      - uses: owner/repo@v1`, because a step's `-`
+        # sits at an indent BELOW its own `with:` -- so no `- ` rule is needed
+        # here, and adding one is actively harmful.
+        #
+        # A previous version ended the block on ANY line starting with `- `,
+        # justified as "a `with:` takes a mapping, never a list item". That is
+        # false for the most common shape a `with:` block has: a multi-line
+        # scalar. `body: |` and `labels: |` bodies are full of `- ` lines
+        # (`- Updated CHANGELOG.md ...`), and the first one closed the block, so
+        # every key after the scalar was charged to nothing. On this tree that
+        # silently unaudited `branch`, `base`, `labels` and `delete-branch` on
+        # both `create-pull-request` steps -- an undeclared input there would
+        # fail the job at run time and this audit would report the tree clean.
+        if in_with and indent <= with_indent:
             in_with = False
 
         if in_with:
             m = WITH_KEY_RE.match(raw)
-            # Only the step's own inputs count, not a nested map's keys.
-            if m and indent > with_indent:
-                out_keys = out[-1].inputs if out else []
-                if m.group("key") not in out_keys:
-                    out_keys.append(m.group("key"))
+            if not m:
+                continue
+            if with_key_indent == 0:
+                with_key_indent = indent
+            if indent == with_key_indent and last_step is not None:
+                key = m.group("key")
+                if key not in last_step.inputs:
+                    last_step.inputs.append(key)
             continue
 
         m = USES_ANY_RE.match(raw) or INLINE_USES_RE.match(raw)
@@ -131,7 +179,12 @@ def iter_action_refs(workflow_file: str) -> list[ActionRef]:
         repo, _, version = ref.rpartition("@")
         if not repo or "/" not in repo:
             continue
-        out.append(ActionRef(repo=repo, ref=version, file=os.path.basename(workflow_file), line=idx + 1))
+        action = ActionRef(repo=repo, ref=version, file=os.path.basename(workflow_file), line=idx + 1)
+        out.append(action)
+        # Recorded even for a ref this scanner skips for runtime auditing (a
+        # composite or docker pin), because the INPUT question is separate from
+        # the runtime one and applies to those too.
+        last_step = action
     return out
 
 
@@ -453,11 +506,74 @@ def node20_findings(refs: list[ActionRef]) -> tuple[list[str], list[str], list[s
 
 
 def consumed_inputs(refs: list[ActionRef]) -> dict[str, set[str]]:
-    """action spec -> inputs the workflows actually pass."""
+    """action spec -> the union of inputs the workflows pass to it.
+
+    Keyed by the full ``repo@ref`` spec, not by repo: the same action is used at
+    more than one pin in this tree, and those two manifests can declare different
+    input sets, so collapsing them to a repo key would invent or hide a
+    difference that is the entire point of the check.
+    """
     consumed: dict[str, set[str]] = {}
     for ref in refs:
-        consumed.setdefault(f"{ref.repo}", set()).update(ref.inputs)
+        if ref.inputs:
+            consumed.setdefault(ref.spec, set()).update(ref.inputs)
     return consumed
+
+
+# The only `using:` values whose manifest declares a flat `inputs:` map that
+# GitHub validates a step's `with:` against. A composite action forwards `with:`
+# into its own steps, and a docker action takes `args:`, so neither can be
+# checked from the manifest alone -- see `parse_action_yml`'s note on
+# `runs.steps`. Enforcing those two would manufacture failures, not catch bugs.
+ENFORCEABLE_USINGS = ("node16", "node20", "node24", "node12")
+
+
+def undeclared_input_findings(refs: list[ActionRef]) -> tuple[list[str], list[str], list[str]]:
+    """(undeclared inputs, skipped pins, transient API faults).
+
+    A workflow that passes ``with: {foo: bar}`` to an action that declares no
+    ``foo`` fails that STEP at run time with ``input "foo" is not defined in
+    action owner/repo@ref`` -- so the class is a real, already-shipped defect in
+    this repo (see #1272), not a hypothetical.
+
+    Three outcomes, kept apart for the reason `node20_findings` keeps its own
+    apart: a pin whose manifest could not be read is NOT a verified input set,
+    and grading it as one is exactly the blind run this audit exists to prevent.
+    """
+    findings: list[str] = []
+    skipped: list[str] = []
+    transient: list[str] = []
+
+    for ref in refs:
+        if not ref.inputs:
+            continue
+        text = fetch_action_yml(ref.repo, ref.ref)
+        if text is None:
+            # Already reported by node20_findings as a MISSING manifest; the
+            # input set of a nonexistent action is not a finding of its own.
+            continue
+        if text == TRANSIENT_FAILURE:
+            cls = _FETCH_ERRORS.get((ref.repo, ref.ref, "manifest"), "unknown")
+            transient.append(f"{ref.spec} ({ref.file}:{ref.line}): upstream read failed [{cls}]")
+            continue
+
+        using, declared = parse_action_yml(text)
+        if not using.startswith("node"):
+            skipped.append(f"{ref.spec} ({ref.file}:{ref.line}): using: {using or 'unknown'}")
+            continue
+        if using not in ENFORCEABLE_USINGS:
+            # e.g. a node22 pin added after this list was written. Refusing to
+            # guess is correct: an unenforced pin would read as a checked one.
+            skipped.append(f"{ref.spec} ({ref.file}:{ref.line}): unenforced runtime {using}")
+            continue
+
+        unknown = sorted(set(ref.inputs) - set(declared))
+        if unknown:
+            findings.append(
+                f"{ref.spec} ({ref.file}:{ref.line}): undeclared input(s) "
+                f"{', '.join(unknown)}; declares {', '.join(declared) or '(none)'}"
+            )
+    return findings, skipped, transient
 
 
 def main() -> int:
@@ -525,13 +641,29 @@ def main() -> int:
     for f in findings:
         print(f"  NODE20  {f}")
 
-    if transient:
+    # The input half of the audit. Run against the SAME refs, and only after the
+    # runtime sweep has warmed the manifest cache, so the two checks cannot
+    # disagree about what a manifest says.
+    inputs_with = consumed_inputs(refs)
+    bad_inputs, input_skipped, input_transient = undeclared_input_findings(refs)
+    if inputs_with:
+        print(f"pins passing `with:` inputs: {len(inputs_with)}")
+    print(f"undeclared inputs passed to an action: {len(bad_inputs)}")
+    for f in bad_inputs:
+        print(f"  UNDECLARED_INPUT  {f}")
+    for s in sorted(set(input_skipped)):
+        print(f"  INPUTS_UNCHECKED  {s}")
+
+    if transient or input_transient:
         # De-duplicate by (pin, class): one unreadable pin used 3 times is ONE
-        # fault, and printing it 3 times buries the diagnosis.
+        # fault, and printing it 3 times buries the diagnosis. Both sweeps'
+        # faults are merged rather than reported twice: an unreadable manifest is
+        # a single fact that invalidates BOTH checks, and a report that listed it
+        # once per check would read as two independent problems.
         seen_faults: dict[str, int] = {}
-        for t in transient:
+        for t in transient + input_transient:
             seen_faults[t] = seen_faults.get(t, 0) + 1
-        print(f"pins unreadable this run (NOT a verdict): {len(transient)} occurrence(s), "
+        print(f"pins unreadable this run (NOT a verdict): {len(transient) + len(input_transient)} occurrence(s), "
               f"{len(seen_faults)} distinct")
         for t, n in sorted(seen_faults.items()):
             suffix = f"  (x{n} uses)" if n > 1 else ""
@@ -546,10 +678,19 @@ def main() -> int:
         print("audit INCOMPLETE -- an unresolvable pin is not a pass")
         return 2
 
+    # The verdict. Both failing checks are real defects that would fail a job at
+    # run time, so both are exit 1 -- a bumped pin that passes an input the new
+    # version dropped is exactly as broken as a bumped pin that reintroduced a
+    # deprecated runtime, and reporting one without the other would understate
+    # the risk the gate exists to carry.
     if findings:
         print("RESULT: node20 runtimes present")
         return 0 if args.report else 1
-    print("RESULT: no node20-runtime action reachable from .github/workflows")
+    if bad_inputs:
+        print(f"RESULT: {len(bad_inputs)} undeclared input(s) passed to an action")
+        return 0 if args.report else 1
+    print("RESULT: no node20-runtime action reachable from .github/workflows; "
+          "no undeclared inputs passed")
     return 0
 
 

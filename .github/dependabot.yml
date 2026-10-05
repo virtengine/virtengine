@@ -15,6 +15,7 @@ updates:
   # Go modules (main codebase)
   - package-ecosystem: "gomod"
     directory: "/"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -55,6 +56,7 @@ updates:
   # Go modules (SDK subdirectory)
   - package-ecosystem: "gomod"
     directory: "/sdk"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "monday"
@@ -71,6 +73,7 @@ updates:
   # Python dependencies (ML pipelines)
   - package-ecosystem: "pip"
     directory: "/ml"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "tuesday"
@@ -100,6 +103,7 @@ updates:
   # Python test dependencies
   - package-ecosystem: "pip"
     directory: "/tests/python"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "tuesday"
@@ -116,6 +120,7 @@ updates:
   # npm dependencies (Bosun)
   - package-ecosystem: "npm"
     directory: "/scripts/bosun"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "wednesday"
@@ -140,6 +145,7 @@ updates:
   # npm dependencies (Portal library)
   - package-ecosystem: "npm"
     directory: "/lib/portal"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "wednesday"
@@ -170,6 +176,7 @@ updates:
   # Docker base images
   - package-ecosystem: "docker"
     directory: "/_build"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "thursday"
@@ -185,6 +192,7 @@ updates:
   # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
+    target-branch: "develop"
     schedule:
       interval: "weekly"
       day: "friday"

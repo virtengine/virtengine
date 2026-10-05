@@ -45,6 +45,31 @@ jobs:
   policy-validation:
     name: Policy Validation
     runs-on: ubuntu-latest
+    # This job reads the per-shard verdict ledgers uploaded by the go-vuln-scan
+    # shards (see "Verify every declared govulncheck shard reported a verdict"),
+    # so it must run AFTER that matrix finishes. Measured on run 37290409373
+    # (PR #1265): with no `needs`, policy-validation completed at 09:30:10 while
+    # the shards were still running and completed at 09:31:27 - the ledgers did
+    # not exist yet, so the check could only ever fail. A parallel job cannot
+    # consume a sibling's output; `needs` is what makes the input exist.
+    #
+    # `go-vuln-scan` already sets `fail-fast: false`, so one shard failing does
+    # not cancel the others: every shard that CAN reach a verdict still writes
+    # its ledger, and the gate below names exactly which shard produced none.
+    needs: go-vuln-scan
+    # `always()` so the ledger gate still runs when the matrix is red or was
+    # cancelled - which is precisely when it has something to report. Without
+    # it, a cancelled shard would skip this job entirely and the run would say
+    # only "Policy Validation: skipped", losing the name of the shard that
+    # produced no verdict. Mirrors security-summary, which is also `always()`.
+    if: always()
+    # `actions: read` is required for the run-artifact download and is scoped to
+    # THIS job only; every other job keeps the workflow-wide `contents: read`
+    # and gains nothing. Widening the workflow-wide block would hand all 16 jobs
+    # a broader token to fix one job's input.
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -92,6 +117,114 @@ jobs:
         # 0 - when the govulncheck report does not parse to the end, so a scan
         # killed mid-write can never be reported clean.
         run: python -m unittest discover -s .github/tests -p "test_filter_allowlist*.py"
+
+      - name: Run govulncheck verdict ledger tests
+        # A shard cancelled mid-scan produces NO verdict, and a matrix-level
+        # result cannot say WHICH shard lost it. These pin that a verdict-less
+        # shard is classified as neither clean nor a finding, and that the gate
+        # fails closed on an unreadable or empty ledger.
+        run: |
+          python -m unittest discover -s .github/tests \
+            -p "test_govulncheck_verdict_ledger*.py"
+
+      - name: Run shard verdict transport tests
+        run: |
+          python -m unittest discover -s .github/tests \
+            -p "test_shard_verdict_transport*.py"
+
+      - name: Falsify the shard verdict transport
+        # The transport tests above assert what the workflow DOES. This asserts
+        # those assertions can fail: it mutates security.yaml back to each of the
+        # two transports that failed in production (matrix job outputs, and
+        # `gh run download`), plus the two ways the new one could be silently
+        # broken (an empty collection that is only a warning, and one shared
+        # artifact name), and requires the suite to go RED for each.
+        #
+        # It is a MUTATION harness, so it edits the real workflow and restores
+        # it byte-for-byte; the run asserts that restoration at the end. It must
+        # never run on a tree with uncommitted workflow changes.
+        run: |
+          if ! git diff --quiet -- .github/workflows/security.yaml; then
+            echo "::error::workflow has uncommitted changes - refusing to mutate it"
+            exit 1
+          fi
+          python .github/tests/falsify_shard_verdict_transport.py
+
+      - name: Download shard verdict artifacts
+        # `pattern` + `merge-multiple` collects every `govulncheck-verdict-*`
+        # artifact from THIS run in one action call. It reads the current run's
+        # artifacts through the Actions runtime, so it needs no extra token scope
+        # and cannot be defeated by the API permissions that broke `gh run
+        # download` on run 37292268699.
+        #
+        # `if-no-files-found: error` is NOT available here - it is an
+        # upload-artifact input, and download-artifact does not define it (CI
+        # rejected exactly this on run 37303621734). An empty collection is
+        # rejected by the gate step below instead, which requires one verdict per
+        # DECLARED shard.
+        #
+        # Pinned to v7 (node24). v6 declared `using: node20`, which the Action
+        # Node Runtime Audit rejects, and node20 is end-of-life. v7 keeps the
+        # `pattern` + `merge-multiple` inputs this step relies on and is the pin
+        # the rest of the tree already uses.
+        if: always()
+        uses: actions/download-artifact@v7
+        with:
+          pattern: govulncheck-verdict-*
+          path: ${{ runner.temp }}/verdicts
+          merge-multiple: true
+
+      - name: Verify every declared govulncheck shard reported a verdict
+        # The summary job already fails on a non-success matrix result, so this
+        # is NOT a second copy of that check: the matrix aggregate is a single
+        # GitHub verdict for N shards and cannot distinguish "all shards clean"
+        # from "one shard died before it judged anything". Measured on run
+        # 37174317397 / job 111353646594: steps were success x5, cancelled,
+        # skipped x2, success - the shard emitted no govulncheck output at all.
+        #
+        # Each shard writes `<shard>.verdict` before it can exit and publishes it
+        # as its own artifact. A shard killed mid-scan runs no further step, so
+        # it publishes nothing - which is the signal this gate keys on. The gate
+        # fails closed: a missing verdict is an UNKNOWN shard and is never
+        # counted as clean.
+        #
+        # Two earlier transports were measured and abandoned rather than retried:
+        #   * `gh run download` here - all four downloads timed out at ~60s each
+        #     while every shard had SUCCEEDED (run 37292268699), and the step
+        #     discarded gh's stderr so a cancelled shard and a download failure
+        #     produced the SAME log line.
+        #   * matrix job outputs - ONE WRITER WINS and the rest vanish: the
+        #     consumer saw `{tests-and-sim:clean}` on 37295691699 and
+        #     `{"tooling":"clean"}` on 37298338441, the latter with all four
+        #     shards green at every step. No expression-level fix exists for
+        #     overwrite.
+        #
+        # `actions/download-artifact` has NO `if-no-files-found` input (that
+        # belongs to upload-artifact), so an empty collection cannot be rejected
+        # by the action itself. It is rejected here instead: the ledger requires
+        # one verdict per DECLARED shard, so zero collected artifacts means every
+        # shard is UNKNOWN and the step fails - the same fail-closed outcome, via
+        # a mechanism the action actually supports.
+        run: |
+          set -uo pipefail
+          # The DECLARED shard list comes from the workflow matrix itself (the
+          # same reader the partition guard uses), so a shard added there is
+          # required to report here without editing this step.
+          python .github/scripts/govulncheck_shards.py --list > /tmp/govulncheck-shards.txt
+          shard_count="$(wc -l < /tmp/govulncheck-shards.txt | tr -d ' ')"
+          echo "declared shards: $shard_count"
+          merged="$RUNNER_TEMP/merged-ledger"
+          mkdir -p "$merged"
+          awk '{print $1}' /tmp/govulncheck-shards.txt > "$merged/shards.manifest"
+          echo "== declared shards =="
+          cat "$merged/shards.manifest"
+          echo "== downloaded verdict artifacts =="
+          ls -1 "$RUNNER_TEMP/verdicts"
+          # Copy only the verdict files; anything else in the directory is
+          # ignored so the gate reads exactly the shards it asked for.
+          find "$RUNNER_TEMP/verdicts" -name '*.verdict' -exec cp {} "$merged/" \;
+          python .github/scripts/govulncheck_verdict_ledger.py "$merged" \
+            --expect "$shard_count"
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -262,6 +395,18 @@ jobs:
             patterns: "./cmd/... ./scripts/... ./tools/... ./docgen/..."
           - shard: tests-and-sim
             patterns: "./tests/... ./testutil/... ./sim/... ./upgrades/... ./sdk/... ./util/..."
+    # NO job-level `outputs:` for verdicts, and deliberately so.
+    #
+    # Matrix job outputs were measured and do not work. One object arrives
+    # intact while the others vanish, with no error and no warning:
+    #   37295691699 - the consumer received `{tests-and-sim:clean}`
+    #   37298338441 - the consumer received `{"tooling":"clean"}`, with all four
+    #                 shards SUCCEEDED and every step green
+    # That is OVERWRITE (one writer wins), not concatenation, so no
+    # expression-level fix exists: the losing shards' values are already gone by
+    # the time any consumer reads them. Each shard therefore publishes its
+    # verdict as its OWN artifact, and the collector reads them one by one so a
+    # missing shard is individually attributable.
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -292,6 +437,14 @@ jobs:
           # reports as verdict=error rather than as a clean scan). Progress
           # reporting is therefore unavailable on the JSON pass; the per-shard
           # job name and the step's own echo lines are the progress signal.
+          #
+          # The verdict ledger below records this shard's verdict as a FILE that
+          # survives cancellation. A shard killed mid-scan cannot run any later
+          # step, so the only evidence it produced a verdict is something written
+          # before the kill; the policy-validation job then requires one verdict
+          # per declared shard and fails closed on a missing one.
+          mkdir -p "$RUNNER_TEMP/govulncheck-ledger"
+          printf '%s\n' "${{ matrix.shard }}" > "$RUNNER_TEMP/govulncheck-ledger/shards.manifest"
           set +e
           govulncheck -format json ${{ matrix.patterns }} \
             > govulncheck-report.json
@@ -308,6 +461,7 @@ jobs:
           echo "verdict=$verdict" >> "$GITHUB_OUTPUT"
           if [ "$verdict" = "error" ]; then
             echo "::error::govulncheck could not complete on shard ${{ matrix.shard }} - this is a scanner error, not a vulnerability finding"
+            echo "verdict=error" > "$RUNNER_TEMP/govulncheck-ledger/${{ matrix.shard }}.verdict"
             exit 1
           fi
           # Filter findings against the vulnerability allowlist. Only advisories
@@ -324,25 +478,65 @@ jobs:
           if [ "$filter_status" -eq 3 ]; then
             echo "verdict_after_allowlist=vulns" >> "$GITHUB_OUTPUT"
             echo "::error::govulncheck reported reachable vulnerabilities not covered by allowlist on shard ${{ matrix.shard }}"
+            echo "verdict=vulns" > "$RUNNER_TEMP/govulncheck-ledger/${{ matrix.shard }}.verdict"
             exit 1
           elif [ "$filter_status" -eq 4 ]; then
             echo "verdict_after_allowlist=incomplete" >> "$GITHUB_OUTPUT"
             echo "::error::govulncheck report on shard ${{ matrix.shard }} is incomplete - the scan did not finish, so this shard has NO verdict. Treating it as clean would be a false negative."
+            echo "verdict=incomplete" > "$RUNNER_TEMP/govulncheck-ledger/${{ matrix.shard }}.verdict"
             exit 1
           elif [ "$filter_status" -eq 0 ]; then
             echo "verdict_after_allowlist=clean" >> "$GITHUB_OUTPUT"
+            echo "verdict=clean" > "$RUNNER_TEMP/govulncheck-ledger/${{ matrix.shard }}.verdict"
           else
             echo "::error::allowlist filter failed with exit code $filter_status"
+            echo "verdict=error" > "$RUNNER_TEMP/govulncheck-ledger/${{ matrix.shard }}.verdict"
             exit 1
           fi
 
       - name: Upload govulncheck report (${{ matrix.shard }})
         uses: actions/upload-artifact@v6
+        # `always()` so the report is uploaded even when the scan step failed:
+        # a shard that failed AFTER reaching a verdict still has a verdict, and
+        # the policy-validation gate must see the difference between that and a
+        # shard that never got far enough to reach one.
         if: always()
         with:
           name: govulncheck-report-${{ matrix.shard }}
           path: govulncheck-report.json
           retention-days: 30
+
+      - name: Publish this shard's verdict
+        # The verdict travels as THIS SHARD'S OWN ARTIFACT.
+        #
+        # Two transports were measured and both failed silently:
+        #   * `gh run download` in the consumer - all four downloads timed out at
+        #     ~60s each while every shard had SUCCEEDED (run 37292268699), and the
+        #     step discarded gh's stderr so a cancelled shard and a download
+        #     failure produced the SAME log line.
+        #   * matrix job outputs - ONE WRITER WINS and the rest vanish, on both
+        #     37295691699 and 37298338441 (the latter with all four shards green
+        #     at every step). No expression-level fix exists for overwrite.
+        #
+        # A separate artifact per shard has neither problem: each is
+        # independently addressable by name, so a shard with no artifact is
+        # attributable to that shard rather than to an aggregate.
+        #
+        # `if: always()` is NOT a weakening: a shard that reached a verdict
+        # publishes it (the matrix result stays red on its own), while a shard
+        # killed mid-scan never reaches this step and therefore publishes
+        # nothing - which is precisely the no-verdict signal the gate keys on.
+        #
+        # `if-no-files-found: error` makes a shard that reached this step without
+        # a verdict file fail loudly here, rather than publishing an empty
+        # artifact that would read as a present-but-empty verdict.
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: govulncheck-verdict-${{ matrix.shard }}
+          path: ${{ runner.temp }}/govulncheck-ledger/${{ matrix.shard }}.verdict
+          retention-days: 30
+          if-no-files-found: error
 
   python-vuln-scan:
     name: Python Vulnerability Scan
