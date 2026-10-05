@@ -124,6 +124,20 @@ ANNOTATION_ERROR = "::error::"
 # so that run does not spawn another. See that test for why it is needed.
 SUITE_CHILD_ENV = "VE_COVERAGE_GATE_SUITE_CHILD"
 
+# The first line of `test_sentinel_echoed_only_by_a_verbose_child`'s docstring.
+#
+# It exists to be READ BACK OUT of the guard's own child output. `unittest -v`
+# echoes each test method's docstring first line, line-initial; a non-verbose
+# child prints nothing for the test at all. So this string is a direct
+# observation of whether the guard is inspecting the kind of run `ci.yaml`
+# performs -- the alternative, restating the argv, is what drifted in round 8.
+#
+# It must be a METHOD docstring: unittest's `shortDescription()` reads
+# `_testMethodDoc`, so a class docstring is never echoed and a sentinel placed
+# there would make the guard's pin pass on a non-verbose child -- vacuous in
+# exactly the direction it exists to cover.
+VERBOSITY_SENTINEL = "VE_GUARD_CHILD_ECHOED_THIS_METHOD_DOCSTRING"
+
 
 @contextlib.contextmanager
 def no_gate_annotations():
@@ -131,7 +145,21 @@ def no_gate_annotations():
 
     Both streams: GitHub renders workflow commands emitted on either, and the
     fail-closed paths in `main()` report to stderr. Capturing stdout alone
-    would leave `test_missing_coverage_file_fails_closed` still annotating.
+    would leave `test_missing_coverage_file_fails_closed` annotating.
+
+    Measured, round 9, so this is defence-in-depth and not decoration:
+    dropping `redirect_stderr` (mutation M23) leaves the suite GREEN, because
+    unittest's verbose writer appends whatever the test wrote to stderr onto
+    the END of the current `... ok` echo line rather than at the start of a
+    line, so the annotation is not line-initial and GitHub renders nothing:
+
+        'An absent gate input must fail ... ::error::Coverage file not found: nope.out'
+        ^ this file's own docstring, then the leaked text, all on ONE line
+
+    So M23 is a no-op in a *verbose* run. The stderr capture is kept anyway,
+    because it is what makes the suite independent of how the runner happens to
+    interleave the two streams, and because the leak-scan defect M23 exposed
+    (concatenating the streams rather than scanning each) was real regardless.
     """
     buf = io.StringIO()
     with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
@@ -181,8 +209,26 @@ def workflow_suite_argv(workflow_step_run: str) -> list[str]:
     return [sys.executable, *argv[1:]]
 
 
-def leaked_annotations(output: str) -> list[str]:
+def leaked_annotations(*outputs: str) -> list[str]:
     """Lines GitHub would render as failure annotations.
+
+    One argument PER STREAM, never `stdout + stderr`. GitHub reads the two
+    streams independently, so a command line-initial on stderr is rendered
+    whether or not anything preceded it on stdout -- but a plain concatenation
+    is not that rule. It is `stdout` followed by `stderr`, so when stdout does
+    not end in a newline, stderr's first line is glued onto stdout's last and
+    the annotation stops being line-initial:
+
+        stdout: 'last line, no trailing newline ... '
+        stderr: '::error::on stderr'
+        joined:  'last line, no trailing newline ... ::error::on stderr'
+                 -> 0 line-initial hits, the annotation silently survives
+
+    Measured while falsifying round 9's own mutation sweep (M23: dropping the
+    stderr capture from `no_gate_annotations()` left the suite green for
+    exactly this reason -- the annotation was still emitted, the scan just
+    could not see it). Passing each stream separately is what makes the guard
+    inspect the thing CI renders.
 
     Line-initial only, and only the `::error::` command: that is the exact set
     of lines this suite is forbidden to emit. Substring matching would also
@@ -191,7 +237,8 @@ def leaked_annotations(output: str) -> list[str]:
     does not render and which the suite must be able to discuss.
     """
     return [
-        line for line in output.splitlines()
+        line for output in outputs
+        for line in output.splitlines()
         if line.lstrip().startswith(ANNOTATION_ERROR)
     ]
 
@@ -783,7 +830,7 @@ class CoverageGateRoutingTest(unittest.TestCase):
                 proc.returncode, 1,
                 f"a profile below the floor must fail, not pass:\n{combined}",
             )
-            announced = leaked_annotations(combined)
+            announced = leaked_annotations(proc.stdout, proc.stderr)
             self.assertTrue(
                 announced,
                 "the gate failed but ANNOUNCED nothing. A red job that does "
@@ -812,32 +859,128 @@ class CoverageGateRoutingTest(unittest.TestCase):
         pass; this is the assertion that makes that claim enforceable rather
         than a promise.
 
-        Note the env var is only an *override for a ratchet bump* -- it may
-        raise the floor, never remove it, which is why both directions are
-        pinned: an unset, empty, malformed, negative or zero value all resolve
-        to the recorded default rather than to "no floor".
+        The env var is only an *override for a ratchet bump* -- it may raise
+        the floor, never remove or weaken it -- so every value that does not
+        RAISE the recorded default is pinned to that default, and the previous
+        round's `assertGreater(resolved, 0.0)` is deliberately NOT the bar:
+        a resolved value can be positive and still be a dead ratchet. See
+        `test_a_resolved_floor_that_is_positive_can_still_be_a_dead_ratchet`.
         """
         self.assertEqual(self.gate.resolve_baseline(), 46.0)
-        for hostile in ("", "   ", "not-a-number", "0", "0.0", "-1", "-99.5"):
-            with self.subTest(baseline=hostile):
+        # Every way of spelling "no floor" or "a floor below the default",
+        # including the three that the round-8 `value <= 0.0` rule let through.
+        hostile = (
+            "", "   ", "not-a-number", "0", "0.0", "-0.0", "-1", "-99.5",
+            # Positive but below the default: a ratchet that never fires.
+            "0.0001", "1e-300", "1e-12", "45.9", "45.999",
+            # Non-finite. Every comparison against NaN is false, so `nan` made
+            # the gate unable to fail at all; `inf` saturated it to permanently
+            # red. Neither is catchable by a comparison, hence isfinite().
+            "nan", "NaN", "-nan", "inf", "Inf", "-inf", "+inf", "1e400", "-1e400",
+        )
+        for raw in hostile:
+            with self.subTest(baseline=raw):
                 with mock.patch.dict(
-                    os.environ, {"COVERAGE_BASELINE": hostile}, clear=False
+                    os.environ, {"COVERAGE_BASELINE": raw}, clear=False
                 ):
                     resolved = self.gate.resolve_baseline()
-                self.assertGreater(
-                    resolved, 0.0,
-                    f"COVERAGE_BASELINE={hostile!r} resolved to {resolved}: "
-                    "a zero or negative floor is not a ratchet",
-                )
                 self.assertEqual(
                     resolved, self.gate.DEFAULT_BASELINE_COVERAGE,
-                    f"COVERAGE_BASELINE={hostile!r} must fall back to the "
-                    f"recorded default {self.gate.DEFAULT_BASELINE_COVERAGE}, "
-                    f"not to {resolved}",
+                    f"COVERAGE_BASELINE={raw!r} resolved to {resolved!r}: only a "
+                    f"floor that RAISES the recorded default "
+                    f"{self.gate.DEFAULT_BASELINE_COVERAGE} is honoured, because "
+                    "anything weaker or degenerate removes the ratchet this gate "
+                    "exists to enforce",
                 )
         # And the override may still RAISE the floor, which is its purpose.
         with mock.patch.dict(os.environ, {"COVERAGE_BASELINE": "52.5"}, clear=False):
             self.assertEqual(self.gate.resolve_baseline(), 52.5)
+        with mock.patch.dict(os.environ, {"COVERAGE_BASELINE": "80"}, clear=False):
+            self.assertEqual(self.gate.resolve_baseline(), 80.0)
+        # Exactly the default is not a raise, so it is honoured as the default --
+        # same number either way, which is why this is not a behaviour change.
+        with mock.patch.dict(
+            os.environ, {"COVERAGE_BASELINE": "46.0"}, clear=False
+        ):
+            self.assertEqual(
+                self.gate.resolve_baseline(), self.gate.DEFAULT_BASELINE_COVERAGE
+            )
+
+    def test_a_resolved_floor_that_is_positive_can_still_be_a_dead_ratchet(self):
+        """Round-2 review defect: assert the DECISION, not just the float.
+
+        The previous version of this test asserted `resolved > 0.0`, and every
+        hostile value it listed (`0`, `-1`, `-99.5`) is caught by a bare
+        positivity check. Two values that were NOT on the list sail straight
+        through a positivity check and switch the ratchet off anyway:
+
+          * `nan`  -- every comparison against it is false, so
+            `coverage < nan` is false for every coverage value including 0.0.
+            The gate cannot fire at all. `nan > 0.0` is ALSO false, which is
+            why the old assertion form could not have caught it.
+          * `0.0001` / `1e-300` -- positive, so `resolved > 0.0` passes, and
+            then no real measurement is below the floor.
+
+        So this drives the real gate AS A PROCESS against a profile that
+        measures 45.0% -- below the 46.0% floor, so every hostile override must
+        still fail -- and asserts the return code. A resolved float that is
+        positive, finite and well-formed can therefore never be mistaken for a
+        working ratchet here, which is the property the previous form lacked.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            profile = Path(tmp) / "coverage.out"
+            profile.write_text(
+                "mode: atomic\n"
+                "example.com/m/covered.go:1.1,1.10 450 1\n"
+                "example.com/m/uncovered.go:1.1,1.10 550 0\n",
+                encoding="utf-8",
+            )
+            # The values that a positivity check alone would admit.
+            sneaky = ("nan", "NaN", "-nan", "inf", "-inf", "0.0001", "1e-300", "1e-12")
+            for raw in sneaky:
+                with self.subTest(baseline=raw):
+                    proc = subprocess.run(
+                        [sys.executable, str(SCRIPT_PATH), str(profile)],
+                        cwd=REPO_ROOT,
+                        capture_output=True,
+                        text=True,
+                        env={
+                            **os.environ,
+                            "GITHUB_EVENT_NAME": "push",
+                            "COVERAGE_BASELINE": raw,
+                        },
+                    )
+                    combined = proc.stdout + proc.stderr
+                    self.assertEqual(
+                        proc.returncode, 1,
+                        f"COVERAGE_BASELINE={raw!r} turned the ratchet OFF: a "
+                        "profile measuring 45.0%, below the 46.0% floor, "
+                        "PASSED. A resolved floor being positive, finite or "
+                        "well-formed is not evidence that it can fire -- the "
+                        "gate's decision is the only evidence of that.\n"
+                        f"Got:\n{combined}",
+                    )
+                    self.assertTrue(
+                        leaked_annotations(proc.stdout, proc.stderr),
+                        "the refusal must still ANNOUNCE the breach: refusing "
+                        "the override is only correct if the floor still bites, "
+                        f"and a silent pass is worse than no gate.\nGot:\n{combined}",
+                    )
+            # Control: the same profile with no override at all, so this test
+            # cannot pass because the profile fails to measure 45.0%.
+            proc = subprocess.run(
+                [sys.executable, str(SCRIPT_PATH), str(profile)],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                env={**os.environ, "GITHUB_EVENT_NAME": "push"},
+            )
+            self.assertEqual(
+                proc.returncode, 1,
+                "this fixture must fail the recorded floor; if it does not, the "
+                "subtests above prove nothing:\n"
+                f"{proc.stdout}\n{proc.stderr}",
+            )
 
     def test_baseline_is_overridable_and_rejects_junk(self):
         with mock.patch.dict(os.environ, {"COVERAGE_BASELINE": "52.5"}, clear=False):
@@ -1517,6 +1660,67 @@ class GateAnnotationHygieneTest(unittest.TestCase):
                     "return code instead -- see the round-7 note above."
                 )
 
+    def test_sentinel_echoed_only_by_a_verbose_child(self):
+        """VE_GUARD_CHILD_ECHOED_THIS_METHOD_DOCSTRING
+
+        A test whose docstring's first line is a known sentinel, and which
+        asserts nothing.
+
+        It exists to be OBSERVED. `unittest -v` echoes each test method's
+        docstring first line; a non-verbose child prints nothing for the test
+        at all. `test_the_suite_itself_emits_no_error_annotations` reads this
+        line out of its own child's output and compares that observation with
+        the verbosity `ci.yaml` asks for, so the guard proves its child is the
+        kind of run CI performs -- by behaviour, not by restating an argv.
+        """
+        self.assertTrue(True)
+
+    def test_the_leak_scan_reads_each_stream_as_ci_does(self):
+        """Round-9: `stdout + stderr` is NOT how GitHub reads a step's output.
+
+        Found by falsifying round 9's own fix. M23 -- dropping
+        `redirect_stderr` from `no_gate_annotations()` -- left this suite green
+        even though `main()`'s fail-closed paths really do emit line-initial
+        `::error::` on stderr, which is the entire reason the wrapper captures
+        stderr at all.
+
+        The cause is the scan, not the wrapper. `proc.stdout + proc.stderr` is a
+        CONCATENATION, so when stdout does not end in a newline, stderr's first
+        line is glued onto stdout's last:
+
+            stdout: '... last line, no trailing newline '
+            stderr: '::error::Could not measure total coverage from ...'
+            joined:  '... last line, no trailing newline ::error::Could not ...'
+                     -> not line-initial -> the annotation is invisible
+
+        GitHub processes each stream separately, so it renders the stderr
+        annotation anyway. The guard was therefore reading output that differs
+        from the surface it exists to protect -- the same class as running a
+        non-verbose child.
+
+        So `leaked_annotations` takes one argument per stream and this pins the
+        property that made the difference measurable: an annotation at the very
+        start of stderr is found even when the preceding stdout line is
+        unterminated.
+        """
+        # Unterminated stdout, exactly the shape that hid M23.
+        glued_stdout = "Ran 3 tests in 0.001s\n"
+        unterminated = "Ran 3 tests in 0.001s\nlast line, no trailing newline "
+        self.assertTrue(leaked_annotations(unterminated, f"{ANNOTATION_ERROR}on stderr"))
+        self.assertFalse(
+            leaked_annotations(unterminated + f"{ANNOTATION_ERROR}on stderr"),
+            "if the concatenated form ever stopped hiding it, this test is no "
+            "longer measuring anything and must be revisited",
+        )
+        self.assertEqual(leaked_annotations(glued_stdout, f"{ANNOTATION_ERROR}x"), [f"{ANNOTATION_ERROR}x"])
+        # Mid-sentence is still not a leak: GitHub does not render it.
+        self.assertEqual(leaked_annotations(f"prose quoting {ANNOTATION_ERROR} here", ""), [])
+        # And both streams are scanned, each on its own terms.
+        self.assertEqual(
+            leaked_annotations(f"{ANNOTATION_ERROR}from stdout", f"{ANNOTATION_ERROR}from stderr"),
+            [f"{ANNOTATION_ERROR}from stdout", f"{ANNOTATION_ERROR}from stderr"],
+        )
+
     def test_the_suite_itself_emits_no_error_annotations(self):
         """THE LOAD-BEARING ONE: run this suite and read its stdout.
 
@@ -1527,13 +1731,30 @@ class GateAnnotationHygieneTest(unittest.TestCase):
         via a new call site, a renamed helper, or a future edit that makes the
         scorer annotate somewhere else.
 
-        Two round-8 corrections, both from trying to break this:
+        Three corrections across rounds 7-9, all from trying to break this:
           * the argv is PARSED FROM `ci.yaml`, not restated here. Restating it
             is how this guard came to run a non-verbose child while CI ran a
             verbose one, and a docstring leak sailed straight through.
           * the assertion is LINE-INITIAL, not substring. Under `-v` this file's
             own prose quotes `::error::` mid-sentence, which GitHub never
             renders; matching substrings turned CI red on a correct tree.
+          * the argv is PINNED BEHAVIOURALLY, not just sourced correctly.
+            Sourcing it correctly was round 8's fix and it was still one edit
+            from gone: replacing the parsed argv with a hand-written
+            non-verbose one left all 34 tests green (mutation M10), and a
+            method-docstring leak then passed through uncaught. So the child's
+            own output must contain `VERBOSITY_SENTINEL` -- a string `-v`
+            echoes and a non-verbose child does not -- and that observation is
+            compared against the verbosity the workflow asks for.
+
+        Why the sentinel comparison is an equality and not
+        `assertTrue(sentinel_echoed)`: the risk being guarded here is that a
+        docstring line-initial `::error::` reaches CI's log, and that surface
+        only exists while the run is verbose. If `-v` is ever dropped from
+        `ci.yaml` the leak surface closes and the suite should stay green --
+        requiring verbosity unconditionally would be over-pinning, and an
+        over-pinned guard is one somebody deletes. What must never hold is the
+        guard inspecting a *different kind of run* than CI performs.
 
         Recursion, and how it is stopped: this test runs the suite, and the suite
         contains this test, so an unguarded version spawns itself until the
@@ -1552,15 +1773,32 @@ class GateAnnotationHygieneTest(unittest.TestCase):
                 "the parent inspects; spawning another would recurse forever"
             )
 
+        # Two INDEPENDENT readings of verbosity, and that independence is the
+        # whole point:
+        #   * what `ci.yaml` ASKS for -- parsed from the workflow text, and
+        #   * what the child ACTUALLY did -- observed in its own output.
+        # Reading both sides off `argv` would be self-defeating: an argv that
+        # has drifted from the workflow changes both readings together, the
+        # equality below still holds, and the guard inspects a run CI never
+        # performs while reporting itself satisfied. That was mutation M10,
+        # measured green before this split existed.
+        workflow_run = routing_step_run()
+        workflow_is_verbose = any(
+            token in ("-v", "--verbose")
+            for token in shlex.split(workflow_run, posix=True)
+        )
+        argv = workflow_suite_argv(workflow_run)
+
         env = {**os.environ, SUITE_CHILD_ENV: "1"}
         proc = subprocess.run(
-            workflow_suite_argv(routing_step_run()),
+            argv,
             cwd=REPO_ROOT,
             env=env,
             capture_output=True,
             text=True,
         )
-        leaked = leaked_annotations(proc.stdout + proc.stderr)
+        combined = proc.stdout + proc.stderr
+        leaked = leaked_annotations(proc.stdout, proc.stderr)
         self.assertEqual(
             leaked, [],
             "this suite leaked a GitHub error annotation into the CI log:\n  "
@@ -1570,7 +1808,24 @@ class GateAnnotationHygieneTest(unittest.TestCase):
             "that `-v` echoes each test method's docstring, so a docstring "
             "beginning with a workflow command leaks exactly this way.",
         )
-        # The control: a green suite. Without this the assertion above could
+        # The behavioural pin on this child's verbosity (mutation M10). The
+        # sentinel is a METHOD docstring: unittest's `shortDescription()` reads
+        # `_testMethodDoc`, so a CLASS docstring is never echoed and would make
+        # this assertion pass vacuously on a non-verbose child.
+        sentinel_echoed = VERBOSITY_SENTINEL in combined
+        self.assertEqual(
+            sentinel_echoed, workflow_is_verbose,
+            "the guard's child is not the kind of run CI performs.\n"
+            f"  ci.yaml argv                        : {argv}\n"
+            f"  ci.yaml asks for verbosity           : {workflow_is_verbose}\n"
+            f"  child output echoed {VERBOSITY_SENTINEL!r}: {sentinel_echoed}\n"
+            "Under `-v`, unittest echoes each test method's docstring first "
+            "line; a non-verbose child prints nothing for it. So a mismatch "
+            "means this guard is inspecting a different run than CI does, and "
+            "the line-initial assertion above is reading output CI will never "
+            "produce. Fix the argv source, not this assertion.",
+        )
+        # The control: a green suite. Without this the assertions above could
         # pass because the suite failed to run at all, which would make the
         # guard vacuous on the exact tree it exists to protect.
         self.assertEqual(
