@@ -6,13 +6,21 @@ guards is broken. This mutates a COPY of `audit_node_runtime.py` once per
 mutation class and requires `test_audit_node_runtime.py` to FAIL on the mutant.
 The live file is never written.
 
-The mutations target the three ways this audit could go blind, each of which is
-a real defect class in this repo's history:
+The mutations target every way this audit could go blind, each of which is a
+real defect class in this repo's history:
 
   M1  transitive composite resolution gutted  -> the exact miss that let
       `upload-pages-artifact@v4` (composite wrapping node20) sit in the tree.
   M2  "no manifest" demoted to a clean pass    -> a blind run reads as green.
   M3  `using: composite` no longer followed   -> composite wrapping is missed.
+  M4  auth preflight removed                  -> 43 identical errors, no cause.
+  M5  anonymous fallback removed              -> a 403 believed outright.
+  M6  input check unwired again               -> the state this audit SHIPPED
+      in: `consumed_inputs()` defined, never called, docstring promising it.
+  M7  input finding kept out of the verdict   -> printed, logged, never gated on.
+  M8  composite inputs made enforceable       -> 10 false positives on a clean
+      tree, i.e. a gate that gets switched off rather than fixed.
+  M9  `with:` block swallowing the next step  -> an action audited by nothing.
 
 Run:  python .github/scripts/falsify_audit_node_runtime.py
 """
@@ -72,6 +80,49 @@ MUTATIONS = [
         "repository is believed outright, so the audit calls itself INCOMPLETE "
         "and reds the build on pins that are plainly public and readable -- the "
         "exact failure that shipped this job red on a clean tree",
+    ),
+    (
+        # M6 is the mutation that reopens THIS card. `consumed_inputs()` shipped
+        # as dead code for four months while the docstring promised this check,
+        # and it took a reviewer reading the source to notice -- no test, no
+        # mutation, nothing failed. Without a mutation class for it, the same
+        # silence is available to the next person who touches main().
+        "M6-input-check-unwired-again",
+        r"    bad_inputs, input_skipped, input_transient = undeclared_input_findings\(refs\)",
+        "    bad_inputs, input_skipped, input_transient = [], [], []",
+        "with the input sweep stubbed out, an undeclared input is neither reported "
+        "nor able to fail the gate -- exactly the state the audit shipped in, and "
+        "the state its docstring promised did not exist",
+    ),
+    (
+        "M7-input-finding-not-in-the-verdict",
+        r"    if bad_inputs:\n        print\(f\"RESULT: \{len\(bad_inputs\)\} undeclared input",
+        "    if False:\n        print(f\"RESULT: {len(bad_inputs)} undeclared input",
+        "the finding is computed and printed but never reaches the exit code, so a "
+        "bump that passes a dropped input is reported in the log and still grades "
+        "the job green -- printing a finding is not gating on it",
+    ),
+    (
+        "M8-composite-inputs-treated-as-enforceable",
+        r"        using, declared = parse_action_yml\(text\)",
+        '        using, declared = parse_action_yml(text)\n'
+        '        if not using.startswith("node"):\n'
+        '            using = "node24"',
+        "without the composite guard, runs.steps keys are read against the action's "
+        "declared inputs and every composite action in the tree is reported as "
+        "passing undeclared inputs -- false positives on a clean tree, i.e. a gate "
+        "nobody can keep on, which is how the real one was switched off in the first "
+        "place. Mutation note: neutering the `if` itself does NOT work here, it just "
+        "falls through to the ENFORCEABLE_USINGS guard below, which also rejects "
+        "composite. The mutant has to defeat BOTH guards.",
+    ),
+    (
+        "M9-with-block-swallows-the-next-step",
+        r"        if in_with and \(indent <= with_indent or stripped\.startswith\(\"-\"\)\):",
+        "        if in_with and indent <= with_indent and not stripped.startswith(\"-\"):",
+        "the `- uses:` one-line step form after a `with:` block is swallowed, so a "
+        "whole action pin is never recorded and is audited by nothing at all -- not "
+        "its runtime, not its inputs",
     ),
 ]
 

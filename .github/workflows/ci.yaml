@@ -356,8 +356,10 @@ jobs:
       - name: Audit action runtimes for deprecated Node
         # Fails when any action reachable from .github/workflows -- including
         # one embedded inside a COMPOSITE action -- still declares `using:
-        # node20`. Exits 2, not 0, if a pin cannot be read: a blind run must
-        # never read as a pass.
+        # node20`, and when a JS action is passed a `with:` input its manifest
+        # does not declare (that step would die at run time with `input "x" is
+        # not defined in action owner/repo@ref`). Exits 2, not 0, if a pin
+        # cannot be read: a blind run must never read as a pass.
         #
         # GH_TOKEN is REQUIRED, not optional. Without it `gh` refuses every
         # call ("please run: gh auth login"), the audit sees API errors rather
