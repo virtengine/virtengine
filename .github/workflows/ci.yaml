@@ -234,6 +234,41 @@ jobs:
         if: always()
         run: python -m unittest discover -s .github/tests -p "test_ci_concurrency_verdict.py" -v
 
+      # Publish the machine-readable lint report BEFORE anything can skip it.
+      #
+      # Why this step exists at all: `--output.json.path=lint-report.json`
+      # redirects every finding off stdout into a file. That makes the linter
+      # step's log EMPTY on failure -- a red with no message, no `##[error]`,
+      # and no annotation naming a single file. Observed in run 37374589055
+      # (PR, develop @ 75105569b), Lint job 111981527543: the log ends at the
+      # `Running [... golangci-lint run ...]` line and the next line is
+      # "Cleaning up orphan processes". The three `if: always()` steps below --
+      # both gate self-tests, the budget ratchet and `Check formatting` -- were
+      # all `skipped`, so the job's own evidence about what failed never ran
+      # either. The red was real and its cause was unreadable: `gh run view
+      # --log-failed` returned nothing to read and the annotations API returned
+      # only an unrelated runner-image notice.
+      #
+      # So this is not a diagnostic nicety, it is the difference between a red
+      # that can be triaged and one that has to be guessed at or re-run blind.
+      # It is ordered immediately after the linter for two reasons:
+      # `if: always()` is required (the linter step is exactly what fails), and
+      # `if-no-files-found: warn` because golangci-lint writes NO report file at
+      # all when it exits 3/4/5 (config error, timeout, no Go files) -- which
+      # upload-artifact treats as an error by default, turning the missing-file
+      # case into a *second* misleading red that hides the first one.
+      #
+      # This publishes evidence. It changes no verdict: the Lint job still fails
+      # on exactly the same conditions as before, and no threshold is lowered.
+      - name: Publish lint report
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: lint-report
+          path: lint-report.json
+          if-no-files-found: warn
+          retention-days: 7
+
       # Per-linter non-regression ratchet over the whole-tree lint report.
       # This is now ENFORCED (no `continue-on-error`): since the push path no
       # longer hard-fails on recorded debt above, this gate is the signal that

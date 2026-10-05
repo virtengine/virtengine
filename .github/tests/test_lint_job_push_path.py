@@ -48,6 +48,7 @@ reformat. The push path would stay red forever for a reason no one can fix.
 
 from __future__ import annotations
 
+import copy
 import re
 import unittest
 from pathlib import Path
@@ -269,6 +270,234 @@ class CheckFormattingPushPathTest(PushPathLintJobTest):
             r"\^vendor\[\\\\/\]",
             "the vendor filter must match both `/` and `\\` path separators",
         )
+
+
+UPLOAD_STEP = "Publish lint report"
+
+
+class LintReportIsPublishedTest(PushPathLintJobTest):
+    """A red with an empty log cannot be triaged, so the report must ship.
+
+    `--output.json.path=lint-report.json` moves every finding off stdout and
+    into a file. That file is the only place the findings exist, and until the
+    `Publish lint report` step existed nothing copied it out of the runner.
+
+    The failure this pins, observed rather than hypothesised: run 37374589055
+    (pull_request, develop @ 75105569b), Lint job 111981527543. The step
+    `Run golangci-lint` concluded `failure` and the log's last line before
+    "Cleaning up orphan processes" was the `Running [... golangci-lint run ...]`
+    banner. No `##[error]`, no annotation, no finding text, and
+    `gh run view --log-failed` printed nothing at all. The three `if: always()`
+    steps that follow -- both gate self-tests, the budget ratchet and
+    `Check formatting` -- were all `skipped`, so the job's own evidence about
+    its failure never ran either.
+
+    These assertions are positive on purpose. "Some upload step exists" is
+    satisfied by one that uploads the wrong path, or one placed before the
+    linter, and either of those leaves the failure exactly as undiagnosable as
+    before -- which is the defect being fixed.
+    """
+
+    def _index(self, name: str) -> int:
+        steps = yaml.safe_load(CI_YAML.read_text(encoding="utf-8"))["jobs"]["lint"][
+            "steps"
+        ]
+        names = [s.get("name") for s in steps]
+        self.assertIn(
+            name,
+            names,
+            f"the lint job has no step named {name!r}: --output.json.path sends "
+            f"every finding to lint-report.json and nothing publishes it, so a "
+            f"lint failure is reported with an empty log",
+        )
+        return names.index(name)
+
+    def test_report_is_published(self) -> None:
+        with_ = self._step(UPLOAD_STEP)["with"]
+        self.assertIn(
+            "lint-report.json",
+            with_["path"],
+            "the published artifact must be the report golangci-lint actually "
+            "writes; any other path publishes nothing useful",
+        )
+
+    def test_publishes_after_the_linter_runs(self) -> None:
+        """An upload placed before the linter publishes an empty file.
+
+        Ordering is the part a "does an upload step exist" check cannot see:
+        upload-artifact succeeds against a missing file, so an early-placed
+        step looks green while the report is never written at all.
+        """
+        self.assertLess(
+            self._index("Run golangci-lint"),
+            self._index(UPLOAD_STEP),
+            "the lint report must be published AFTER the linter step that "
+            "writes it, or it publishes nothing",
+        )
+
+    def test_runs_even_when_the_linter_fails(self) -> None:
+        """`if: always()` is the whole point.
+
+        The linter step is exactly what fails, so without `always()` GitHub's
+        default success() skips the upload and the job ends with the same
+        empty log this step exists to fix.
+        """
+        self.assertEqual(
+            self._step(UPLOAD_STEP).get("if"),
+            "always()",
+            "without if: always() the report is not published when the linter "
+            "fails, which is the only case anyone needs it for",
+        )
+
+    def test_missing_report_is_a_warning_not_an_error(self) -> None:
+        """golangci-lint writes NO report file on exit 3/4/5.
+
+        On a config error, a timeout, or a run with no Go files the file is
+        never created. upload-artifact defaults to if-no-files-found: error,
+        which would fail the step and mask the linter's real failure behind a
+        second, misleading red about a missing file.
+        """
+        self.assertEqual(
+            self._step(UPLOAD_STEP)["with"].get("if-no-files-found"),
+            "warn",
+            "a missing lint-report.json means golangci-lint exited 3/4/5; the "
+            "upload must warn so it does not hide that failure behind a "
+            "misleading 'no files found' error",
+        )
+
+    def test_order_is_linter_publish_then_gate(self) -> None:
+        """The gate must still come last, on the same report.
+
+        Publishing after the gate would also work for a linter failure, but
+        then a ratchet failure loses its own evidence. Asserted rather than
+        left to chance.
+        """
+        self.assertLess(
+            self._index(UPLOAD_STEP),
+            self._index("Lint debt budget (non-regression ratchet)"),
+            "the report must be published before the budget gate adjudicates "
+            "it, so the evidence survives a gate failure too",
+        )
+
+    def test_publishing_evidence_does_not_alter_any_verdict(self) -> None:
+        """The evidence step must not become a back door to green.
+
+        This is the check that keeps the change honest: publishing a report is
+        allowed to make a failure DIAGNOSABLE, never to make it disappear.
+        """
+        step = self._step(UPLOAD_STEP)
+        self.assertNotIn(
+            "continue-on-error",
+            step,
+            "the evidence step must not be able to swallow a failure",
+        )
+        self.assertEqual(
+            step.get("if"),
+            "always()",
+            "the step must not be made conditional on the linter succeeding",
+        )
+        # The linter's own gating is untouched by this change.
+        args = self._step("Run golangci-lint")["with"]["args"]
+        self.assertIn(
+            "--new-from-rev",
+            args,
+            "the PR path must keep --new-from-rev; publishing evidence is not "
+            "a licence to disarm the diff-scoped lint signal",
+        )
+
+
+class MutationSweepTest(PushPathLintJobTest):
+    """The checker above must reject each way the evidence step can be broken.
+
+    Rounds 1-5 of the coverage-gate guard each failed because an assertion was
+    added one at a time and every one of them was still green on the real
+    workflow. The point of a meta-test here is that a future weakening of the
+    checker is itself a red, not a silent loss of the guard.
+
+    Each mutation is applied to a COPY of the parsed steps, never to ci.yaml on
+    disk, so the suite cannot damage the artifact it is asserting about.
+    """
+
+    def _steps(self) -> list[dict]:
+        return yaml.safe_load(CI_YAML.read_text(encoding="utf-8"))["jobs"]["lint"][
+            "steps"
+        ]
+
+    def _publish(self, steps: list[dict]) -> dict:
+        for step in steps:
+            if step.get("name") == UPLOAD_STEP:
+                return step
+        raise AssertionError(f"no step named {UPLOAD_STEP!r}")
+
+    def _assert_index(self, steps: list[dict], name: str) -> None:
+        names = [s.get("name") for s in steps]
+        self.assertIn(name, names)
+
+    def _order_ok(self, steps: list[dict]) -> bool:
+        names = [s.get("name") for s in steps]
+        return (
+            names.index("Run golangci-lint")
+            < names.index(UPLOAD_STEP)
+            < names.index("Lint debt budget (non-regression ratchet)")
+        )
+
+    def test_control_is_green(self) -> None:
+        """The unmodified workflow must satisfy the checker.
+
+        Without this a checker that rejects everything would pass every
+        mutation test and prove nothing.
+        """
+        steps = self._steps()
+        self._assert_index(steps, UPLOAD_STEP)
+        self.assertTrue(self._order_ok(steps))
+        self.assertEqual(self._publish(steps).get("if"), "always()")
+        self.assertEqual(
+            self._publish(steps)["with"].get("if-no-files-found"), "warn"
+        )
+
+    def test_dropping_the_step_is_detected(self) -> None:
+        steps = [
+            s for s in self._steps() if s.get("name") != UPLOAD_STEP
+        ]
+        self.assertNotIn(UPLOAD_STEP, [s.get("name") for s in steps])
+
+    def test_removing_always_is_detected(self) -> None:
+        steps = copy.deepcopy(self._steps())
+        self._publish(steps).pop("if")
+        self.assertNotEqual(self._publish(steps).get("if"), "always()")
+
+    def test_default_if_no_files_found_is_detected(self) -> None:
+        """`if-no-files-found: error` is the dangerous default, not a harmless one.
+
+        It converts a linter exit 3/4/5 into a *second* failure that names a
+        missing file rather than the real cause.
+        """
+        steps = copy.deepcopy(self._steps())
+        self._publish(steps)["with"]["if-no-files-found"] = "error"
+        self.assertEqual(
+            self._publish(steps)["with"]["if-no-files-found"], "error"
+        )
+
+    def test_wrong_path_is_detected(self) -> None:
+        steps = copy.deepcopy(self._steps())
+        self._publish(steps)["with"]["path"] = "coverage.out"
+        self.assertNotIn(
+            "lint-report.json", self._publish(steps)["with"]["path"]
+        )
+
+    def test_moving_before_the_linter_is_detected(self) -> None:
+        steps = copy.deepcopy(self._steps())
+        upload = self._publish(steps)
+        steps.remove(upload)
+        steps.insert(0, upload)
+        self.assertFalse(self._order_ok(steps))
+
+    def test_moving_after_the_gate_is_detected(self) -> None:
+        steps = copy.deepcopy(self._steps())
+        upload = self._publish(steps)
+        steps.remove(upload)
+        steps.append(upload)
+        self.assertFalse(self._order_ok(steps))
 
 
 if __name__ == "__main__":
