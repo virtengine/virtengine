@@ -60,7 +60,9 @@ un-discardable without these tests going red.
 
 from __future__ import annotations
 
+import contextlib
 import importlib.util
+import io
 import os
 import re
 import shutil
@@ -82,6 +84,57 @@ GATE_OWN_FILES = (
     "scripts/ci/check_pr_diff_coverage.py",
     ".github/tests/test_coverage_gate.py",
 )
+
+# --------------------------------------------------------------------------
+# Round-7 review defect: this suite made the gate's own log lie.
+#
+# Several tests here call the scorer DIRECTLY with below-floor values and assert
+# its return code -- `evaluate_branch(45.0, 46.0) == 1`. That is the right way
+# to prove the floor bites. But `evaluate_branch` PRINTED its verdict, so a
+# GREEN `Go Tests` job shipped this into its log:
+#
+#   ::error::Repository coverage regressed to 45.0%, below the 46.0% floor
+#
+# `::error::` is a GitHub workflow command: the runner renders it as a failure
+# annotation regardless of the step's exit status. So on run 37268464612 a
+# passing job displayed a coverage regression that had not happened, and it was
+# taken at face value -- kanban t_93bf2133 was raised to "ci.yaml RED: coverage
+# ratchet regressed to 45.0% below the 46.0% floor" and spent chasing a
+# regression that does not exist. `main()` has the same problem via its
+# fail-closed paths, on stderr.
+#
+# This is a gate-integrity defect in the same class the rest of this file
+# exists to close: an assertion whose own output is indistinguishable from the
+# failure it is testing for. A guard must be able to tell you, from the log,
+# whether the thing it guards is actually enforcing.
+#
+# The fix is two-sided, because either half alone is insufficient:
+#   1. every direct-call test now runs under `no_gate_annotations()`, so a
+#      fixture verdict cannot reach a CI log; and
+#   2. `test_the_suite_itself_emits_no_error_annotations` runs THIS SUITE as a
+#      subprocess and fails if a single `::error::` reaches its stdout -- so the
+#      leak cannot come back through a new call site, in this file or in a
+#      future edit to the scorer.
+# --------------------------------------------------------------------------
+
+ANNOTATION_ERROR = "::error::"
+
+# Set on the child spawned by `test_the_suite_itself_emits_no_error_annotations`
+# so that run does not spawn another. See that test for why it is needed.
+SUITE_CHILD_ENV = "VE_COVERAGE_GATE_SUITE_CHILD"
+
+
+@contextlib.contextmanager
+def no_gate_annotations():
+    """Capture the gate's stdout AND stderr for the duration of a fixture call.
+
+    Both streams: GitHub renders workflow commands emitted on either, and the
+    fail-closed paths in `main()` report to stderr. Capturing stdout alone
+    would leave `test_missing_coverage_file_fails_closed` still annotating.
+    """
+    buf = io.StringIO()
+    with contextlib.redirect_stdout(buf), contextlib.redirect_stderr(buf):
+        yield buf
 
 # --------------------------------------------------------------------------
 # What a gate step is allowed to be.
@@ -548,7 +601,8 @@ class CoverageGateRoutingTest(unittest.TestCase):
         """
         profile = write_coverprofile(self.tmp, 46.5)
         with mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push"}, clear=False):
-            self.assertEqual(self.gate.evaluate_branch(46.5, self.gate.DEFAULT_BASELINE_COVERAGE), 0)
+            with no_gate_annotations():
+                self.assertEqual(self.gate.evaluate_branch(46.5, self.gate.DEFAULT_BASELINE_COVERAGE), 0)
 
     def test_pull_request_event_fails_on_an_uncovered_added_line(self):
         """THE PR-PATH GATE, in a repo built for it.
@@ -583,10 +637,17 @@ class CoverageGateRoutingTest(unittest.TestCase):
         self.assertEqual(self.gate.PR_EVENT, "pull_request")
 
     def test_branch_floor_still_fails_a_real_regression(self):
-        """The floor is not a waiver: dropping below the baseline fails."""
-        self.assertEqual(self.gate.evaluate_branch(45.0, 46.0), 1)
-        self.assertEqual(self.gate.evaluate_branch(46.0, 46.0), 0)
-        self.assertEqual(self.gate.evaluate_branch(60.0, 46.0), 0)
+        """The floor is not a waiver: dropping below the baseline fails.
+
+        These are the calls that used to announce a fake regression in the CI
+        log. The verdicts are still asserted -- that is the point of the test --
+        but they are asserted against a captured buffer, so proving the gate
+        bites no longer costs a reader of the log a phantom incident.
+        """
+        with no_gate_annotations():
+            self.assertEqual(self.gate.evaluate_branch(45.0, 46.0), 1)
+            self.assertEqual(self.gate.evaluate_branch(46.0, 46.0), 0)
+            self.assertEqual(self.gate.evaluate_branch(60.0, 46.0), 0)
 
     def test_baseline_is_overridable_and_rejects_junk(self):
         with mock.patch.dict(os.environ, {"COVERAGE_BASELINE": "52.5"}, clear=False):
@@ -597,17 +658,20 @@ class CoverageGateRoutingTest(unittest.TestCase):
     def test_missing_coverage_file_fails_closed(self):
         """An absent gate input must fail, not pass by default."""
         self.assertIsNone(self.gate.resolve_coverage(self.tmp / "nope.out"))
-        self.assertEqual(self.gate.main(["coverage_gate.py", "nope.out"]), 1)
+        with no_gate_annotations():
+            self.assertEqual(self.gate.main(["coverage_gate.py", "nope.out"]), 1)
 
     def test_branch_path_fails_closed_on_an_unmeasurable_profile(self):
         """A profile with no statements cannot be scored -- fail, never pass."""
         empty = self.tmp / "empty.out"
         empty.write_text("mode: atomic\n", encoding="utf-8")
         with mock.patch.dict(os.environ, {"GITHUB_EVENT_NAME": "push"}, clear=False):
-            self.assertEqual(self.gate.main(["coverage_gate.py", str(empty)]), 1)
+            with no_gate_annotations():
+                self.assertEqual(self.gate.main(["coverage_gate.py", str(empty)]), 1)
 
     def test_usage_error(self):
-        self.assertEqual(self.gate.main(["coverage_gate.py"]), 2)
+        with no_gate_annotations():
+            self.assertEqual(self.gate.main(["coverage_gate.py"]), 2)
 
 
 class WhitespaceOnlyChangeTest(unittest.TestCase):
@@ -1225,6 +1289,148 @@ class WorkflowWiringTest(unittest.TestCase):
         """A guard pointing at a renamed file is not a guard."""
         for rel in GATE_OWN_FILES:
             self.assertTrue((REPO_ROOT / rel).is_file(), rel)
+
+
+class GateAnnotationHygieneTest(unittest.TestCase):
+    """This suite must not print a `::error::` into the log it runs inside.
+
+    Round-7 defect, observed on run 37268464612: a GREEN `Go Tests` job carried
+    `::error::Repository coverage regressed to 45.0%, below the 46.0% floor`
+    because the suite's own negative control printed the gate's real failure
+    annotation while proving the return code. GitHub renders workflow commands
+    regardless of exit status, so the phantom was indistinguishable from a live
+    incident in the job log -- and it was read as one (kanban t_93bf2133).
+
+    Everything in this class is about the suite's OUTPUT rather than the gate's
+    behaviour, which is why it is a separate class: the gate is allowed to
+    annotate, the guard is not.
+    """
+
+    def test_this_file_declares_no_bare_error_annotation(self):
+        """Pin the reason the suite can talk about `::error::` without printing it.
+
+        Every fixture call site goes through `no_gate_annotations()`. A new test
+        that calls the scorer directly without that wrapper reintroduces the
+        leak, and this catches the most likely shape of it.
+        """
+        text = Path(__file__).read_text(encoding="utf-8")
+        # The only permitted literal is the constant the wrappers compare
+        # against; it must never be handed to `print`.
+        self.assertIn(f'ANNOTATION_ERROR = "{ANNOTATION_ERROR}"', text)
+        for line in text.splitlines():
+            if f'print("{ANNOTATION_ERROR}' in line or f"print('{ANNOTATION_ERROR}'" in line:
+                self.fail(
+                    f"this suite must not print a workflow annotation: {line.strip()!r}. "
+                    "Wrap the call in `no_gate_annotations()` and assert on the "
+                    "return code instead -- see the round-7 note above."
+                )
+
+    def test_the_suite_itself_emits_no_error_annotations(self):
+        """THE LOAD-BEARING ONE: run this suite and read its stdout.
+
+        The wrapper above is discipline; this is the check. It executes this
+        exact file as a subprocess -- the same way `ci.yaml` does -- and fails
+        if a single `::error::` reaches stdout. So the leak cannot return via a
+        new call site, a renamed helper, or a future edit that makes the scorer
+        annotate somewhere else.
+
+        Recursion, and how it is stopped: this test runs the suite, and the suite
+        contains this test, so an unguarded version spawns itself until the
+        machine drowns. The child is marked with `SUITE_CHILD_ENV` and skips
+        the spawn -- it still runs every other test and still emits whatever it
+        would emit, which is exactly the output the parent inspects. One level
+        deep, never two.
+
+        Costs one extra run of a sub-second suite, and runs with the gate
+        fixture calls still in place, so it fails on the real regression rather
+        than on a hypothetical one.
+        """
+        if os.environ.get(SUITE_CHILD_ENV) == "1":
+            self.skipTest(
+                f"{SUITE_CHILD_ENV}=1: this IS the subprocess run whose output "
+                "the parent inspects; spawning another would recurse forever"
+            )
+
+        env = {**os.environ, SUITE_CHILD_ENV: "1"}
+        proc = subprocess.run(
+            [sys.executable, "-m", "unittest", "discover", "-s", ".github/tests",
+             "-p", "test_coverage_gate.py"],
+            cwd=REPO_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+        )
+        leaked = [
+            line for line in (proc.stdout + proc.stderr).splitlines()
+            if ANNOTATION_ERROR in line
+        ]
+        self.assertEqual(
+            leaked, [],
+            "this suite leaked a GitHub error annotation into the CI log:\n  "
+            + "\n  ".join(leaked)
+            + "\nEvery fixture verdict must be captured with "
+            "`no_gate_annotations()`; only a real gate run may annotate.",
+        )
+        # The control: a green suite. Without this the assertion above could
+        # pass because the suite failed to run at all, which would make the
+        # guard vacuous on the exact tree it exists to protect.
+        self.assertEqual(
+            proc.returncode, 0,
+            f"the suite must still pass while emitting no annotations:\n"
+            f"{proc.stdout[-4000:]}\n{proc.stderr[-4000:]}",
+        )
+
+    def test_a_passing_gate_run_annotates_nothing(self):
+        """Round-7 gap 2, found by falsifying the guard above.
+
+        The subprocess guard above only inspects the SUITE's output, so it says
+        nothing about the gate's own. Measured while falsifying this file:
+        mutating `evaluate_branch` to prefix its success line with
+        `::error::` left that guard completely green -- 31 tests, no failure --
+        because every direct call site here is wrapped in
+        `no_gate_annotations()`. The wrapper hid it, which is exactly what the
+        wrapper is for.
+
+        But that mutation is still a live defect in CI: `ci.yaml` invokes the
+        gate directly, unwrapped, so a scorer that annotates on success paints
+        an error annotation on every green push. Nothing in the suite would
+        notice.
+
+        So this drives the REAL gate as a process, the way `ci.yaml` does, on a
+        profile that PASSES, and requires a clean log. No recursion concern:
+        this spawns the gate, not the suite.
+        """
+        with tempfile.TemporaryDirectory() as tmp:
+            profile = Path(tmp) / "coverage.out"
+            # 46.5% covered: at the recorded floor, so this is a passing run.
+            profile.write_text(
+                "mode: atomic\n"
+                "example.com/m/covered.go:1.1,1.10 465 1\n"
+                "example.com/m/uncovered.go:1.1,1.10 535 0\n",
+                encoding="utf-8",
+            )
+            proc = subprocess.run(
+                [sys.executable, str(SCRIPT_PATH), str(profile)],
+                cwd=REPO_ROOT,
+                capture_output=True,
+                text=True,
+                env={**os.environ, "GITHUB_EVENT_NAME": "push"},
+            )
+            combined = proc.stdout + proc.stderr
+            self.assertEqual(
+                proc.returncode, 0,
+                f"this fixture is meant to PASS the floor; it did not:\n{combined}",
+            )
+            self.assertNotIn(
+                ANNOTATION_ERROR, combined,
+                "the gate annotated ::error:: on a PASSING run. A green push "
+                "would carry a failure annotation, which is the same "
+                "phantom-incident defect as round 7 -- indistinguishable from "
+                "a live one in the log. Only a genuine regression may annotate "
+                f"::error::.\nGot:\n{combined}",
+            )
+            # It must still be doing its job: saying what it measured.
+            self.assertIn("Total coverage: 46.5%", combined)
 
 
 if __name__ == "__main__":
