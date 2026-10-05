@@ -130,6 +130,23 @@ jobs:
               export PATH="/go/bin:/usr/local/bin:$PATH"
               export NODE_OPTIONS=--max-old-space-size=6144
               npm --prefix sdk/ts ci --ignore-scripts --no-audit --no-fund
+              # t_f78de3b9 / t_631af860: jest interpolates an ABSOLUTE <rootDir>
+              # prefix into testMatch, and on a checkout path containing a
+              # glob-special segment that pattern ends up MIXED-separator and
+              # matches NOTHING. The suite then reports "No tests found" --
+              # but only when EVERY project is empty. `projects` here are `unit`
+              # and `functional`, so while `functional` still finds its 3 specs,
+              # a `unit` project discovering 0 of 40 is MASKED and the step goes
+              # on to a green build. Measured on develop 118f6628: reverting the
+              # unit project's testMatch to "<rootDir>/src/**/*.spec.ts" drops
+              # `npm test` from 43 suites to 3, and the step still exits 1 only
+              # because two functional buf suites fail for an unrelated
+              # reason -- a coincidence, not a guard.
+              #
+              # So discovery is asserted per project, before the tests run: a
+              # collapsed discovery must be named, not inherited from an
+              # unrelated failure.
+              bash scripts/ci/check-jest-spec-discovery.sh
               npm --prefix sdk/ts run lint
               npm --prefix sdk/ts test -- --runInBand
               npm --prefix sdk/ts run build
