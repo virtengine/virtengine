@@ -47,6 +47,38 @@ type MarketState struct {
 }
 
 // DefaultMarketParams provides sensible defaults.
+//
+// GasCapacity sizing (see the economics-sim gate, "avg_gas_utilization").
+//
+// GasCapacity used to be 300, which is EXACTLY the baseline scenario's mean
+// gas demand: baseConfig() has 200 users at UserDemandMean 10, and
+// agents/user.go splits each user's demand with GasDemand: demand * 0.15, so
+//
+//	200 * 10 * 0.15 = 300 = GasCapacity
+//
+// That arithmetic collision -- not a design decision -- pinned baseline
+// utilization at ~1.0. UpdateGas computes utilization = demand/GasCapacity and
+// sim/core/metrics.go averages it, so `ve-sim check` reported
+//
+//	avg_gas_utilization 0.9927890510656573 (band 0.05..0.95)
+//
+// and the Economics Simulation Suite has been red on every main run since the
+// gate existed. The same collision also made the market's own controller dead
+// code: GasCongestionThresholdBPS is 8500, so at ~0.99 utilization the
+// congestion branch was taken on 366 of 366 steps and the adaptive min-gas
+// controller could never return to its 0.65 target. A "baseline" that is
+// permanently in the congestion regime is not a baseline.
+//
+// 500 puts baseline at 300/500 = 0.60, comfortably under the 0.65 target with
+// headroom for demand variance (UserDemandStdDev 2.5), while still leaving
+// congestion reachable: bull_market (350 users @ mean 18 -> 945 gas) and
+// black_swan (600 @ 25 -> 2250) both exceed it, so the adaptive/congestion
+// paths stay exercised by the scenario suite instead of being saturated away.
+//
+// Raising the DefaultThresholds band instead (0.05..0.95 -> up to 1.0) was the
+// other option and was rejected: it would bless a permanently-saturated market
+// as correct while leaving the model's 0.65 target unreachable. GasCapacity is
+// the supply-side lever, and the band exists to catch supply-side faults.
 func DefaultMarketParams() MarketParams {
 	return MarketParams{
 		ComputeBasePrice:            0.02,
@@ -54,7 +86,7 @@ func DefaultMarketParams() MarketParams {
 		GPUBasePrice:                0.12,
 		GasBasePrice:                0.001,
 		MinGasPrice:                 0.0005,
-		GasCapacity:                 300,
+		GasCapacity:                 500,
 		FeeBurnBPS:                  2000,
 		PriceAdjustment:             0.15,
 		MaxPriceMove:                0.35,
