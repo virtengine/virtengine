@@ -447,6 +447,37 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/ci/check-env-approval-gate.mjs
 
+  pr-exclusive-jobs:
+    name: pr-exclusive-jobs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Falsify the PR-exclusive job census
+        # Offline fixture suite + mutation harness first. If the classifier no
+        # longer works, the gate must say so rather than printing a census
+        # derived from a broken parser.
+        run: node scripts/ci/check-pr-exclusive-jobs.mjs --selftest
+
+      - name: Census jobs that cannot fail before merge
+        # REPORT-ONLY by design, and deliberately not --strict. A job gated on
+        # `refs/heads/main` is CORRECT when it deploys; failing here would train
+        # everyone to delete the gate instead. What this buys is that every such
+        # job is enumerated in review, so a NEW one (or a changed `if:`) is a
+        # visible diff rather than a defect that lands on main already merged --
+        # which is exactly how Build (macOS) stayed red 3/3 with every PR green.
+        #
+        # Exit 2 (could not build the evidence) is deliberately NOT a pass.
+        run: node scripts/ci/check-pr-exclusive-jobs.mjs
+
   economics-sim:
     name: economics-sim
     runs-on: ubuntu-latest
@@ -713,6 +744,7 @@ jobs:
       - vet
       - go-mod-download-selftest
       - build-linkmode-selftest
+      - pr-exclusive-jobs
       - build
       - test-go
       - agents-docs
@@ -755,6 +787,16 @@ jobs:
           # can stop that in a PR.
           if [ "${{ needs.build-linkmode-selftest.result }}" != "success" ]; then
             echo "::error::build-linkmode selftest failed"
+            failed=1
+          fi
+
+          # Unconditional for the same reason. The census itself is report-only,
+          # so it only goes red on exit 2 -- it could not read the workflows --
+          # and that must NOT read as a clean estate, because a census that
+          # silently measured nothing is precisely the failure it exists to
+          # catch.
+          if [ "${{ needs.pr-exclusive-jobs.result }}" != "success" ]; then
+            echo "::error::pr-exclusive job census failed"
             failed=1
           fi
 
