@@ -155,16 +155,18 @@ func TestDeletionReceiptsRequireIndependentMatchingClaims(t *testing.T) {
 	forged := kms
 	forged.Signature = append([]byte(nil), kms.Signature...)
 	forged.Signature[0] ^= 1
-	cases := []struct {
+	type deletionResolutionCase struct {
 		name     string
 		receipts []DeletionReceipt
 		hold     bool
-	}{
-		{"incomplete", []DeletionReceipt{storage}, false},
-		{"duplicate kind", []DeletionReceipt{storage, storage}, false},
-		{"forged", []DeletionReceipt{storage, forged}, false},
-		{"legal hold", []DeletionReceipt{storage, kms}, true},
 	}
+	cases := make([]deletionResolutionCase, 0, 5)
+	cases = append(cases,
+		deletionResolutionCase{"incomplete", []DeletionReceipt{storage}, false},
+		deletionResolutionCase{"duplicate kind", []DeletionReceipt{storage, storage}, false},
+		deletionResolutionCase{"forged", []DeletionReceipt{storage, forged}, false},
+		deletionResolutionCase{"legal hold", []DeletionReceipt{storage, kms}, true},
+	)
 	replayed := kms
 	replayed.OperationID = storage.OperationID
 	signReceipt(t, &replayed, kmsPrivate)

@@ -32,19 +32,19 @@ func TestLoadSecrets(t *testing.T) {
 	defer func() {
 		for k, v := range origEnv {
 			if v == "" {
-				os.Unsetenv(k)
+				_ = os.Unsetenv(k)
 			} else {
-				os.Setenv(k, v)
+				_ = os.Setenv(k, v)
 			}
 		}
 	}()
 
 	// Set test values
-	os.Setenv("DATABASE_URL", "postgres://localhost:5432/testdb")
-	os.Setenv("JWT_SECRET", "test-jwt-secret-12345")
-	os.Setenv("ENCRYPTION_KEY", "0123456789abcdef0123456789abcdef")
-	os.Setenv("OPENAI_API_KEY", "sk-test-openai-key")
-	os.Setenv("STRIPE_SECRET_KEY", "sk_test_stripe_key")
+	_ = os.Setenv("DATABASE_URL", "postgres://localhost:5432/testdb")
+	_ = os.Setenv("JWT_SECRET", "test-jwt-secret-12345")
+	_ = os.Setenv("ENCRYPTION_KEY", "0123456789abcdef0123456789abcdef")
+	_ = os.Setenv("OPENAI_API_KEY", "sk-test-openai-key")
+	_ = os.Setenv("STRIPE_SECRET_KEY", "sk_test_stripe_key")
 
 	cfg, err := LoadSecrets()
 	if err != nil {
@@ -310,14 +310,14 @@ func TestLoadSecrets_EmptyEnv(t *testing.T) {
 	saved := make(map[string]string)
 	for _, v := range envVars {
 		saved[v] = os.Getenv(v)
-		os.Unsetenv(v)
+		_ = os.Unsetenv(v)
 	}
 	defer func() {
 		for k, v := range saved {
 			if v == "" {
-				os.Unsetenv(k)
+				_ = os.Unsetenv(k)
 			} else {
-				os.Setenv(k, v)
+				_ = os.Setenv(k, v)
 			}
 		}
 	}()

@@ -42,7 +42,7 @@ func TestNewServiceUsesHTTPAMLClientWhenConfigured(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer svcRaw.Close()
+	defer func() { _ = svcRaw.Close() }()
 
 	svc := svcRaw.(*offRampService)
 	screener, ok := svc.amlScreener.(*DefaultAMLScreener)
@@ -79,7 +79,7 @@ func TestNewServiceUsesDirectACHProviderWhenConfigured(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer svcRaw.Close()
+	defer func() { _ = svcRaw.Close() }()
 
 	svc := svcRaw.(*offRampService)
 	provider := svc.providers[ProviderACH]
@@ -386,7 +386,7 @@ func TestNewServiceUsesMockAMLClientWithoutProviderConfig(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewService() error = %v", err)
 	}
-	defer svcRaw.Close()
+	defer func() { _ = svcRaw.Close() }()
 
 	svc := svcRaw.(*offRampService)
 	screener, ok := svc.amlScreener.(*DefaultAMLScreener)

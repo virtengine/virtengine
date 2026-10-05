@@ -31,7 +31,7 @@ func TestProviderNew(t *testing.T) {
 
 func TestProviderConnectIdempotent(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	// Second connect should be a no-op
 	require.NoError(t, p.Connect(context.Background()))
@@ -39,7 +39,7 @@ func TestProviderConnectIdempotent(t *testing.T) {
 
 func TestProviderGenerateKey(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	ctx := context.Background()
 
@@ -53,7 +53,7 @@ func TestProviderGenerateKey(t *testing.T) {
 
 func TestProviderGenerateKeyDuplicate(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	ctx := context.Background()
 	_, err := p.GenerateKey(ctx, hsm.KeyTypeEd25519, "dup-key")
@@ -65,7 +65,7 @@ func TestProviderGenerateKeyDuplicate(t *testing.T) {
 
 func TestProviderGenerateKeyUnsupported(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	_, err := p.GenerateKey(context.Background(), "rsa4096", "rsa-key")
 	require.Error(t, err)
@@ -84,7 +84,7 @@ func TestProviderNotConnected(t *testing.T) {
 
 func TestProviderImportKey(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -97,7 +97,7 @@ func TestProviderImportKey(t *testing.T) {
 
 func TestProviderImportKeyInvalidSize(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	_, err := p.ImportKey(context.Background(), hsm.KeyTypeEd25519, "bad", []byte("short"))
 	require.Error(t, err)
@@ -106,7 +106,7 @@ func TestProviderImportKeyInvalidSize(t *testing.T) {
 
 func TestProviderGetKey(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	ctx := context.Background()
 	_, err := p.GenerateKey(ctx, hsm.KeyTypeEd25519, "get-test")
@@ -122,7 +122,7 @@ func TestProviderGetKey(t *testing.T) {
 
 func TestProviderListKeys(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	ctx := context.Background()
 	_, err := p.GenerateKey(ctx, hsm.KeyTypeEd25519, "list-1")
@@ -137,7 +137,7 @@ func TestProviderListKeys(t *testing.T) {
 
 func TestProviderDeleteKey(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	ctx := context.Background()
 	_, err := p.GenerateKey(ctx, hsm.KeyTypeEd25519, "del-key")
@@ -154,7 +154,7 @@ func TestProviderDeleteKey(t *testing.T) {
 
 func TestProviderSignAndVerify(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	ctx := context.Background()
 	_, err := p.GenerateKey(ctx, hsm.KeyTypeEd25519, "sign-key")
@@ -175,7 +175,7 @@ func TestProviderSignAndVerify(t *testing.T) {
 
 func TestProviderSignNonexistent(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	_, err := p.Sign(context.Background(), "ghost", []byte("test"))
 	require.ErrorIs(t, err, hsm.ErrKeyNotFound)
@@ -183,7 +183,7 @@ func TestProviderSignNonexistent(t *testing.T) {
 
 func TestProviderGetPublicKeyNonexistent(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	_, err := p.GetPublicKey(context.Background(), "ghost")
 	require.ErrorIs(t, err, hsm.ErrKeyNotFound)
@@ -204,7 +204,7 @@ func TestProviderClose(t *testing.T) {
 
 func TestKeyExistsAndCount(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	assert.False(t, p.KeyExists("test"))
 	assert.Equal(t, 0, p.KeyCount())
@@ -218,7 +218,7 @@ func TestKeyExistsAndCount(t *testing.T) {
 
 func TestMigrateKey(t *testing.T) {
 	p := newTestProvider(t)
-	defer p.Close()
+	defer func() { _ = p.Close() }()
 
 	_, priv, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)

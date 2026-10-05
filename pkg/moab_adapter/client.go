@@ -549,7 +549,7 @@ func (c *ProductionMOABClient) execute(ctx context.Context, command string, stdi
 		closeSSHClient(conn.client)
 		return "", fmt.Errorf("failed to create session: %w", err)
 	}
-	defer session.Close()
+	defer func() { _ = session.Close() }()
 
 	// Set up stdin if provided
 	if stdin != "" {
@@ -558,7 +558,7 @@ func (c *ProductionMOABClient) execute(ctx context.Context, command string, stdi
 			return "", fmt.Errorf("failed to create stdin pipe: %w", err)
 		}
 		go func() {
-			defer stdinPipe.Close()
+			defer func() { _ = stdinPipe.Close() }()
 			_, _ = io.WriteString(stdinPipe, stdin)
 		}()
 	}

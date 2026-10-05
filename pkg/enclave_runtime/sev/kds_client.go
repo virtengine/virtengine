@@ -677,7 +677,7 @@ func (c *KDSClient) doRequest(ctx context.Context, urlStr string) ([]byte, error
 			Err:     err,
 		}
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		return nil, &KDSError{

@@ -59,10 +59,11 @@ func GetOrCreateMemoryCache[K comparable, V any](m *Manager, name string, opts .
 	}
 
 	// Create new cache with config defaults
-	defaultOpts := []MemoryCacheOption[K, V]{
+	defaultOpts := make([]MemoryCacheOption[K, V], 0, 2+len(opts))
+	defaultOpts = append(defaultOpts,
 		WithMaxSize[K, V](m.config.MaxSize),
 		WithDefaultTTL[K, V](m.config.DefaultTTL),
-	}
+	)
 	opts = append(defaultOpts, opts...)
 
 	cache := NewMemoryCache(opts...)
@@ -98,9 +99,8 @@ func GetOrCreateRedisCache[K comparable, V any](m *Manager, name string, opts ..
 	redisConfig.KeyPrefix = m.config.Redis.KeyPrefix + name + ":"
 
 	// Create new cache
-	defaultOpts := []RedisCacheOption[K, V]{
-		WithRedisDefaultTTL[K, V](m.config.DefaultTTL),
-	}
+	defaultOpts := make([]RedisCacheOption[K, V], 0, 1+len(opts))
+	defaultOpts = append(defaultOpts, WithRedisDefaultTTL[K, V](m.config.DefaultTTL))
 	opts = append(defaultOpts, opts...)
 
 	cache, err := NewRedisCache(m.redisClient, redisConfig, opts...)

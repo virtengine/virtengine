@@ -889,7 +889,7 @@ func FindStructField[C any](obj interface{}, fieldName string) (C, error) {
 	}
 	rValue := reflect.ValueOf(obj)
 
-	if rValue.Type().Kind() != reflect.Ptr {
+	if rValue.Type().Kind() != reflect.Pointer {
 		pValue := reflect.New(reflect.TypeOf(obj))
 		pValue.Elem().Set(rValue)
 		rValue = pValue
