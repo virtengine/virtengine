@@ -17,7 +17,7 @@ func (r *TestReport) WriteJSON(filename string) error {
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
@@ -34,7 +34,7 @@ func (r *TestReport) WriteCSV(filename string) error {
 	if err != nil {
 		return fmt.Errorf("create file: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()

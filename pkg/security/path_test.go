@@ -209,7 +209,7 @@ func TestSafeOpen(t *testing.T) {
 		t.Errorf("SafeOpen failed: %v", err)
 	}
 	if f != nil {
-		f.Close()
+		_ = f.Close()
 	}
 
 	// Traversal attack

@@ -90,9 +90,44 @@ PR_EVENT = "pull_request"
 #     goconst 926  errcheck 662  staticcheck 61  gosec 51
 #     prealloc  13  govet       6  gocritic  2
 #
-# Only the two linters with real backlog are budgeted. The rest are recorded
-# for context and enforced at their measured count, so the gate also catches
-# them growing.
+# Every linter `.golangci.yaml` enables has an entry here, so no enabled linter
+# can report findings without a budget that decides what happens to them. The
+# six that measure 0 are budgeted at 0 precisely BECAUSE they are clean: an
+# unbudgeted linter only emits a `::warning::` and exits 0, so on the push path
+# (where `--issues-exit-code=0` is set) growth in an unbudgeted linter would be
+# silently accepted. Budgeting a clean linter at 0 is what turns the warning
+# into a hard failure, and it costs nothing while the tree stays clean.
+#
+# Re-measured on `develop` at 0df6b86d8 with the same pinned toolchain
+# (golangci-lint v2.13.2, Go 1.26.8): copyloopvar 0, errchkjson 0, ineffassign
+# 0, misspell 0, unparam 0, unused 0 -- unchanged. The `gosec` baseline is
+# measured on the LINUX runner the `Lint` job uses; a windows host additionally
+# reports 3 findings in `//go:build windows` files (G115 x2 in
+# pkg/data_vault/internal/pathnorm/pathnorm_windows.go, G204 x1 in
+# pkg/data_vault/fixture_shortname_windows_test.go) that the ubuntu job never
+# analyses, hence 51 and not 54.
+#
+# RE-MEASURED 2026-10-05 on `develop` after PR #1256, same pinned toolchain.
+# Whole tree, both ends measured on one windows host so the platform offset
+# cancels: base 54bcd6f2 = 1724 findings, merged 8989eb29a = 1589, delta -135.
+#
+#     linter      before   after   delta
+#     errcheck       662     554    -108
+#     goconst        926     914     -12
+#     staticcheck     61      52      -9
+#     govet           6       3      -3
+#     prealloc        13      10      -3
+#     gosec           54      54      +0
+#     gocritic         2       2      +0
+#
+# The five tightened entries are LOWERED to the freshly measured value, which is
+# the only direction this gate permits a number to move. The point of doing it
+# here rather than leaving the slack on the table: the slack band
+# (measured + SLACK=1) is a regression buffer, and the previous baselines sat 108
+# errcheck findings above the real count, so any of that 108 could have been
+# reintroduced without the gate noticing. `gosec` is deliberately NOT touched:
+# it is 54 on this windows host at BOTH ends (+0 across the change), so there is
+# nothing to reclaim, and 51 remains the number the linux job enforces.
 #
 # Each entry: (measured findings, tracked issue, expiry).
 #   - Raise a baseline ONLY by fixing findings in the tree.
@@ -100,13 +135,21 @@ PR_EVENT = "pull_request"
 #   - A past expiry is a hard failure: renew it deliberately in a follow-up that
 #     states why, or fix the debt. Silence is not an option.
 BASELINES: dict[str, tuple[int, str, str]] = {
-    "goconst": (926, "#1122", "2027-01-15"),
-    "errcheck": (662, "#1122", "2027-01-15"),
-    "staticcheck": (61, "#1122", "2027-01-15"),
+    "goconst": (914, "#1122", "2027-01-15"),
+    "errcheck": (554, "#1122", "2027-01-15"),
+    "staticcheck": (52, "#1122", "2027-01-15"),
     "gosec": (51, "#1122", "2027-01-15"),
-    "prealloc": (13, "#1122", "2027-01-15"),
-    "govet": (6, "#1122", "2027-01-15"),
+    "prealloc": (10, "#1122", "2027-01-15"),
+    "govet": (3, "#1122", "2027-01-15"),
     "gocritic": (2, "#1122", "2027-01-15"),
+    # Clean today, and enforced as such: the first finding any of these reports
+    # is a regression, not pre-existing debt, and must fail the push path.
+    "copyloopvar": (0, "#1122", "2027-01-15"),
+    "errchkjson": (0, "#1122", "2027-01-15"),
+    "ineffassign": (0, "#1122", "2027-01-15"),
+    "misspell": (0, "#1122", "2027-01-15"),
+    "unparam": (0, "#1122", "2027-01-15"),
+    "unused": (0, "#1122", "2027-01-15"),
 }
 
 # Slack between the enforced budget and the measured value, so float noise in a

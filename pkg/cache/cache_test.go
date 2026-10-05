@@ -12,7 +12,7 @@ func TestMemoryCache_BasicOperations(t *testing.T) {
 		WithMaxSize[string, string](100),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -58,7 +58,7 @@ func TestMemoryCache_TTLExpiration(t *testing.T) {
 		WithDefaultTTL[string, string](50*time.Millisecond),
 		WithCleanupInterval[string, string](10*time.Millisecond),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -87,7 +87,7 @@ func TestMemoryCache_LRUEviction(t *testing.T) {
 		WithMaxSize[string, string](3),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -124,7 +124,7 @@ func TestMemoryCache_Stats(t *testing.T) {
 		WithMaxSize[string, string](100),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -164,7 +164,7 @@ func TestMemoryCache_Clear(t *testing.T) {
 		WithMaxSize[string, string](100),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -192,7 +192,7 @@ func TestMemoryCache_GetOrLoad(t *testing.T) {
 		WithMaxSize[string, string](100),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 	loadCount := 0
@@ -232,7 +232,7 @@ func TestMemoryCache_Concurrent(t *testing.T) {
 		WithMaxSize[string, int](1000),
 		WithDefaultTTL[string, int](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 	var wg sync.WaitGroup
@@ -266,7 +266,7 @@ func TestMemoryCache_InvalidationListener(t *testing.T) {
 		WithMaxSize[string, string](100),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 	var events []InvalidationEvent
@@ -307,7 +307,7 @@ func TestRedisCache_WithMock(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewRedisCache failed: %v", err)
 	}
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -429,7 +429,7 @@ func TestManager_GetOrCreateMemoryCache(t *testing.T) {
 	if err != nil {
 		t.Fatalf("NewManager failed: %v", err)
 	}
-	defer manager.Close()
+	defer func() { _ = manager.Close() }()
 
 	// Create cache
 	cache1 := GetOrCreateMemoryCache[string, string](manager, "test-cache")
@@ -463,7 +463,7 @@ func TestMetrics_RegisterAndReport(t *testing.T) {
 		WithMaxSize[string, string](100),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	metrics.RegisterCache("test-cache", cache)
 
@@ -498,7 +498,7 @@ func BenchmarkMemoryCache_Get(b *testing.B) {
 		WithMaxSize[string, string](10000),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -518,7 +518,7 @@ func BenchmarkMemoryCache_Set(b *testing.B) {
 		WithMaxSize[string, string](10000),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 
@@ -533,7 +533,7 @@ func BenchmarkMemoryCache_ConcurrentAccess(b *testing.B) {
 		WithMaxSize[string, string](10000),
 		WithDefaultTTL[string, string](5*time.Minute),
 	)
-	defer cache.Close()
+	defer func() { _ = cache.Close() }()
 
 	ctx := context.Background()
 

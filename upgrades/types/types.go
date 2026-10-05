@@ -33,6 +33,17 @@ const AuthenticatedFiatConversionsUpgradeName = "v1.8.0"
 // resolution once the canonical lifecycle and reservations are active.
 const UnifiedMarketResolutionUpgradeName = "v1.9.0"
 
+// AssuranceVectorUpgradeName introduces per-account assurance vectors
+// (x/veid) alongside the existing scalar identity score.
+//
+// The migration is DELIBERATELY additive and writes nothing per account: every
+// existing account keeps an absent vector, which reads as "no assurance claim".
+// A migration that back-filled a vector from the scalar score would invent
+// per-factor assurance that was never measured, and the per-factor thresholds a
+// relying party would then read (document > 9500, biometric > 9700) would be
+// fabricated. Accounts acquire a vector the first time they are re-verified.
+const AssuranceVectorUpgradeName = "v1.10.0"
+
 var (
 	upgrades      = map[string]UpgradeInitFn{}
 	heightPatches = map[int64]IHeightPatch{}

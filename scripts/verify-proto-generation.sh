@@ -10,10 +10,23 @@ before="$(mktemp)"
 after="$(mktemp)"
 trap 'rm -f "$before" "$after"' EXIT
 
+# The two ajv validators belong here for the same reason they are named in
+# proto-generation.yaml's drift pathspec: `compile:validators`, reached via
+# `npm --prefix ts run build` at the end of generate_typescript(), writes both
+# of them, so this two-run byte-identity comparison is meaningless without them.
+# Named as files rather than as sdk/ts/src/sdk + sdk/ts/src/sdl, because those
+# trees are otherwise hand-written SDK source.
+validator_jwt="sdk/ts/src/sdk/provider/auth/jwt/validateJwtPayload.ts"
+validator_sdl="sdk/ts/src/sdl/SDL/validateSDL/validateSDLInput.ts"
+
 tracked_hashes() {
   find sdk/go/node sdk/ts/src/generated sdk/artifacts/proto api/openapi \
     -type f \( -name '*.pb.go' -o -name '*.pb.gw.go' -o -name '*.ts' -o -name '*.binpb' -o -name '*.sha256' -o -name 'inventory.json' -o -name 'virtengine-proto.swagger.json' \) \
     -print0 | sort -z | xargs -0 sha256sum
+  # The generators under sdk/ts/src/sdk and sdk/ts/src/sdl are named files, not
+  # directories, so they cannot join the find above without also sweeping in
+  # hand-written SDK source.
+  sha256sum "$validator_jwt" "$validator_sdl"
 }
 
 tracked_hashes > "$before"

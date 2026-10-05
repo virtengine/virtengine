@@ -95,6 +95,32 @@ func (k Keeper) ComputeAndStoreCompositeScore(
 		// Non-fatal - continue
 	}
 
+	// Persist the per-factor form of the same result. The scalar above is the
+	// reduction; this is the evidence behind it, so a relying party can express
+	// its own policy instead of trusting one number. It is derived from `result`
+	// rather than re-scored, so the two can never disagree.
+	//
+	// Failure to persist the vector must NOT fail the verification: the scalar
+	// is already committed to state above, and a composite score without a vector
+	// is still a valid score. The absence is logged loudly instead.
+	vector, err := k.StoreAssuranceVectorForResult(ctx, accountAddr, result, types.DerivationInput{
+		ModelVersion: result.ScoreVersion,
+		// Device evidence is not carried on CompositeScoreResult; until the
+		// pipeline surfaces the device sub-signals the device factor is recorded
+		// UNMEASURED rather than zero, so no device assurance is ever invented.
+		Device:        types.DeviceEvidence{Present: false},
+		VerifiedAt:    ctx.BlockTime(),
+		AccountAgeBps: 0,
+	})
+	if err != nil {
+		k.Logger(ctx).Error("failed to store assurance vector for composite result",
+			"account", accountAddr,
+			"error", err,
+		)
+	} else {
+		k.Logger(ctx).Debug("assurance vector persisted", "account", accountAddr, "epoch", vector.Epoch)
+	}
+
 	return result, nil
 }
 

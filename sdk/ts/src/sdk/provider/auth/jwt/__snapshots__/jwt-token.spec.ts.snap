@@ -2,4 +2,4 @@
 
 exports[`JWT Claims Validation ES256KADR36 - Valid Signature / short: ES256KADR36 - Valid Signature / short 1`] = `"qzgQaT_VsnA92-ox-rSZGyEj5MFVM0MuELLV-ugGg3lt8gGWsDz0oHU2WLvACJDPElrxo0SVszBePaXxezzgvw"`;
 
-exports[`JWT Claims Validation ES256KADR36 - Valid Signature/with scoped claims: ES256KADR36 - Valid Signature/with scoped claims 1`] = `"coGxq7uLfcz1zBE-PmRON7Ul1X7R_uQs6-nQQ2yLCLI9L85By4Gk8guJvQKEz8Q6uZ31CgMseB2eUNUqpfG2RA"`;
+exports[`JWT Claims Validation ES256KADR36 - Valid Signature/with scoped claims: ES256KADR36 - Valid Signature/with scoped claims 1`] = `"gm755rzde7OBsBkudJ_q0ha-fzfYwBYXCMyfPcMc2Tp8is__0HwchNFG-ia0UD83BcezUNe72fSQ5MLXpL_WDQ"`;

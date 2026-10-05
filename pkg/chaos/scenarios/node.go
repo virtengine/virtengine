@@ -318,8 +318,8 @@ func NewValidatorCrash(validatorName string, duration time.Duration) *PodFailure
 		Duration:    duration,
 		GracePeriod: 0, // Immediate kill for crash simulation
 		Labels: map[string]string{
-			"chaos.virtengine.dev/category": "validator",
-			"chaos.virtengine.dev/severity": "high",
+			ChaosLabelNodeCategory: ChaosCategoryValidator,
+			ChaosLabelNodeSeverity: ChaosSeverityHigh,
 		},
 	}
 }
@@ -345,8 +345,8 @@ func NewProviderDaemonCrash(providerName string, duration time.Duration) *PodFai
 		Duration:    duration,
 		GracePeriod: 0, // Immediate kill for crash simulation
 		Labels: map[string]string{
-			"chaos.virtengine.dev/category": "provider",
-			"chaos.virtengine.dev/severity": "medium",
+			ChaosLabelNodeCategory: ChaosCategoryProvider,
+			ChaosLabelNodeSeverity: ChaosSeverityMedium,
 		},
 	}
 }
@@ -373,8 +373,8 @@ func NewRandomPodKill(namespace, labelSelector string, count int) *PodFailureSce
 		Duration:    DefaultDuration,
 		GracePeriod: 0, // Immediate kill
 		Labels: map[string]string{
-			"chaos.virtengine.dev/category": "random",
-			"chaos.virtengine.dev/severity": "medium",
+			ChaosLabelNodeCategory: ChaosCategoryRandom,
+			ChaosLabelNodeSeverity: ChaosSeverityMedium,
 		},
 	}
 }
@@ -406,8 +406,8 @@ func NewRollingPodFailure(pods []string, interval, duration time.Duration) *PodF
 		GracePeriod: DefaultGracePeriod,
 		Interval:    interval,
 		Labels: map[string]string{
-			"chaos.virtengine.dev/category": "rolling",
-			"chaos.virtengine.dev/severity": "high",
+			ChaosLabelNodeCategory: ChaosCategoryRolling,
+			ChaosLabelNodeSeverity: ChaosSeverityHigh,
 		},
 	}
 }
@@ -548,8 +548,8 @@ func NewNodeDrain(nodeName string, gracePeriod time.Duration) *NodeFailureScenar
 		Force:            false,
 		EvictGracePeriod: gracePeriod,
 		Labels: map[string]string{
-			"chaos.virtengine.dev/category": "node",
-			"chaos.virtengine.dev/severity": "high",
+			ChaosLabelNodeCategory: ChaosCategoryNode,
+			ChaosLabelNodeSeverity: ChaosSeverityHigh,
 		},
 	}
 }
@@ -573,8 +573,8 @@ func NewNodeReboot(nodeName string) *NodeFailureScenario {
 		Force:            false,
 		EvictGracePeriod: DefaultEvictGracePeriod,
 		Labels: map[string]string{
-			"chaos.virtengine.dev/category": "node",
-			"chaos.virtengine.dev/severity": "critical",
+			ChaosLabelNodeCategory: ChaosCategoryNode,
+			ChaosLabelNodeSeverity: ChaosSeverityCritical,
 		},
 	}
 }
@@ -599,8 +599,8 @@ func NewNodeCordon(nodeName string, duration time.Duration) *NodeFailureScenario
 		Force:            false,
 		EvictGracePeriod: DefaultEvictGracePeriod,
 		Labels: map[string]string{
-			"chaos.virtengine.dev/category": "node",
-			"chaos.virtengine.dev/severity": "medium",
+			ChaosLabelNodeCategory: ChaosCategoryNode,
+			ChaosLabelNodeSeverity: ChaosSeverityMedium,
 		},
 	}
 }
@@ -751,8 +751,8 @@ func NewContainerKill(namespace, pod, container string) *ContainerFailureScenari
 		Action:        ContainerActionKill,
 		Duration:      DefaultDuration,
 		Labels: map[string]string{
-			"chaos.virtengine.dev/category": "container",
-			"chaos.virtengine.dev/severity": "low",
+			ChaosLabelNodeCategory: ChaosCategoryContainer,
+			ChaosLabelNodeSeverity: ChaosSeverityLow,
 		},
 	}
 }
@@ -779,8 +779,8 @@ func NewContainerPause(namespace, pod, container string, duration time.Duration)
 		Action:        ContainerActionPause,
 		Duration:      duration,
 		Labels: map[string]string{
-			"chaos.virtengine.dev/category": "container",
-			"chaos.virtengine.dev/severity": "medium",
+			ChaosLabelNodeCategory: ChaosCategoryContainer,
+			ChaosLabelNodeSeverity: ChaosSeverityMedium,
 		},
 	}
 }
@@ -989,8 +989,8 @@ func NewCascadeFailure(stages []FailureStage) *CascadeFailureScenario {
 		Stages:        stages,
 		StageInterval: DefaultInterval,
 		Labels: map[string]string{
-			"chaos.virtengine.dev/category": "cascade",
-			"chaos.virtengine.dev/severity": "critical",
+			ChaosLabelNodeCategory: ChaosCategoryCascade,
+			ChaosLabelNodeSeverity: ChaosSeverityCritical,
 		},
 	}
 }

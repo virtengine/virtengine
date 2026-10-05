@@ -22,7 +22,7 @@ func WriteJSON(path string, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
@@ -38,7 +38,7 @@ func WriteMonteCarloCSV(path string, results map[string]MonteCarloResult) error 
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
@@ -73,7 +73,7 @@ func WriteMonteCarloJSON(path string, results map[string]MonteCarloResult) error
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	keys := make([]string, 0, len(results))
 	for key := range results {
@@ -82,7 +82,7 @@ func WriteMonteCarloJSON(path string, results map[string]MonteCarloResult) error
 	sort.Strings(keys)
 
 	writer := bufio.NewWriter(file)
-	defer writer.Flush()
+	defer func() { _ = writer.Flush() }()
 
 	if _, err := writer.WriteString("{\n"); err != nil {
 		return err
@@ -134,7 +134,7 @@ func WriteDashboardHTML(path string, results map[string]MonteCarloResult, sensit
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	// toJSON returns the JSON encoding as a plain string: html/template then
 	// escapes it as a JS string literal in the <script> context. Returning

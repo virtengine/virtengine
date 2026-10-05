@@ -4,11 +4,18 @@
 #
 # Why this exists
 # ---------------
-# The DR CronJob pods (infra/kubernetes/dr/backup-cronjobs.yaml) run under
-# dr-backup-sa, which mounts NO imagePullSecrets. They can therefore only ever
-# pull an anonymously-readable package. A digest pin that resolves for an
-# authenticated CI runner can still be unreachable from the cluster, so the
-# digest check alone is not sufficient evidence — this probe covers that gap.
+# A digest pin that resolves for an authenticated CI runner can still be
+# unreachable from the cluster, so the digest check alone is not sufficient
+# evidence — this probe covers that gap.
+#
+# Since #1161 the DR CronJob pods (infra/kubernetes/dr/backup-cronjobs.yaml)
+# run under dr-backup-sa, which DOES mount an imagePullSecrets entry
+# (dr-tools-ghcr-pull). So a non-200 here is no longer by itself a reason for
+# the pod to sit in ImagePullBackOff: the pod has a credential path. What this
+# probe reports is which side of the invariant is currently true — see
+# .github/tests/test_ghcr_image_pull_credential_policy.py, which asserts the
+# pair (not anonymously readable => a pull credential exists) in both
+# directions.
 #
 # Why it is self-validating
 # -------------------------
@@ -38,7 +45,7 @@
 #             1 self-test failed or usage error.
 #
 # Advisory by design: the package visibility decision is an owner call
-# (t_46de26f7), so a private package must not fail unrelated PRs.
+# (recorded on PR #1161), so a private package must not fail unrelated PRs.
 
 set -uo pipefail
 
@@ -52,11 +59,17 @@ CONTROL_REF="${CONTROL_REF:-sha256:da0ac87c431e4774ba327604769f7609f2e56275ece6e
 
 # Composed at runtime rather than written inline. Output from agent/review
 # tooling that masks secret-like text rewrites the adjacent form
-# "Bearer <identifier>" to "Bearer ***" on display, which already produced one
-# false review finding against this file (t_46de26f7 round 3: "the probe sends a
-# literal ***", with the requested fix rendering identically to the code it
-# called buggy). Keeping the scheme in a variable means a reviewer reading this
-# through such a mask still sees a variable reference, not a placeholder.
+# "Bearer <identifier>" to "Bearer ***" on display, which has produced false
+# review findings against this line -- the requested "fix" renders identically
+# to the code it called buggy. Reproduce it yourself: run the line below
+#
+#   grep -n 'Authorization' scripts/ci/probe-ghcr-pullability.sh | od -c
+#
+# and read the bytes: they are `${AUTH_SCHEME} $3`. A reader going through a
+# masking tool instead sees `Authorization: *** $3`, which is the mask, not the
+# file. Keeping the scheme in a variable means even the masked view shows a
+# variable reference rather than a bare placeholder. (Locate the line by grep,
+# not by a hard-coded number: every edit above this one shifts it.)
 AUTH_SCHEME='Bearer'
 
 subject_repo=''
@@ -128,9 +141,14 @@ probe() { # repo ref
 
 warn_private() { # repo ref code
   echo "::warning::anonymous manifest fetch returned $3 for $1@$2."
-  echo "The DR CronJob pods mount no imagePullSecrets, so they will stay in"
-  echo "ImagePullBackOff. Either make the package public or add a pull secret"
-  echo "to dr-backup-sa. Decision tracked by t_46de26f7."
+  echo "The DR CronJob pods now mount imagePullSecrets (dr-tools-ghcr-pull), so"
+  echo "this is not by itself an outage: a non-200 means the package is not"
+  echo "ANONYMOUSLY readable, and the pods have a credential path either way."
+  echo "It does become an outage if that secret is missing from the namespace."
+  echo "Either make the package public or make sure dr-backup-sa has the pull"
+  echo "secret. Credential-path decision recorded on PR #1161 (panel verdict in"
+  echo "the t_c1265bfb task thread; a card id quoted in this file's history,"
+  echo "t_46de26f7, exists on no board and was the original PR #900 task)."
 }
 
 echo "probing anonymous pullability (control: ${CONTROL_REPO}@${CONTROL_REF:0:19}...)"

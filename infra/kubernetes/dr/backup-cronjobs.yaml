@@ -38,12 +38,23 @@ metadata:
 #     --docker-username='<principal with read:packages on dr-tools>' \
 #     --docker-password='<token>'
 #
-# `dr-tools-ghcr-pull` is the name this manifest now references. It is a
-# placeholder chosen because the repo carries NO existing imagePullSecrets
-# convention to match; if your cluster already names this secret differently,
-# change this reference to that name rather than creating a second secret.
-# Use a read-only credential: this Secret is mounted into an unattended DR pod
-# and the token outlives the manifest.
+# `dr-tools-ghcr-pull` is the name this manifest now references, and it follows
+# the one convention this tree uses for a plain (non-Helm) manifest: one
+# read-only pull secret per ghcr.io/virtengine package, named
+# `<package>-ghcr-pull`. The four deploy/kubernetes/base workloads follow the
+# same shape (virtengine-node-ghcr-pull, provider-daemon-ghcr-pull,
+# tee-enclave-ghcr-pull, veid-inference-ghcr-pull).
+#
+# The OTHER convention in the repo -- deploy/slurm/slurm-cluster
+# `global.imagePullSecrets`, consumed by the five *-statefulset.yaml templates
+# -- is Helm-only: it renders into a pod spec and cannot set the
+# `imagePullSecrets` field on a plain ServiceAccount like the one above. That
+# is why a plain secret name is correct here rather than a divergence from it.
+#
+# If your cluster already names this secret differently, change this reference
+# to that name rather than creating a second secret. Use a read-only
+# credential: this Secret is mounted into an unattended DR pod and the token
+# outlives the manifest.
 #
 # The IRSA annotation above does NOT authenticate these pulls. IRSA grants the
 # POD AWS API access; the image pull is performed by the NODE's kubelet against

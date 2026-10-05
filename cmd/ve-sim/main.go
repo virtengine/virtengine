@@ -326,7 +326,7 @@ func loadConfig(path string) (core.Config, error) {
 	if err != nil {
 		return core.Config{}, err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	decoder := json.NewDecoder(file)
 	var cfg core.Config
@@ -347,7 +347,7 @@ func writeJSON(path string, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	encoder := json.NewEncoder(file)
 	encoder.SetIndent("", "  ")
@@ -359,7 +359,7 @@ func readJSON(path string, v interface{}) error {
 	if err != nil {
 		return err
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	decoder := json.NewDecoder(file)
 	return decoder.Decode(v)

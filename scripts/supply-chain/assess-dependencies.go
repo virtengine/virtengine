@@ -210,7 +210,7 @@ func getDependencies() []struct{ Package, Version string } {
 		fmt.Fprintf(os.Stderr, "Error opening go.mod: %v\n", err)
 		os.Exit(1)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 
 	inRequire := false
 	requireBlockRegex := regexp.MustCompile(`^\s*require\s*\(`)

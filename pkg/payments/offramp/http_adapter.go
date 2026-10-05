@@ -957,7 +957,7 @@ func (a *HTTPPartnerAdapter) doJSONDispatch(ctx context.Context, method string, 
 		}
 		return true, NormalizeError(a.Name(), operation, err)
 	}
-	defer response.Body.Close()
+	defer func() { _ = response.Body.Close() }()
 	limited := io.LimitReader(response.Body, a.maxResponseBytes+1)
 	raw, err := io.ReadAll(limited)
 	if err != nil {

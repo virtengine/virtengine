@@ -9,7 +9,7 @@
 | [`sdk/ts`](./ts) | [SDK CI](https://github.com/virtengine/virtengine/actions/workflows/sdk-ci.yaml) | `npm run lint`, `npm run build` |
 | [`sdk/ts`](./ts) tests | [Protobuf and Module Contract Gate](https://github.com/virtengine/virtengine/actions/workflows/proto-generation.yaml) | `npm run lint`, `npm test -- --runInBand`, `npm run build` (all 40 suites) |
 | [`sdk/portal`](./portal) | [Portal CI](https://github.com/virtengine/virtengine/actions/workflows/portal-ci.yaml) (job `SDK Portal`) | `pnpm type-check`, `pnpm test`, `pnpm build` |
-| [`sdk/python`](./python) | **none — see below** | — |
+| [`sdk/python`](./python) | **none — see below** | `pytest tests/` (measured green, not yet wired) |
 | [`sdk/rust`](./rust) | **none — see below** | — |
 
 > **Known gap: `sdk/python` and `sdk/rust` have no CI.** Neither is a supported
@@ -17,22 +17,61 @@
 > Python protobuf SDK is published ("generation fails closed") and that the Rust
 > templates are experimental ("no Rust protobuf SDK is a release output"), and
 > `sdk/generation/generate.sh:333` refuses both by name. Gating them would mean
-> gating output the build deliberately does not produce.
+> gating output the build deliberately does not produce. Their current state:
 >
-> Two concrete defects make them un-gateable today, independent of that policy:
+> - **`sdk/python` — collectible and green, but still ungated.** Both defects
+>   this block used to report are fixed:
 >
-> - `sdk/python` — pytest cannot collect. The generated `google/protobuf/`
->   package checked in next to the code is a 0-byte `__init__.py` plus generated
->   `*_pb2` modules with no `descriptor.py`, so it shadows the installed
->   `google.protobuf` whenever `sdk/python` is first on `sys.path`. Measured:
->   `pytest tests/ --collect-only` → 3 collection errors, `ImportError: cannot
->   import name 'descriptor' from 'google.protobuf'`. All 3 test modules error.
-> - `sdk/rust` — the checked-in `rust/src/proto/mod.rs:123` contains
->   `pub mod mod {`. `mod` is a Rust keyword, so this cannot compile; the file is
->   marked `@generated` and is consistent with output that was never compiled.
+>   1. *The `google/` shadowing package is deleted.* It was a 0-byte
+>      `__init__.py` plus generated `*_pb2` modules and no `descriptor.py`, so it
+>      shadowed the installed `google.protobuf` whenever `sdk/python` was first on
+>      `sys.path`. `google/api/*` now comes from the `googleapis-common-protos`
+>      dependency instead, and the `google` entry was dropped from the
+>      `pyproject.toml` package list.
+>   2. *The gencode/runtime version floor is corrected.* The checked-in gencode is
+>      mixed-version — of the 194 tracked `*_pb2.py` files, 179 declare
+>      `# Protobuf Python Version: 6.33.5` and 15 declare `7.36.2`. Protobuf
+>      runtimes ≥5 validate gencode at import and hard-fail when the gencode is
+>      newer, so the runtime must sit at or above the newest gencode in the tree;
+>      the floor is therefore `protobuf = ">=7.36.2,<8"`, not the previous
+>      `^5.29.6`.
 >
-> These are tracked as separate work items; this workflow gates only what is
-> known green so that a red check always means a real regression.
+>   Measured on Python 3.11 and 3.12: `pytest tests/ --collect-only` exits 0 with
+>   5 tests collected, and `pytest tests/` passes 5/5. The un-gated state is a
+>   coverage decision, not a blocker — there is nothing red to wire up yet. The
+>   reason it is not simply added to [SDK CI](https://github.com/virtengine/virtengine/actions/workflows/sdk-ci.yaml)
+>   is a packaging one: this SDK has no lockfile and no supported generation
+>   contract, so a gate would resolve fresh dependency ranges on every run rather
+>   than test a pinned tree. Wiring it is a deliberate follow-up, not an oversight.
+> - **`sdk/rust` — knowingly uncompilable, and deliberately ungated.**
+>   `cargo check --all-targets` fails with 6 errors, measured:
+>
+>   | Error | Site |
+>   | --- | --- |
+>   | `expected identifier, found keyword 'mod'` | `src/proto/mod.rs:123` (`pub mod mod {`) |
+>   | `E0428`: `query_client` redefined | `src/proto/cosmos.auth.v1beta1.tonic.rs:3` |
+>   | `E0428`: `query_server` redefined | `src/proto/cosmos.auth.v1beta1.tonic.rs:348` |
+>   | `E0428`: `service_client` redefined | `src/proto/cosmos.tx.v1beta1.tonic.rs:3` |
+>   | `E0428`: `service_server` redefined | `src/proto/cosmos.tx.v1beta1.tonic.rs:312` |
+>   | `recursion limit reached while expanding 'stringify!'` | `src/proto/cometbft.abci.v2.rs:18` (`prost::Oneof` derive) |
+>
+>   The `pub mod mod` entry is not merely a keyword error — it is
+>   `pub mod mod { include!("mod.rs"); }`, i.e. a self-include. There is no
+>   `package mod` and no `mod.proto` anywhere in the repository, so this module
+>   is orphan generated output with no regeneration path: neither
+>   `sdk/buf.gen.rust-sdk.yaml` nor any make target is wired to
+>   `sdk/rust/src/proto/`. It is left in place rather than hand-patched, because
+>   editing a `@generated` file by hand would hide the real defect (a generator
+>   that was never run for this tree) behind a one-line cosmetic fix.
+>
+>   `sdk/rust` also cannot simply be deleted: the hand-written `src/client.rs`,
+>   `src/tx.rs`, `src/modules/*.rs` all import `crate::proto::…`, so the
+>   generated tree is load-bearing for the crate even though it does not compile.
+>   Making it build requires regenerating the tree from a supported Rust template
+>   first — which is the same reason it is not a release output.
+>
+> Decision owner for both: SDK surface policy is operator/chain-core. Re-verify
+> the numbers above before quoting them; they are not asserted by CI.
 
 ## Overview
 

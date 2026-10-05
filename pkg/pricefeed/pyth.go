@@ -150,7 +150,7 @@ func (p *PythProvider) fetchPrice(ctx context.Context, baseAsset, quoteAsset str
 	if err != nil {
 		return PriceData{}, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
@@ -277,7 +277,7 @@ func (p *PythProvider) GetPrices(ctx context.Context, pairs []AssetPair) (map[st
 	if err != nil {
 		return nil, fmt.Errorf("request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)

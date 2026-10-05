@@ -94,7 +94,7 @@ func (e *MissingSecretsError) Error() string {
 	}
 
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%d required secrets are missing:\n", len(e.Errors)))
+	fmt.Fprintf(&sb, "%d required secrets are missing:\n", len(e.Errors))
 	for _, err := range e.Errors {
 		sb.WriteString("  - ")
 		sb.WriteString(err.Error())
@@ -184,7 +184,7 @@ func (c *SecretConfig) RedactedString() string {
 			reqMarker = " (required)"
 		}
 
-		sb.WriteString(fmt.Sprintf("  %s (%s)%s: %s\n", field.Name, envTag, reqMarker, status))
+		fmt.Fprintf(&sb, "  %s (%s)%s: %s\n", field.Name, envTag, reqMarker, status)
 	}
 
 	sb.WriteString("}")

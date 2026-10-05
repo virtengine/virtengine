@@ -426,7 +426,7 @@ func TestAggregator_PrimaryStrategy(t *testing.T) {
 		t.Errorf("expected 1 primary request, got %d", primary.RequestCount())
 	}
 
-	agg.Close()
+	_ = agg.Close()
 }
 
 func TestAggregator_FallbackOnError(t *testing.T) {
@@ -482,7 +482,7 @@ func TestAggregator_FallbackOnError(t *testing.T) {
 		t.Errorf("expected secondary price %s, got %s", secondaryPrice, result.Price)
 	}
 
-	agg.Close()
+	_ = agg.Close()
 }
 
 func TestConfig_Validate(t *testing.T) {

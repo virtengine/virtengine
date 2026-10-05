@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from typing import Tuple
 import hashlib
 
-from bip_utils import Bip39SeedGenerator, Bip44, Bip44Coins
+from bip_utils import Bip39SeedGenerator, Bip44, Bip44Changes, Bip44Coins
 from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.utils import decode_dss_signature
@@ -39,7 +39,17 @@ class Wallet:
         """Derive wallet from BIP39 mnemonic."""
         seed = Bip39SeedGenerator(mnemonic).Generate()
         bip44 = Bip44.FromSeed(seed, Bip44Coins.COSMOS)
-        account_node = bip44.Purpose().Coin().Account(account).Change(0).AddressIndex(index)
+        # Bip44.Change() takes a Bip44Changes enum, not a bare int. bip-utils
+        # 2.9+ raises TypeError("Change index is not an enumerative of
+        # Bip44Changes") for the int 0, which is what the pyproject floor
+        # (bip-utils ^2.9.0) resolves to.
+        account_node = (
+            bip44.Purpose()
+            .Coin()
+            .Account(account)
+            .Change(Bip44Changes.CHAIN_EXT)
+            .AddressIndex(index)
+        )
         private_key = account_node.PrivateKey().Raw().ToBytes()
         private_key_int = int.from_bytes(private_key, "big")
         signing_key = ec.derive_private_key(private_key_int, ec.SECP256K1())
