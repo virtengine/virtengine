@@ -157,16 +157,17 @@ jobs:
         # and cannot be defeated by the API permissions that broke `gh run
         # download` on run 37292268699.
         #
-        # `if-no-files-found: error` makes an empty collection a hard failure
-        # rather than a silent pass: a shard with no artifact must be
-        # attributable to that shard, not to an empty directory.
+        # `if-no-files-found: error` is NOT available here - it is an
+        # upload-artifact input, and download-artifact@v6 does not define it (CI
+        # rejected exactly this on run 37303621734). An empty collection is
+        # rejected by the gate step below instead, which requires one verdict per
+        # DECLARED shard.
         if: always()
         uses: actions/download-artifact@v6
         with:
           pattern: govulncheck-verdict-*
           path: ${{ runner.temp }}/verdicts
           merge-multiple: true
-          if-no-files-found: error
 
       - name: Verify every declared govulncheck shard reported a verdict
         # The summary job already fails on a non-success matrix result, so this
@@ -192,6 +193,13 @@ jobs:
         #     `{"tooling":"clean"}` on 37298338441, the latter with all four
         #     shards green at every step. No expression-level fix exists for
         #     overwrite.
+        #
+        # `actions/download-artifact@v6` has NO `if-no-files-found` input (that
+        # belongs to upload-artifact), so an empty collection cannot be rejected
+        # by the action itself. It is rejected here instead: the ledger requires
+        # one verdict per DECLARED shard, so zero collected artifacts means every
+        # shard is UNKNOWN and the step fails - the same fail-closed outcome, via
+        # a mechanism the action actually supports.
         run: |
           set -uo pipefail
           # The DECLARED shard list comes from the workflow matrix itself (the
