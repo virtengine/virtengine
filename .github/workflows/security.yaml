@@ -45,6 +45,31 @@ jobs:
   policy-validation:
     name: Policy Validation
     runs-on: ubuntu-latest
+    # This job reads the per-shard verdict ledgers uploaded by the go-vuln-scan
+    # shards (see "Verify every declared govulncheck shard reported a verdict"),
+    # so it must run AFTER that matrix finishes. Measured on run 37290409373
+    # (PR #1265): with no `needs`, policy-validation completed at 09:30:10 while
+    # the shards were still running and completed at 09:31:27 - the ledgers did
+    # not exist yet, so the check could only ever fail. A parallel job cannot
+    # consume a sibling's output; `needs` is what makes the input exist.
+    #
+    # `go-vuln-scan` already sets `fail-fast: false`, so one shard failing does
+    # not cancel the others: every shard that CAN reach a verdict still writes
+    # its ledger, and the gate below names exactly which shard produced none.
+    needs: go-vuln-scan
+    # `always()` so the ledger gate still runs when the matrix is red or was
+    # cancelled - which is precisely when it has something to report. Without
+    # it, a cancelled shard would skip this job entirely and the run would say
+    # only "Policy Validation: skipped", losing the name of the shard that
+    # produced no verdict. Mirrors security-summary, which is also `always()`.
+    if: always()
+    # `actions: read` is required for the run-artifact download and is scoped to
+    # THIS job only; every other job keeps the workflow-wide `contents: read`
+    # and gains nothing. Widening the workflow-wide block would hand all 16 jobs
+    # a broader token to fix one job's input.
+    permissions:
+      contents: read
+      actions: read
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -128,12 +153,26 @@ jobs:
             [ -n "$shard" ] || continue
             # Every shard uploads `govulncheck-ledger/` inside its own artifact
             # alongside the report, so one download covers the whole matrix.
-            if ! gh run download "$GITHUB_RUN_ID" \
-              --name "govulncheck-report-$shard" \
-              --dir "$ledger/$shard" >/dev/null 2>&1; then
-              echo "::error::could not download the ledger for shard '$shard'"
+            #
+            # A shard that was CANCELLED mid-scan runs no step at all, so its
+            # artifact never exists - a missing artifact is the real signal, not
+            # a flaky download. The retry therefore covers only the transient
+            # case (artifact listed but not yet readable). Either way the shard
+            # ends with no verdict, and the gate below fails closed naming it:
+            # absence is UNKNOWN, never clean.
+            ok=0
+            for attempt in 1 2 3; do
+              if gh run download "$GITHUB_RUN_ID" \
+                --name "govulncheck-report-$shard" \
+                --dir "$ledger/$shard" >/dev/null 2>&1; then
+                ok=1
+                break
+              fi
+              sleep $((attempt * 10))
+            done
+            if [ "$ok" -ne 1 ]; then
+              echo "::error::no verdict ledger for shard '$shard' (artifact absent after 3 attempts) - this shard reported NO verdict"
               status=1
-              continue
             fi
           done < /tmp/govulncheck-shards.txt
           if [ "$status" -ne 0 ]; then
