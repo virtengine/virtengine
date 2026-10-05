@@ -60,10 +60,32 @@ runs:
         
         # macOS-specific CGO settings to suppress deprecation warnings
         echo "CGO_CFLAGS=-Wno-deprecated-declarations" >> $GITHUB_ENV
-        
-        # Use internal linkmode on macOS to avoid external linker issues
-        echo "GO_LINKMODE=internal" >> $GITHUB_ENV
-        
+
+        # NOTE: do NOT export GO_LINKMODE here.
+        #
+        # This action used to force `GO_LINKMODE=internal` unconditionally. That
+        # silently overrode the Makefile's own derivation, because
+        # `Makefile:41` declares `GO_LINKMODE ?= external` and `?=` YIELDS TO THE
+        # ENVIRONMENT. On a native macOS runner CGO_ENABLED=1, so `external` is
+        # what the build needs: BUILD_TAGS includes `hidraw`, which pulls
+        # github.com/zondax/hid/hidapi/mac, a cgo-only package (that directory
+        # contains hid.c and no .go files) and a cgo package cannot be internally
+        # linked. The `Build (macOS)` job then died at link time on every run:
+        #
+        #   darwin_arm64/link: internal linking requested but external linking
+        #   required: some packages could not be built to support internal
+        #   linking ([github.com/zondax/hid github.com/zondax/hid/hidapi/mac])
+        #
+        # It was red 3/3 on main and never once green. Letting the Makefile
+        # decide also removes a CI-vs-release divergence: .goreleaser.yaml links
+        # darwin with CGO_ENABLED=1 and takes `-linkmode={{ .Env.LINKMODE }}` from
+        # make/releasing.mk (`-e LINKMODE="$(GO_LINKMODE)"`), so CI was verifying a
+        # differently-linked binary than the one that ships.
+        #
+        # `scripts/ci/check-build-linkmode.mjs` fails if any action exports a
+        # GO_LINKMODE that disagrees with `make print-linkmode` under the same
+        # environment, and runs on pull requests because this job is main/tags-only.
+
         # Disable code signing for CI builds
         echo "MACOSX_DEPLOYMENT_TARGET=10.15" >> $GITHUB_ENV
         
@@ -78,6 +100,10 @@ runs:
         echo "GOTOOLCHAIN: ${GOTOOLCHAIN:-NOT SET}"
         echo "VIRTENGINE: ${VIRTENGINE:-NOT SET}"
         echo "CGO_CFLAGS: ${CGO_CFLAGS:-NOT SET}"
-        echo "GO_LINKMODE: ${GO_LINKMODE:-NOT SET}"
+        # Report what the Makefile will ACTUALLY use, not what this action
+        # exported. This action no longer sets GO_LINKMODE, so printing the env
+        # var here would read "NOT SET" on a healthy build and send the next
+        # person looking for a problem that is not there.
+        echo "GO_LINKMODE (Makefile-derived): $(make print-linkmode)"
         echo "Go version: $(go version)"
         echo "Clang version: $(clang --version | head -1)"

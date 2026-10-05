@@ -101,6 +101,42 @@ all: build bins
 clean: cache-clean
 	rm -f $(BINS)
 
+# Report the linkmode this Makefile actually builds with, so a CI job can be
+# checked against it instead of against a hardcoded expectation. `scripts/ci/
+# check-build-linkmode.mjs` compares every `.github/actions/*` that exports
+# GO_LINKMODE against this value under the SAME environment; the two disagreeing
+# is how `Build (macOS)` stayed red on every run since #967 (2026-09-27), because
+# setup-macos forced `internal` on a CGO_ENABLED=1 runner where the `hidraw`
+# build tag pulls a cgo-only package that cannot be internally linked.
+#
+# `internal` here is Make's own variable expansion inside a recipe, so it reports
+# the post-conditional value (the CGO_ENABLED=0 downgrade, the Windows_NT
+# override, and any `?=` that yields to the environment) rather than a
+# restatement of the default.
+.PHONY: print-linkmode
+print-linkmode:
+	@echo "$(GO_LINKMODE)"
+
+# Report the linkmode a LINUX OR MACOS runner would derive, which is what every
+# composite CI action actually builds with.
+#
+# `make print-linkmode` alone cannot answer that from a Windows host: line 53
+# above is `GO_LINKMODE := internal` under `ifeq ($(OS),Windows_NT)`, an
+# unconditional `:=` assignment applied AFTER the CGO_ENABLED rule, so it
+# overrides the environment no matter what is exported. On Windows the variable is
+# therefore always `internal`, every candidate override equals it, and a guard
+# comparing the two can never disagree with anything — it would report OK on the
+# exact defect it exists to catch.
+#
+# `OS` cannot be cleared for the whole Makefile, because `make/init.mk:12-29`
+# branches on it to decide whether to demand direnv. So this target delegates to
+# make/linkmode.mk, which carries the same two rules minus the Windows override.
+# That file is a verbatim copy of lines 41-47 and cannot drift silently: the
+# guard asserts its answer agrees with the real Makefile wherever the real
+# Makefile can be interrogated (see check-build-linkmode.mjs `selftestAgreement`).
+print-linkmode-for-runner:
+	@$(MAKE) --no-print-directory -f make/linkmode.mk print-linkmode
+
 .PHONY: proto-generate
 proto-generate:
 	./scripts/proto-generate.sh all
