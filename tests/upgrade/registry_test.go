@@ -12,6 +12,7 @@ import (
 	_ "github.com/virtengine/virtengine/upgrades"
 	v100 "github.com/virtengine/virtengine/upgrades/software/v1.0.0"
 	v110 "github.com/virtengine/virtengine/upgrades/software/v1.1.0"
+	v1100 "github.com/virtengine/virtengine/upgrades/software/v1.10.0"
 	v120 "github.com/virtengine/virtengine/upgrades/software/v1.2.0"
 	v130 "github.com/virtengine/virtengine/upgrades/software/v1.3.0"
 	v140 "github.com/virtengine/virtengine/upgrades/software/v1.4.0"
@@ -20,7 +21,6 @@ import (
 	v170 "github.com/virtengine/virtengine/upgrades/software/v1.7.0"
 	v180 "github.com/virtengine/virtengine/upgrades/software/v1.8.0"
 	v190 "github.com/virtengine/virtengine/upgrades/software/v1.9.0"
-	v1100 "github.com/virtengine/virtengine/upgrades/software/v1.10.0"
 	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
