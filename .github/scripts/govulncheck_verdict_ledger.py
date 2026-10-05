@@ -26,15 +26,25 @@ verdict, and must not be read as one.
 
 So this gate does not ask "was the matrix green?" - the summary already does
 that. It asks a question the summary cannot: DID EVERY DECLARED SHARD REPORT A
-VERDICT? Each shard writes a one-line ledger entry naming its verdict; a shard
-that dies mid-scan writes none, and a missing entry is an UNKNOWN that fails
-closed rather than being read as clean.
+VERDICT? Each shard exposes its verdict as a job output; GitHub aggregates those
+into one object, and a shard that died mid-scan contributes no key. A missing
+key is an UNKNOWN that fails closed rather than being read as clean.
+
+The verdicts arrive as job OUTPUTS, not as downloaded artifacts. An earlier
+revision had the consumer `gh run download` each shard's ledger: on run
+37292268699 all four downloads timed out at ~60s each while every shard had
+actually SUCCEEDED, and the step's `>/dev/null 2>&1` left the log saying only
+"artifact absent" - indistinguishable from a genuinely cancelled shard. A red
+that cannot tell those two apart is worse than no gate, so the cross-job
+download was removed rather than retried.
 
 Deliberately NOT a weakening. No `continue-on-error`, no `|| true`, no
 reclassification of an unfinished scan as clean: an absent verdict is red.
 
-Usage: govulncheck_verdict_ledger.py <ledger-dir> [--expect N] [--json]
-  Reads `<ledger-dir>/<shard>.verdict`, one `verdict=<value>` line per shard.
+Usage: govulncheck_verdict_ledger.py <ledger-dir> [--verdicts-json F]
+         [--expect N] [--json]
+  --verdicts-json  JSON object of {shard: verdict} from the matrix job outputs.
+  Without it, reads `<ledger-dir>/<shard>.verdict`, one `verdict=` line each.
   Exit 0 only when every expected shard reports a recognised verdict.
 Exit 1 = a shard has no verdict, or an unknown verdict; exit 2 = usage/IO error.
 """
@@ -102,9 +112,37 @@ def expected_shards(explicit: int | None, directory: str) -> list[str]:
     return []
 
 
+def read_verdicts_json(path: str) -> dict[str, str]:
+    """Parse the matrix's aggregated verdict object.
+
+    GitHub emits an EMPTY string (not `{}`) when no shard produced an output, so
+    an empty or blank file is the normal no-verdict-at-all case, not an error -
+    it yields {} and every declared shard is then reported missing.
+    """
+    if not os.path.isfile(path):
+        return {}
+    with open(path, encoding="utf-8", errors="replace") as fh:
+        body = fh.read().strip()
+    if not body:
+        return {}
+    try:
+        data = json.loads(body)
+    except json.JSONDecodeError as exc:
+        raise ValueError(f"{path}: not valid JSON ({exc})")
+    if not isinstance(data, dict):
+        raise ValueError(f"{path}: expected a JSON object, got {type(data).__name__}")
+    return {str(k): str(v) for k, v in data.items()}
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("ledger_dir", help="directory holding <shard>.verdict files")
+    ap.add_argument(
+        "--verdicts-json",
+        default=None,
+        help="JSON object of {shard: verdict} from the matrix job outputs; "
+        "takes precedence over <shard>.verdict files when present",
+    )
     ap.add_argument(
         "--expect",
         type=int,
@@ -132,15 +170,31 @@ def main(argv: list[str] | None = None) -> int:
         )
         return 2
 
+    from_json: dict[str, str] | None = None
+    if args.verdicts_json:
+        try:
+            from_json = read_verdicts_json(args.verdicts_json)
+        except ValueError as exc:
+            print(f"ERROR: {exc}", file=sys.stderr)
+            return 2
+
     results = []
     unknown = 0
     for shard in shards:
-        verdict, note = read_shard_ledger(args.ledger_dir, shard)
+        if from_json is not None:
+            verdict = from_json.get(shard)
+            if verdict is None:
+                note = f"{shard}: NO verdict reported by the matrix"
+            elif verdict not in KNOWN:
+                note = f"{shard}: unknown verdict '{verdict}' (not in {sorted(KNOWN)})"
+                verdict = None
+            else:
+                note = f"{shard}: verdict={verdict}"
+        else:
+            verdict, note = read_shard_ledger(args.ledger_dir, shard)
         if verdict is None:
             unknown += 1
-            results.append({"shard": shard, "verdict": None, "note": note})
-        else:
-            results.append({"shard": shard, "verdict": verdict, "note": note})
+        results.append({"shard": shard, "verdict": verdict, "note": note})
 
     if args.expect is not None and len(shards) != args.expect:
         print(

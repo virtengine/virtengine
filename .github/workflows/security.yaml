@@ -143,58 +143,35 @@ jobs:
         # UNKNOWN shard and is never counted as clean.
         run: |
           set -uo pipefail
+          # The DECLARED shard list comes from the workflow matrix itself (the
+          # same reader the partition guard uses), so a shard added there is
+          # required to report here without editing this step.
           python .github/scripts/govulncheck_shards.py --list > /tmp/govulncheck-shards.txt
           shard_count="$(wc -l < /tmp/govulncheck-shards.txt | tr -d ' ')"
           echo "declared shards: $shard_count"
-          ledger="$RUNNER_TEMP/ledger"
-          mkdir -p "$ledger"
-          status=0
-          while IFS="$(printf '\t')" read -r shard _patterns; do
-            [ -n "$shard" ] || continue
-            # Every shard uploads `govulncheck-ledger/` inside its own artifact
-            # alongside the report, so one download covers the whole matrix.
-            #
-            # A shard that was CANCELLED mid-scan runs no step at all, so its
-            # artifact never exists - a missing artifact is the real signal, not
-            # a flaky download. The retry therefore covers only the transient
-            # case (artifact listed but not yet readable). Either way the shard
-            # ends with no verdict, and the gate below fails closed naming it:
-            # absence is UNKNOWN, never clean.
-            ok=0
-            for attempt in 1 2 3; do
-              if gh run download "$GITHUB_RUN_ID" \
-                --name "govulncheck-report-$shard" \
-                --dir "$ledger/$shard" >/dev/null 2>&1; then
-                ok=1
-                break
-              fi
-              sleep $((attempt * 10))
-            done
-            if [ "$ok" -ne 1 ]; then
-              echo "::error::no verdict ledger for shard '$shard' (artifact absent after 3 attempts) - this shard reported NO verdict"
-              status=1
-            fi
-          done < /tmp/govulncheck-shards.txt
-          if [ "$status" -ne 0 ]; then
-            exit 1
-          fi
-          # Merge every shard's ledger into one directory the gate can read. The
-          # manifest is the shard list itself (first column), which is what makes
-          # a missing verdict attributable to a named shard rather than to a count.
+
+          # Verdicts arrive as JOB OUTPUTS, not as downloaded artifacts.
+          #
+          # Measured on run 37292268699: the artifact-download design failed even
+          # with `actions: read` and `needs` in place - all four downloads timed
+          # out at ~60s each while every shard had actually SUCCEEDED, and
+          # because the step sent gh's stderr to /dev/null the log could only say
+          # "artifact absent", which is indistinguishable from a genuinely
+          # cancelled shard. A red that cannot tell those two apart is worse than
+          # no gate, so the dependency is removed rather than retried.
+          #
+          # A cancelled matrix job contributes NO outputs, so both values arrive
+          # empty and the gate below fails closed naming every missing shard.
           merged="$RUNNER_TEMP/merged-ledger"
           mkdir -p "$merged"
           awk '{print $1}' /tmp/govulncheck-shards.txt > "$merged/shards.manifest"
-          for shard_dir in "$ledger"/*/; do
-            [ -d "$shard_dir" ] || continue
-            # A cancelled shard's download fails above, so a directory that
-            # exists but holds no .verdict file is itself the missing-verdict
-            # signal - the gate below reports it by name.
-            find "$shard_dir" -name '*.verdict' -exec cp {} "$merged/" \; 2>/dev/null
-          done
-          echo "== per-shard verdicts collected =="
-          ls -1 "$merged"
+          printf '%s' "${{ needs.go-vuln-scan.outputs.govulncheck_verdicts }}" \
+            > "$merged/verdicts.json"
+          echo "== declared shards vs reported verdicts =="
+          cat "$merged/shards.manifest"
+          echo "reported: $(cat "$merged/verdicts.json")"
           python .github/scripts/govulncheck_verdict_ledger.py "$merged" \
-            --expect "$shard_count"
+            --verdicts-json "$merged/verdicts.json" --expect "$shard_count"
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -365,6 +342,9 @@ jobs:
             patterns: "./cmd/... ./scripts/... ./tools/... ./docgen/..."
           - shard: tests-and-sim
             patterns: "./tests/... ./testutil/... ./sim/... ./upgrades/... ./sdk/... ./util/..."
+    outputs:
+      govulncheck_shards: ${{ steps.shard-names.outputs.names }}
+      govulncheck_verdicts: ${{ steps.shard-verdicts.outputs.verdicts }}
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -454,19 +434,72 @@ jobs:
 
       - name: Upload govulncheck report (${{ matrix.shard }})
         uses: actions/upload-artifact@v6
-        # `always()` so the ledger is uploaded even when the scan step failed:
+        # `always()` so the report is uploaded even when the scan step failed:
         # a shard that failed AFTER reaching a verdict still has a verdict, and
-        # the policy-validation job must see the difference between that and a
-        # shard that never got far enough to reach one. A shard CANCELLED
-        # mid-scan uploads nothing at all, which is exactly the signal the
-        # ledger gate keys on.
+        # the policy-validation gate must see the difference between that and a
+        # shard that never got far enough to reach one.
         if: always()
         with:
           name: govulncheck-report-${{ matrix.shard }}
-          path: |
-            govulncheck-report.json
-            ${{ runner.temp }}/govulncheck-ledger
+          path: govulncheck-report.json
           retention-days: 30
+
+      - name: Report this shard's verdict
+        id: verdict
+        # The verdict is carried as a JOB OUTPUT, not as an artifact the
+        # summary has to download.
+        #
+        # Measured on run 37292268699: the artifact-download design failed even
+        # with `actions: read` and `needs` in place - all four downloads timed
+        # out at ~60s each while the shards themselves succeeded, and because the
+        # step sent gh's stderr to /dev/null the log said only "artifact
+        # absent", which is indistinguishable from a genuinely cancelled shard.
+        # A cross-job artifact download needs a token scope, an ordering
+        # guarantee AND its own error channel; a matrix job output needs none of
+        # those, and GitHub carries it natively.
+        #
+        # `if: always()` is deliberate and is NOT a weakening: it runs this step
+        # even when the scan step failed. A shard that reached a verdict reports
+        # it (the matrix result stays red); a shard cancelled mid-scan never
+        # reaches this step at all, so its entry is simply absent - and an absent
+        # entry is what the consuming gate keys on.
+        if: always()
+        env:
+          VERDICT_DIR: ${{ runner.temp }}/govulncheck-ledger
+        run: |
+          if [ -f "$VERDICT_DIR/${{ matrix.shard }}.verdict" ]; then
+            v="$(sed -n 's/^verdict=//p' "$VERDICT_DIR/${{ matrix.shard }}.verdict")"
+          else
+            v="no-verdict"
+          fi
+          echo "value=$v" >> "$GITHUB_OUTPUT"
+
+      # A matrix job cannot expose a step's output at the JOB level, so the
+      # shard name and verdict are emitted as job outputs via the documented
+      # object form (`toJSON` over the matrix context). GitHub aggregates them
+      # across the matrix automatically - no download, no token scope, no
+      # ordering constraint inside this job.
+      #
+      # `govulncheck: '${{ matrix.shard }}'` is the shard's identity; a shard
+      # cancelled mid-scan never reaches the verdict step, so its key is simply
+      # absent from `verdicts` - and an absent key is the no-verdict signal the
+      # consuming gate keys on. A shard that reached a verdict keeps its key
+      # even when the matrix result is red, which is what lets the gate say
+      # "clean but failed later" instead of "unknown".
+      - name: Expose this shard's verdict
+        id: shard-verdicts
+        if: always()
+        env:
+          VERDICT: ${{ steps.verdict.outputs.value }}
+        run: |
+          echo "verdicts=$(printf '{"%s":"%s"}' '${{ matrix.shard }}' "$VERDICT")" \
+            >> "$GITHUB_OUTPUT"
+
+      - name: Expose this shard's name
+        id: shard-names
+        if: always()
+        run: |
+          echo "names=[\"${{ matrix.shard }}\"]" >> "$GITHUB_OUTPUT"
 
   python-vuln-scan:
     name: Python Vulnerability Scan

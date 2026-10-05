@@ -192,5 +192,87 @@ class TestManifestParsing(LedgerFixture):
         self.assertIn("reported a verdict", proc.stdout)
 
 
+class TestVerdictsJson(LedgerFixture):
+    """The transport the workflow actually uses: matrix job outputs.
+
+    The file-based ledger was superseded because a cross-job artifact download
+    failed on run 37292268699 even though every shard succeeded. These pin the
+    replacement, including the empty-output case GitHub produces when the whole
+    matrix is cancelled.
+    """
+
+    def verdicts_json(self, body: str) -> str:
+        path = os.path.join(self.dir, "verdicts.json")
+        with open(path, "w", encoding="utf-8") as fh:
+            fh.write(body)
+        return path
+
+    def test_all_verdicts_reported_passes(self):
+        self.manifest("core", "platform", "tooling")
+        path = self.verdicts_json(
+            '{"core":"clean","platform":"clean","tooling":"clean"}'
+        )
+        self.assertEqual(self.mod.main([self.dir, "--verdicts-json", path,
+                                        "--expect", "3"]), 0)
+
+    def test_cancelled_shard_absent_from_the_object_fails_closed(self):
+        """The exact recurrence: one shard produced no output at all."""
+        self.manifest("core", "platform", "tooling")
+        path = self.verdicts_json('{"core":"clean","platform":"clean"}')
+        self.assertEqual(self.mod.main([self.dir, "--verdicts-json", path,
+                                        "--expect", "3"]), 1)
+
+    def test_empty_output_means_every_shard_is_unknown(self):
+        """GitHub emits an EMPTY STRING, not `{}`, when nothing reported."""
+        self.manifest("core", "platform")
+        path = self.verdicts_json("")
+        self.assertEqual(self.mod.main([self.dir, "--verdicts-json", path,
+                                        "--expect", "2"]), 1)
+
+    def test_whitespace_only_output_is_treated_as_empty(self):
+        self.manifest("core")
+        path = self.verdicts_json("  \n ")
+        self.assertEqual(self.mod.main([self.dir, "--verdicts-json", path,
+                                        "--expect", "1"]), 1)
+
+    def test_no_verdict_value_fails_closed(self):
+        """A shard can complete its step and still not reach a verdict."""
+        self.manifest("core")
+        path = self.verdicts_json('{"core":"no-verdict"}')
+        self.assertEqual(self.mod.main([self.dir, "--verdicts-json", path,
+                                        "--expect", "1"]), 1)
+
+    def test_malformed_json_is_a_usage_error_not_a_pass(self):
+        self.manifest("core")
+        path = self.verdicts_json('{"core": ')
+        self.assertEqual(self.mod.main([self.dir, "--verdicts-json", path,
+                                        "--expect", "1"]), 2)
+
+    def test_json_array_instead_of_object_is_rejected(self):
+        self.manifest("core")
+        path = self.verdicts_json('["clean"]')
+        self.assertEqual(self.mod.main([self.dir, "--verdicts-json", path,
+                                        "--expect", "1"]), 2)
+
+    def test_missing_json_file_yields_all_unknown(self):
+        self.manifest("core", "platform")
+        path = os.path.join(self.dir, "does-not-exist.json")
+        self.assertEqual(self.mod.main([self.dir, "--verdicts-json", path,
+                                        "--expect", "2"]), 1)
+
+    def test_unknown_verdict_value_in_json_fails_closed(self):
+        self.manifest("core")
+        path = self.verdicts_json('{"core":"looks-fine"}')
+        self.assertEqual(self.mod.main([self.dir, "--verdicts-json", path,
+                                        "--expect", "1"]), 1)
+
+    def test_extra_shard_in_json_is_not_credited(self):
+        """A shard the workflow no longer declares must not satisfy the count."""
+        self.manifest("core")
+        path = self.verdicts_json('{"core":"clean","ghost":"clean"}')
+        self.assertEqual(self.mod.main([self.dir, "--verdicts-json", path,
+                                        "--expect", "1"]), 0)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)
