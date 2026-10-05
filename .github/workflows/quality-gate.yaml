@@ -405,6 +405,48 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/ci/check-deploy-env-policies.mjs
 
+  sdk-publish-policy:
+    name: sdk-publish-policy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Assert the SDK npm publish trigger is dispatch-only
+        # The defect class this prevents is a trigger that was too BROAD: the
+        # sibling sdk-publish.yaml used to fire on `release: types: [published]`,
+        # which would have run a live cargo publish the moment a release was cut.
+        # A "does it parse" check cannot see that -- such a file parses fine --
+        # so the triggers themselves are graded, and falsified below.
+        run: node scripts/ci/check-sdk-npm-publish-triggers.mjs
+
+      - name: Falsify the SDK publish trigger guard
+        # Plants each forbidden trigger into a COPY and requires the guard to
+        # go red. A guard that cannot fail is worse than no guard.
+        run: node scripts/ci/falsify-sdk-npm-publish-triggers.mjs
+
+      - name: Report the npm-publish environment approval state (NON-BLOCKING)
+        # Deliberately `continue-on-error`. This grades REPOSITORY SETTINGS, not
+        # code: `npm-publish` currently has zero protection rules, so
+        # `environment: npm-publish` gates nothing and a dispatch would publish
+        # unattended. Clearing it is a repo-settings change and is HUMAN-ONLY, so
+        # failing every PR until a human does it would make this step
+        # indistinguishable from a code defect and would train readers to
+        # ignore it. It stays visible and stays red until a human adds the
+        # required reviewers; then it goes green on its own.
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ci/check-env-approval-gate.mjs
+
   economics-sim:
     name: economics-sim
     runs-on: ubuntu-latest
