@@ -127,18 +127,46 @@ jobs:
           python -m unittest discover -s .github/tests \
             -p "test_govulncheck_verdict_ledger*.py"
 
-      - name: Run matrix-output aggregation tests
-        # GitHub CONCATENATES matrix job outputs verbatim, so the shard verdicts
-        # arrive as `{"core":"clean"}{"platform":"clean"}...` and must be
-        # reassembled with `fromJSON`. Measured on run 37295691699: `json.loads`
-        # on that concatenation raised "Extra data", the gate received only the
-        # LAST shard, and Policy Validation went red for a transport reason
-        # while reading like a shard finding. These pin the reassembly - and the
-        # last test in the file pins that plain json.loads STILL rejects the
-        # concatenation, so the suite cannot pass against the broken design.
+      - name: Run shard verdict transport tests
         run: |
           python -m unittest discover -s .github/tests \
-            -p "test_matrix_output_aggregation*.py"
+            -p "test_shard_verdict_transport*.py"
+
+      - name: Falsify the shard verdict transport
+        # The transport tests above assert what the workflow DOES. This asserts
+        # those assertions can fail: it mutates security.yaml back to each of the
+        # two transports that failed in production (matrix job outputs, and
+        # `gh run download`), plus the two ways the new one could be silently
+        # broken (an empty collection that is only a warning, and one shared
+        # artifact name), and requires the suite to go RED for each.
+        #
+        # It is a MUTATION harness, so it edits the real workflow and restores
+        # it byte-for-byte; the run asserts that restoration at the end. It must
+        # never run on a tree with uncommitted workflow changes.
+        run: |
+          if ! git diff --quiet -- .github/workflows/security.yaml; then
+            echo "::error::workflow has uncommitted changes - refusing to mutate it"
+            exit 1
+          fi
+          python .github/tests/falsify_shard_verdict_transport.py
+
+      - name: Download shard verdict artifacts
+        # `pattern` + `merge-multiple` collects every `govulncheck-verdict-*`
+        # artifact from THIS run in one action call. It reads the current run's
+        # artifacts through the Actions runtime, so it needs no extra token scope
+        # and cannot be defeated by the API permissions that broke `gh run
+        # download` on run 37292268699.
+        #
+        # `if-no-files-found: error` makes an empty collection a hard failure
+        # rather than a silent pass: a shard with no artifact must be
+        # attributable to that shard, not to an empty directory.
+        if: always()
+        uses: actions/download-artifact@v6
+        with:
+          pattern: govulncheck-verdict-*
+          path: ${{ runner.temp }}/verdicts
+          merge-multiple: true
+          if-no-files-found: error
 
       - name: Verify every declared govulncheck shard reported a verdict
         # The summary job already fails on a non-success matrix result, so this
@@ -146,14 +174,24 @@ jobs:
         # GitHub verdict for N shards and cannot distinguish "all shards clean"
         # from "one shard died before it judged anything". Measured on run
         # 37174317397 / job 111353646594: steps were success x5, cancelled,
-        # skipped x2, success - the shard emitted no govulncheck output at all,
-        # and its `Upload` step was skipped, so no artifact survived.
+        # skipped x2, success - the shard emitted no govulncheck output at all.
         #
-        # Each shard writes `govulncheck-ledger/<shard>.verdict` BEFORE it can
-        # exit, and uploads it under its own report artifact. A shard killed
-        # mid-scan runs no further step, so its ledger is absent - which is the
-        # signal this gate keys on. It fails closed: a missing verdict is an
-        # UNKNOWN shard and is never counted as clean.
+        # Each shard writes `<shard>.verdict` before it can exit and publishes it
+        # as its own artifact. A shard killed mid-scan runs no further step, so
+        # it publishes nothing - which is the signal this gate keys on. The gate
+        # fails closed: a missing verdict is an UNKNOWN shard and is never
+        # counted as clean.
+        #
+        # Two earlier transports were measured and abandoned rather than retried:
+        #   * `gh run download` here - all four downloads timed out at ~60s each
+        #     while every shard had SUCCEEDED (run 37292268699), and the step
+        #     discarded gh's stderr so a cancelled shard and a download failure
+        #     produced the SAME log line.
+        #   * matrix job outputs - ONE WRITER WINS and the rest vanish: the
+        #     consumer saw `{tests-and-sim:clean}` on 37295691699 and
+        #     `{"tooling":"clean"}` on 37298338441, the latter with all four
+        #     shards green at every step. No expression-level fix exists for
+        #     overwrite.
         run: |
           set -uo pipefail
           # The DECLARED shard list comes from the workflow matrix itself (the
@@ -162,39 +200,18 @@ jobs:
           python .github/scripts/govulncheck_shards.py --list > /tmp/govulncheck-shards.txt
           shard_count="$(wc -l < /tmp/govulncheck-shards.txt | tr -d ' ')"
           echo "declared shards: $shard_count"
-
-          # Verdicts arrive as JOB OUTPUTS, not as downloaded artifacts.
-          #
-          # Measured on run 37292268699: the artifact-download design failed even
-          # with `actions: read` and `needs` in place - all four downloads timed
-          # out at ~60s each while every shard had actually SUCCEEDED, and
-          # because the step sent gh's stderr to /dev/null the log could only say
-          # "artifact absent", which is indistinguishable from a genuinely
-          # cancelled shard. A red that cannot tell those two apart is worse than
-          # no gate, so the dependency is removed rather than retried.
-          #
-          # A cancelled matrix job contributes NO outputs, so both values arrive
-          # empty and the gate below fails closed naming every missing shard.
           merged="$RUNNER_TEMP/merged-ledger"
           mkdir -p "$merged"
           awk '{print $1}' /tmp/govulncheck-shards.txt > "$merged/shards.manifest"
-          # `fromJSON` reassembles GitHub's verbatim CONCATENATION of the
-          # per-shard one-element objects into a single object. The `|| '{}'`
-          # default covers a wholly cancelled matrix, where the output is EMPTY
-          # (not `{}`) and fromJSON('') would throw.
-          #
-          # Measured on run 37295691699: without this the step handed the raw
-          # concatenation to json.loads, which raised "Extra data", the gate saw
-          # only `{tests-and-sim:clean}`, and Policy Validation went red for a
-          # transport reason while reading like a shard finding.
-          printf '%s' \
-            '${{ toJSON(fromJSON(needs.go-vuln-scan.outputs.govulncheck_verdicts || '{}')) }}' \
-            > "$merged/verdicts.json"
-          echo "== declared shards vs reported verdicts =="
+          echo "== declared shards =="
           cat "$merged/shards.manifest"
-          echo "reported: $(cat "$merged/verdicts.json")"
+          echo "== downloaded verdict artifacts =="
+          ls -1 "$RUNNER_TEMP/verdicts"
+          # Copy only the verdict files; anything else in the directory is
+          # ignored so the gate reads exactly the shards it asked for.
+          find "$RUNNER_TEMP/verdicts" -name '*.verdict' -exec cp {} "$merged/" \;
           python .github/scripts/govulncheck_verdict_ledger.py "$merged" \
-            --verdicts-json "$merged/verdicts.json" --expect "$shard_count"
+            --expect "$shard_count"
 
       - name: Set up Go
         uses: actions/setup-go@v6
@@ -365,13 +382,18 @@ jobs:
             patterns: "./cmd/... ./scripts/... ./tools/... ./docgen/..."
           - shard: tests-and-sim
             patterns: "./tests/... ./testutil/... ./sim/... ./upgrades/... ./sdk/... ./util/..."
-    outputs:
-      # Each shard emits a ONE-ELEMENT JSON object. GitHub CONCATENATES matrix
-      # outputs verbatim, so this arrives as
-      # `{"core":"clean"}{"platform":"clean"}{"tooling":"clean"}...` and the
-      # CONSUMER reassembles it with fromJSON. A job cannot reference `needs` in
-      # its own outputs, so the reassembly happens downstream.
-      govulncheck_verdicts: ${{ steps.shard-verdicts.outputs.verdicts }}
+    # NO job-level `outputs:` for verdicts, and deliberately so.
+    #
+    # Matrix job outputs were measured and do not work. One object arrives
+    # intact while the others vanish, with no error and no warning:
+    #   37295691699 - the consumer received `{tests-and-sim:clean}`
+    #   37298338441 - the consumer received `{"tooling":"clean"}`, with all four
+    #                 shards SUCCEEDED and every step green
+    # That is OVERWRITE (one writer wins), not concatenation, so no
+    # expression-level fix exists: the losing shards' values are already gone by
+    # the time any consumer reads them. Each shard therefore publishes its
+    # verdict as its OWN artifact, and the collector reads them one by one so a
+    # missing shard is individually attributable.
     steps:
       - name: Checkout repository
         uses: actions/checkout@v5
@@ -471,59 +493,37 @@ jobs:
           path: govulncheck-report.json
           retention-days: 30
 
-      - name: Report this shard's verdict
-        id: verdict
-        # The verdict is carried as a JOB OUTPUT, not as an artifact the
-        # summary has to download.
+      - name: Publish this shard's verdict
+        # The verdict travels as THIS SHARD'S OWN ARTIFACT.
         #
-        # Measured on run 37292268699: the artifact-download design failed even
-        # with `actions: read` and `needs` in place - all four downloads timed
-        # out at ~60s each while the shards themselves succeeded, and because the
-        # step sent gh's stderr to /dev/null the log said only "artifact
-        # absent", which is indistinguishable from a genuinely cancelled shard.
-        # A cross-job artifact download needs a token scope, an ordering
-        # guarantee AND its own error channel; a matrix job output needs none of
-        # those, and GitHub carries it natively.
+        # Two transports were measured and both failed silently:
+        #   * `gh run download` in the consumer - all four downloads timed out at
+        #     ~60s each while every shard had SUCCEEDED (run 37292268699), and the
+        #     step discarded gh's stderr so a cancelled shard and a download
+        #     failure produced the SAME log line.
+        #   * matrix job outputs - ONE WRITER WINS and the rest vanish, on both
+        #     37295691699 and 37298338441 (the latter with all four shards green
+        #     at every step). No expression-level fix exists for overwrite.
         #
-        # `if: always()` is deliberate and is NOT a weakening: it runs this step
-        # even when the scan step failed. A shard that reached a verdict reports
-        # it (the matrix result stays red); a shard cancelled mid-scan never
-        # reaches this step at all, so its entry is simply absent - and an absent
-        # entry is what the consuming gate keys on.
+        # A separate artifact per shard has neither problem: each is
+        # independently addressable by name, so a shard with no artifact is
+        # attributable to that shard rather than to an aggregate.
+        #
+        # `if: always()` is NOT a weakening: a shard that reached a verdict
+        # publishes it (the matrix result stays red on its own), while a shard
+        # killed mid-scan never reaches this step and therefore publishes
+        # nothing - which is precisely the no-verdict signal the gate keys on.
+        #
+        # `if-no-files-found: error` makes a shard that reached this step without
+        # a verdict file fail loudly here, rather than publishing an empty
+        # artifact that would read as a present-but-empty verdict.
         if: always()
-        env:
-          VERDICT_DIR: ${{ runner.temp }}/govulncheck-ledger
-        run: |
-          if [ -f "$VERDICT_DIR/${{ matrix.shard }}.verdict" ]; then
-            v="$(sed -n 's/^verdict=//p' "$VERDICT_DIR/${{ matrix.shard }}.verdict")"
-          else
-            v="no-verdict"
-          fi
-          echo "value=$v" >> "$GITHUB_OUTPUT"
-
-      # A matrix job cannot expose a step's output at the JOB level, so the
-      # shard name and verdict are emitted as job outputs via the documented
-      # object form (`toJSON` over the matrix context). GitHub aggregates them
-      # across the matrix automatically - no download, no token scope, no
-      # ordering constraint inside this job.
-      #
-      # `govulncheck: '${{ matrix.shard }}'` is the shard's identity; a shard
-      # cancelled mid-scan never reaches the verdict step, so its key is simply
-      # absent from `verdicts` - and an absent key is the no-verdict signal the
-      # consuming gate keys on. A shard that reached a verdict keeps its key
-      # even when the matrix result is red, which is what lets the gate say
-      # "clean but failed later" instead of "unknown".
-      - name: Expose this shard's verdict
-        id: shard-verdicts
-        if: always()
-        env:
-          VERDICT: ${{ steps.verdict.outputs.value }}
-        run: |
-          # ONE ELEMENT object per shard. GitHub concatenates matrix outputs
-          # verbatim, so the job output above wraps the result in `fromJSON` to
-          # reassemble them into a single object.
-          echo "verdicts=$(printf '{"%s":"%s"}' '${{ matrix.shard }}' "$VERDICT")" \
-            >> "$GITHUB_OUTPUT"
+        uses: actions/upload-artifact@v6
+        with:
+          name: govulncheck-verdict-${{ matrix.shard }}
+          path: ${{ runner.temp }}/govulncheck-ledger/${{ matrix.shard }}.verdict
+          retention-days: 30
+          if-no-files-found: error
 
   python-vuln-scan:
     name: Python Vulnerability Scan
