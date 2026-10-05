@@ -20,6 +20,7 @@ import (
 	v170 "github.com/virtengine/virtengine/upgrades/software/v1.7.0"
 	v180 "github.com/virtengine/virtengine/upgrades/software/v1.8.0"
 	v190 "github.com/virtengine/virtengine/upgrades/software/v1.9.0"
+	v1100 "github.com/virtengine/virtengine/upgrades/software/v1.10.0"
 	utypes "github.com/virtengine/virtengine/upgrades/types"
 )
 
@@ -31,18 +32,31 @@ func TestUpgradeRegistryIncludesAllExpectedVersions(t *testing.T) {
 		actual = append(actual, name)
 	}
 
-	sort.Strings(actual)
+	// Sort with the SAME comparator TestUpgradeRegistryIsSemverSorted asserts,
+	// not sort.Strings. Upgrade names are semver, and semver ordering diverges
+	// from lexicographic ordering as soon as a version has two digits: "v1.10.0"
+	// sorts before "v1.2.0" as a string but after "v1.9.0" as a version. Using
+	// sort.Strings here made this test demand a lexicographic list while its
+	// sibling demanded a semver one, so no single expected list could satisfy
+	// both from v1.10.0 onward.
+	sortBySemver(actual)
 	require.Equal(t, expected, actual)
 }
 
 func TestUpgradeRegistryIsSemverSorted(t *testing.T) {
 	expected := expectedUpgradeNames()
 	actual := append([]string(nil), expected...)
-	sort.Slice(actual, func(i, j int) bool {
-		return semver.Compare(actual[i], actual[j]) < 0
-	})
+	sortBySemver(actual)
 
 	require.Equal(t, expected, actual)
+}
+
+// sortBySemver orders upgrade names by version. golang.org/x/mod/semver requires
+// a leading "v", which every UpgradeName already carries.
+func sortBySemver(names []string) {
+	sort.Slice(names, func(i, j int) bool {
+		return semver.Compare(names[i], names[j]) < 0
+	})
 }
 
 func TestUpgradeConstructorsReturnRegisteredUpgrades(t *testing.T) {
@@ -72,5 +86,6 @@ func expectedUpgradeNames() []string {
 		v170.UpgradeName,
 		v180.UpgradeName,
 		v190.UpgradeName,
+		v1100.UpgradeName,
 	}
 }
