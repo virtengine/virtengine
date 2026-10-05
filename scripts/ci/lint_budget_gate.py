@@ -107,18 +107,40 @@ PR_EVENT = "pull_request"
 # pkg/data_vault/fixture_shortname_windows_test.go) that the ubuntu job never
 # analyses, hence 51 and not 54.
 #
+# RE-MEASURED 2026-10-05 on `develop` after PR #1256, same pinned toolchain.
+# Whole tree, both ends measured on one windows host so the platform offset
+# cancels: base 54bcd6f2 = 1724 findings, merged 8989eb29a = 1589, delta -135.
+#
+#     linter      before   after   delta
+#     errcheck       662     554    -108
+#     goconst        926     914     -12
+#     staticcheck     61      52      -9
+#     govet           6       3      -3
+#     prealloc        13      10      -3
+#     gosec           54      54      +0
+#     gocritic         2       2      +0
+#
+# The five tightened entries are LOWERED to the freshly measured value, which is
+# the only direction this gate permits a number to move. The point of doing it
+# here rather than leaving the slack on the table: the slack band
+# (measured + SLACK=1) is a regression buffer, and the previous baselines sat 108
+# errcheck findings above the real count, so any of that 108 could have been
+# reintroduced without the gate noticing. `gosec` is deliberately NOT touched:
+# it is 54 on this windows host at BOTH ends (+0 across the change), so there is
+# nothing to reclaim, and 51 remains the number the linux job enforces.
+#
 # Each entry: (measured findings, tracked issue, expiry).
 #   - Raise a baseline ONLY by fixing findings in the tree.
 #   - Lowering a baseline is a lint regression and must not be done to go green.
 #   - A past expiry is a hard failure: renew it deliberately in a follow-up that
 #     states why, or fix the debt. Silence is not an option.
 BASELINES: dict[str, tuple[int, str, str]] = {
-    "goconst": (926, "#1122", "2027-01-15"),
-    "errcheck": (662, "#1122", "2027-01-15"),
-    "staticcheck": (61, "#1122", "2027-01-15"),
+    "goconst": (914, "#1122", "2027-01-15"),
+    "errcheck": (554, "#1122", "2027-01-15"),
+    "staticcheck": (52, "#1122", "2027-01-15"),
     "gosec": (51, "#1122", "2027-01-15"),
-    "prealloc": (13, "#1122", "2027-01-15"),
-    "govet": (6, "#1122", "2027-01-15"),
+    "prealloc": (10, "#1122", "2027-01-15"),
+    "govet": (3, "#1122", "2027-01-15"),
     "gocritic": (2, "#1122", "2027-01-15"),
     # Clean today, and enforced as such: the first finding any of these reports
     # is a regression, not pre-existing debt, and must fail the push path.
