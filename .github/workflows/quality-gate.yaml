@@ -202,6 +202,71 @@ jobs:
           fi
           echo "go-mod-download.sh is LF-only"
 
+  # The macOS build job it protects only runs on main and tags:
+  #   ci.yaml build-macos: if: github.ref == 'refs/heads/main' || startsWith(ref, 'refs/tags/v')
+  # so a composite action that breaks the darwin build lands on main already
+  # merged, and every develop PR is green while main is red. That is how
+  # `.github/actions/setup-macos` shipped a forced `GO_LINKMODE=internal` and the
+  # `Build (macOS)` job went red 3/3 without anyone being able to reproduce it
+  # before merge. This job is the PR-time substitute for that one.
+  #
+  # It has no `needs:` and needs no Go toolchain — it asks `make` two questions,
+  # nothing more — so it stays cheap and always reports.
+  build-linkmode-selftest:
+    name: build-linkmode selftest
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: build-linkmode self-tests
+        run: |
+          rc=0
+          node --test scripts/ci/check-build-linkmode.test.mjs > build-linkmode-tests.log 2>&1 || rc=$?
+          # Always print the log, pass or fail: `set -e` would otherwise abort
+          # here and throw away the only evidence of why a self-test failed.
+          cat build-linkmode-tests.log
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::build-linkmode self-tests failed (exit $rc)"
+            exit "$rc"
+          fi
+          # A test run that discovers no tests also exits 0, so assert a positive
+          # count rather than trusting the exit status alone.
+          count=$(grep -oE 'tests[[:space:]]+[0-9]+' build-linkmode-tests.log | head -1 | grep -oE '[0-9]+')
+          if [ -z "${count:-}" ] || [ "$count" -eq 0 ]; then
+            echo "::error::build-linkmode self-tests did not run"
+            exit 1
+          fi
+          echo "build-linkmode self-tests: ${count} test(s) passed"
+
+      # The guard runs on ubuntu, where `Makefile` does NOT apply its
+      # Windows_NT override, so the two make targets can be cross-checked here.
+      # If this ever runs on a Windows runner the drift check silently skips and
+      # the only thing still testing the copy is case 0; fail loudly rather than
+      # let the gate weaken silently.
+      - name: The runner view must be the one that differs from the local view
+        run: |
+          if [ "$RUNNER_OS" = "Windows" ]; then
+            echo "::error::this gate must run on a POSIX runner; on Windows the Makefile's Windows_NT override makes every linkmode comparison vacuous"
+            exit 1
+          fi
+          echo "runner view is checkable on $RUNNER_OS"
+
+      - name: No composite action may force a linkmode the Makefile disagrees with
+        run: |
+          rc=0
+          node scripts/ci/check-build-linkmode.mjs > check-build-linkmode.log 2>&1 || rc=$?
+          cat check-build-linkmode.log
+          if [ "$rc" -ne 0 ]; then
+            echo "::error::a composite action forces a GO_LINKMODE the Makefile disagrees with (exit $rc)"
+            exit "$rc"
+          fi
+
   build:
     name: build
     runs-on: ubuntu-latest
@@ -605,6 +670,7 @@ jobs:
       - lint
       - vet
       - go-mod-download-selftest
+      - build-linkmode-selftest
       - build
       - test-go
       - agents-docs
@@ -638,6 +704,15 @@ jobs:
           # conditional on what the PR touched.
           if [ "${{ needs.go-mod-download-selftest.result }}" != "success" ]; then
             echo "::error::go-mod-download selftest failed"
+            failed=1
+          fi
+
+          # Also unconditional: the job it guards (Build (macOS)) runs only on
+          # main and tags, so a composite action that breaks the darwin build is
+          # otherwise invisible until after merge. This is the only signal that
+          # can stop that in a PR.
+          if [ "${{ needs.build-linkmode-selftest.result }}" != "success" ]; then
+            echo "::error::build-linkmode selftest failed"
             failed=1
           fi
 
