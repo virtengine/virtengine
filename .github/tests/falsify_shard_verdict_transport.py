@@ -30,9 +30,12 @@ MUTATIONS = [
         "      - name: Publish this shard's verdict",
     ),
     (
-        "M3-empty-collection-silently-ok",
+        # The regression CI actually hit: `if-no-files-found` is an
+        # upload-artifact input, and download-artifact@v6 does not define it.
+        "M3-bogus-input-on-download-step",
+        "          pattern: govulncheck-verdict-*",
+        "          pattern: govulncheck-verdict-*\n"
         "          if-no-files-found: error",
-        "          if-no-files-found: warn",
     ),
     (
         "M4-per-shard-artifact-removed",

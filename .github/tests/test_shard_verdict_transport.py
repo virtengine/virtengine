@@ -68,6 +68,22 @@ def job_block(text: str, job: str) -> str:
     return rest[: nxt.start()] if nxt else rest
 
 
+def block_of(text: str, step_name: str) -> str:
+    """The body of one step, from its `- name:` to the next step at the same indent.
+
+    Assertions about a STEP must be scoped to that step. A substring check over
+    the whole file cannot tell `if-no-files-found: error` on the upload step
+    (valid) from the same string on the download step (an input that action does
+    not accept - which CI rejected on run 37303621734).
+    """
+    m = re.search(rf"^(\s*)- name: {re.escape(step_name)}\s*$", text, re.MULTILINE)
+    assert m, f"step {step_name!r} not found"
+    indent = m.group(1)
+    rest = text[m.end():]
+    nxt = re.search(rf"^{re.escape(indent)}- name: ", rest, re.MULTILINE)
+    return rest[: nxt.start()] if nxt else rest
+
+
 class TestPerShardArtifactsAreIndependentlyAddressable(unittest.TestCase):
     """The property the shipped transport depends on, and the previous two lacked."""
 
@@ -179,18 +195,34 @@ class TestWorkflowWiring(unittest.TestCase):
         code = strip_comments(self.text)
         self.assertNotIn("gh run download", code)
 
-    def test_empty_verdict_collection_is_an_error(self):
-        """`warn` would let an empty collection pass silently.
+    def test_empty_verdict_collection_cannot_pass(self):
+        """An empty collection must fail the gate.
 
-        This assertion is deliberately on the EXACT value, not on the presence
-        of the key: `if-no-files-found: warn` still contains the key, so a
-        presence check would pass against the mutation that this test exists to
-        catch.
+        `actions/download-artifact@v6` has NO `if-no-files-found` input - that
+        belongs to upload-artifact, and CI proved it on run 37303621734
+        ("input \\"if-no-files-found\\" is not defined in action
+        actions/download-artifact@v6"). The fail-closed behaviour therefore has
+        to come from the ledger requiring one verdict per DECLARED shard, so
+        this asserts the download step does not reintroduce the bogus input and
+        that the gate step is what enforces completeness.
         """
         code = strip_comments(self.text)
-        self.assertIn("if-no-files-found: error", code)
-        self.assertNotIn("if-no-files-found: warn", code)
-        self.assertNotIn("if-no-files-found: ignore", code)
+        # Comments are stripped: the step's own comment explains that this input
+        # is NOT available, and a substring check would match that explanation -
+        # the same trap as test_no_gh_run_download_in_the_workflow.
+        download = strip_comments(block_of(self.text, "Download shard verdict artifacts"))
+        self.assertNotIn("if-no-files-found", download)
+        # upload-artifact DOES support it, and the per-shard publisher must use
+        # it, so a shard that reaches the step without a verdict file fails.
+        self.assertIn(
+            "if-no-files-found: error",
+            strip_comments(block_of(self.text, "Publish this shard's verdict")),
+        )
+        gate = strip_comments(
+            block_of(self.text, "Verify every declared govulncheck shard reported a verdict")
+        )
+        self.assertIn("govulncheck_verdict_ledger.py", gate)
+        self.assertIn("--expect", gate)
 
     def test_consumer_runs_after_the_matrix(self):
         """A parallel job cannot consume a sibling's output."""
