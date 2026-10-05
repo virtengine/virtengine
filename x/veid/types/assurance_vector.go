@@ -458,7 +458,7 @@ func deriveDeviceScore(device DeviceEvidence) (uint32, bool) {
 	}
 
 	// sum <= count * 10000 and count >= 1, so the quotient is at most 10000.
-	return uint32(sum / uint64(count)), true //nolint:gosec // bounded above by 10000
+	return uint32(sum / uint64(count)), true /* #nosec G115 -- sum is the sum of at most 3 sub-scores each bounded above by MaxBasisPoints (10000), and count is exactly 3 whenever the loop runs, so the quotient is at most 10000 and cannot overflow uint32 */ //nolint:gosec
 }
 
 // OverallBpsFromScore re-expresses a 0-100 score in basis points using integer
@@ -534,20 +534,20 @@ func assuranceBoolByte(b bool) byte {
 func writeAssuranceBytes(h assuranceHasher, bz []byte) {
 	var lenBuf [8]byte
 	binary.BigEndian.PutUint64(lenBuf[:], uint64(len(bz)))
-	h.Write(lenBuf[:]) //nolint:errcheck // hash writes never fail
-	h.Write(bz)        //nolint:errcheck // hash writes never fail
+	_, _ = h.Write(lenBuf[:]) // hash.Hash never returns an error per the io.Writer contract
+	_, _ = h.Write(bz)        // hash.Hash never returns an error per the io.Writer contract
 }
 
 func writeAssuranceUint32(h assuranceHasher, value uint32) {
 	var buf [4]byte
 	binary.BigEndian.PutUint32(buf[:], value)
-	h.Write(buf[:]) //nolint:errcheck // hash writes never fail
+	_, _ = h.Write(buf[:]) // hash.Hash never returns an error per the io.Writer contract
 }
 
 func writeAssuranceUint64(h assuranceHasher, value uint64) {
 	var buf [8]byte
 	binary.BigEndian.PutUint64(buf[:], value)
-	h.Write(buf[:]) //nolint:errcheck // hash writes never fail
+	_, _ = h.Write(buf[:]) // hash.Hash never returns an error per the io.Writer contract
 }
 
 func writeAssuranceInt64(h assuranceHasher, value int64) {
@@ -555,8 +555,8 @@ func writeAssuranceInt64(h assuranceHasher, value int64) {
 	// The two's-complement reinterpretation is the intent: a negative int64 (a
 	// block height cannot be negative in practice, but the encoder is total)
 	// must serialise distinctly rather than wrap into a colliding value.
-	binary.BigEndian.PutUint64(buf[:], uint64(value)) //nolint:gosec // G115: fixed-width two's-complement encoding by design
-	h.Write(buf[:])                                   //nolint:errcheck // hash writes never fail
+	binary.BigEndian.PutUint64(buf[:], uint64(value)) /* #nosec G115 -- fixed-width two's-complement encoding by design: the int64 is reinterpreted bit-for-bit into 8 bytes, which is lossless by definition and is not an arithmetic truncation */ //nolint:gosec
+	_, _ = h.Write(buf[:])                            // hash.Hash never returns an error per the io.Writer contract
 }
 
 // constantTimeEqual compares two byte slices without an early exit on the first
