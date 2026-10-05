@@ -272,6 +272,48 @@ def main() -> int:
             )
         print(f"  {'ok  ' if ok else 'FAIL'} inputs-attach-to-their-own-step")
 
+        # 7. A `with:` block containing a MULTI-LINE SCALAR must keep charging
+        # keys after the scalar. This is the shape the shipped scanner got wrong:
+        # it ended the block on any `- ` line, and the body of `body: |` is full
+        # of them, so `branch`, `base`, `labels` and `delete-branch` were dropped
+        # and the audit reported a clean tree for a step that would fail at run
+        # time. The flat one-line fixtures above cannot see this -- every value
+        # they use ends on its own line.
+        #
+        # Asserted in BOTH directions: the key after the scalar is caught when it
+        # is undeclared (it is not silently dropped) AND the `- ` line itself is
+        # not mistaken for an input (it is scalar text, not a `with:` entry).
+        scalar_with = (
+            "        with:\n"
+            "          target: production\n"
+            "          body: |\n"
+            "            - Updated CHANGELOG.md with all changes\n"
+            "            - Generated release notes\n"
+            "          totally-not-an-input: changelog/x\n"
+        )
+        plant(root, WORKFLOW.format(
+            name="scalar-body",
+            steps=step("amondnet/vercel-action@v42", extra=scalar_with),
+        ))
+        code, out = run_audit(root)
+        ok = "UNDECLARED_INPUT" in out and "totally-not-an-input" in out
+        if not ok:
+            failures.append(
+                "key-after-a-multi-line-scalar-is-still-charged: a `- ` line inside a "
+                "`body: |` scalar ended the `with:` block, so every key after it went "
+                f"unaudited; got rc={code}:\n{out}"
+            )
+        # The scalar's own lines must not be charged as inputs: they are text
+        # the action receives as the VALUE of `body`, not `with:` keys.
+        stray = [ln for ln in out.splitlines()
+                 if "UNDECLARED_INPUT" in ln and "Updated CHANGELOG.md" in ln]
+        if stray:
+            failures.append(
+                "multi-line-scalar-body-is-not-read-as-inputs: `- ` lines inside a "
+                f"scalar body were charged as `with:` keys:\n{out}"
+            )
+        print(f"  {'ok  ' if ok and not stray else 'FAIL'} key-after-a-multi-line-scalar-is-still-charged")
+
         # A pin that cannot exist upstream must NOT be graded as a pass.
         plant(root, WORKFLOW.format(name="missing", steps=step("virtengine/definitely-not-a-real-action-xyz@v1")))
         code, out = run_audit(root)
@@ -311,7 +353,7 @@ def main() -> int:
 
     for f in failures:
         print("FAIL:", f)
-    total = len(CASES) + 9
+    total = len(CASES) + 10
     print(f"{total - len({f.split(':')[0] for f in failures})}/{total} checks passed")
     return 1 if failures else 0
 

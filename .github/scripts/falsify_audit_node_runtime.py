@@ -20,7 +20,9 @@ real defect class in this repo's history:
   M7  input finding kept out of the verdict   -> printed, logged, never gated on.
   M8  composite inputs made enforceable       -> 10 false positives on a clean
       tree, i.e. a gate that gets switched off rather than fixed.
-  M9  `with:` block swallowing the next step  -> an action audited by nothing.
+  M9  `- ` line ending a multi-line scalar -> every input after `body: |`
+      dropped, an undeclared input shipped clean.
+  M10 `with:` block never ending on a dedent -> an action audited by nothing.
 
 Run:  python .github/scripts/falsify_audit_node_runtime.py
 """
@@ -117,12 +119,32 @@ MUTATIONS = [
         "composite. The mutant has to defeat BOTH guards.",
     ),
     (
-        "M9-with-block-swallows-the-next-step",
-        r"        if in_with and \(indent <= with_indent or stripped\.startswith\(\"-\"\)\):",
-        "        if in_with and indent <= with_indent and not stripped.startswith(\"-\"):",
-        "the `- uses:` one-line step form after a `with:` block is swallowed, so a "
-        "whole action pin is never recorded and is audited by nothing at all -- not "
-        "its runtime, not its inputs",
+        # M9 attacks the `with:`/step boundary itself, from the side that was
+        # actually shipped wrong. Its previous form reintroduced the dash clause
+        # that this change REMOVES, which is a guarantee no fixture could
+        # falsify while that clause was live -- it locked in the bug instead of
+        # guarding the fix. The mutation is now the reverse: re-add the dash rule
+        # to the fixed line, which must go RED because a `- ` line inside a
+        # multi-line scalar (`body: |`) then ends the block and every key after
+        # it goes unaudited.
+        "M9-dash-line-ends-a-multi-line-scalar-block",
+        r"        if in_with and indent <= with_indent:",
+        '        if in_with and (indent <= with_indent or stripped.startswith("-")):',
+        "a `- ` line inside a `body: |` scalar ends the `with:` block, so the inputs "
+        "after the scalar are charged to nothing: an undeclared input on that step "
+        "fails the job at run time and this audit reports the tree clean",
+    ),
+    (
+        # M10 is the opposite failure and the one the inline step form caused: if
+        # the boundary is judged by indentation ALONE being wrong (i.e. the block
+        # never ends on a dedent), the next `- uses:` step is swallowed by the
+        # previous step's `with:` block and an entire pin is recorded as nothing.
+        "M10-with-block-never-ends-on-a-dedent",
+        r"        if in_with and indent <= with_indent:",
+        "        if in_with and indent <= 0:",
+        "the `with:` block never closes on a dedent, so the inline one-line step "
+        "form after it is swallowed by the input branch and the whole action pin "
+        "-- runtime and inputs -- is audited by nothing at all",
     ),
 ]
 
