@@ -29,6 +29,11 @@ overrides:
   'ws@^7': '^7.5.13'
   # next pins postcss 8.4.31 exactly; GHSA-6g55-p6wh-862q / GHSA-r28c-9q8g-f849
   postcss: '^8.5.28'
+  # GHSA-68fv-2mgg-jv7q / CVE-2026-93749 (event-loop DoS via indexed source-map
+  # section offsets) — reachable as portal>next>postcss>source-map-js at 1.2.1.
+  # postcss declares ^1.0.0, which already accepts 1.2.2, so the stale 1.2.1
+  # resolution is what a lockfile refresh alone does not correct.
+  'source-map-js@^1': '^1.2.2'
   # GHSA-28wg-ghj8-5hjv / GHSA-2v37-7h3g-55p8 / GHSA-xwg4-73v4-xw9w
   nanoid: '^3.3.19'
   # GHSA-c83g-rgw3-j3cx / GHSA-73wf-gq98-2v4g
