@@ -27,8 +27,12 @@ on:
       - "**/keeper/*.go"
       - ".github/workflows/compatibility.yaml"
 
+# Reusable: called by ci.yaml and release.yaml, and `github.workflow` resolves
+# to the CALLER's name so callers must not share a group. Per-commit on push so
+# a cancelled run never eats a develop verdict. Pinned by
+# .github/tests/test_ci_concurrency_verdict.py.
 concurrency:
-  group: compatibility-${{ github.workflow }}-${{ github.ref }}
+  group: compatibility-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
   cancel-in-progress: true
 
 env:

@@ -19,8 +19,13 @@ on:
       - develop
       - "release/**"
 
+# Per-commit on push, per-ref on pull_request: see ci.yaml for the full
+# argument. A cancelled run publishes NO verdict, and 7 of this workflow's
+# develop push runs were cancelled that way before the per-commit component
+# existed. Pinned by .github/tests/test_ci_concurrency_verdict.py, which reads
+# the PARSED block.
 concurrency:
-  group: quality-gate-${{ github.workflow }}-${{ github.ref }}
+  group: quality-gate-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
   cancel-in-progress: true
 
 env:

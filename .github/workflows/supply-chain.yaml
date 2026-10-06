@@ -46,8 +46,11 @@ on:
         default: true
         type: boolean
 
+# Per-commit on push, per-ref on pull_request: see ci.yaml for the full
+# argument. A cancelled run publishes NO verdict. Pinned by
+# .github/tests/test_ci_concurrency_verdict.py, which reads the PARSED block.
 concurrency:
-  group: supply-chain-${{ github.workflow }}-${{ github.ref }}
+  group: supply-chain-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
   cancel-in-progress: true
 
 defaults:
