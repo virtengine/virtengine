@@ -943,6 +943,24 @@ jobs:
             echo "exit_code=0" >> "$GITHUB_OUTPUT"
           fi
 
+      # The scan above cannot tell a suppressed finding from a suppressed
+      # annotation: standalone gosec reads only `#nosec`, so a file whose
+      # suppressions are written as `//nolint:gosec` silences golangci-lint and
+      # the developer's editor while every finding still lands in this job. That
+      # is how PR #1254 put 7 findings into this gate looking justified.
+      #
+      # This step grades the FORMS, not the findings -- it does not run gosec and
+      # does not decide whether any finding is real. It fails on an annotation
+      # that silences the linter but not the gate, and is ratcheted against a
+      # recorded baseline so the existing debt does not red the gate on arrival.
+      # See _docs/security/gosec-triage.md section 9.5.
+      - name: Reject gosec suppressions the gate cannot read
+        run: |
+          set -uo pipefail
+          GOWORK=off go run ./scripts/gosecsuppressions \
+            -root . \
+            -baseline scripts/gosecsuppressions/gosec-suppressions.baseline
+
       - name: Upload gosec SARIF
         uses: github/codeql-action/upload-sarif@v4
         if: always()
