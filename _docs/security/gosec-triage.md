@@ -694,6 +694,57 @@ preserved verbatim inside the combined form rather than replaced. Conversely,
 suppression is matched by **range overlap** (`ignores.get`), not by line equality, which
 is why a comment on the line immediately above a statement also works.
 
+#### 9.5.1 What ENFORCES this — the guard, not good intentions
+
+This section existed as prose while the trap stayed live. PR #1254 is the proof: it
+shipped `x/veid/types/assurance_vector.go` whose suppressions were written only as
+`//nolint:gosec`, so they silenced the linter the author was running and did nothing
+to the gate — 7 findings landed in `gosec Security Scan` and were caught by reading a
+CI log after the fact, not before the merge.
+
+The trap is **asymmetric**, which is why "just run gosec" was not the fix. Measured
+against gosec v2.25.0 (the gate) and golangci-lint v2.13.2, on the annotation shapes:
+
+| shape | standalone gosec (GATE) | golangci-lint gosec |
+| --- | --- | --- |
+| `//nolint:gosec // why` | **REPORTS** | suppressed |
+| `// #nosec G404 -- why` | suppressed | suppressed |
+| `/* #nosec G404 -- why */ //nolint:gosec` | suppressed | suppressed |
+| `//nolint:gosec // #nosec G404 -- why` | **REPORTS** | suppressed |
+| `// nolint gosec` | **REPORTS** | suppressed |
+| (no annotation) | REPORTS | REPORTS |
+
+A `//nolint:gosec`-only annotation is therefore not a no-op — it is a suppression that
+reports itself as suppressed to your editor and to golangci-lint while the gate still
+sees the finding. That is strictly worse than writing nothing.
+
+`scripts/gosecsuppressions` (`go run ./scripts/gosecsuppressions -root .`) rejects that
+form, and runs as a step in the `gosec Security Scan` job immediately after the scan:
+
+- It grades the **forms**, not the findings. It does not run gosec and does not decide
+  whether any finding is real. A justified `#nosec` stays justified.
+- Its oracle is gosec's **own** `findNoSecDirective`/`findNoSecTag`, copied verbatim
+  from v2.25.0 rather than reimplemented, so it cannot drift into grading something the
+  gate does not.
+- It is **ratcheted**, not absolute: the tree already holds 366 unreadable annotations
+  predating the guard, so a hard fail would red every gate on arrival and teach everyone
+  to ignore it. The baseline is keyed on `path<TAB>comment-text`, never on line number —
+  inserting a line shifts every line number in a file, so a line-keyed baseline would
+  detonate into hundreds of false failures on ordinary edits. Three rules, no fourth: an
+  annotation **not in the record fails**; a count rising for a known key fails; falling
+  is an improvement, reported and never failed.
+- The record is keyed rather than merely counted **on purpose**: a bare total is
+  defeated by shipping one new annotation while deleting one old one, leaving the total
+  flat and the guard silent — precisely the trade this must stop.
+- It **fails closed**, deliberately not-a-pass (exit 2), on a missing or empty baseline
+  or an unparseable tree, so an unreadable estate can never report clean.
+- The `GOSEC_SUPPRESSION_MAX` override may only **tighten**. Raising the bar means
+  editing `defaultAllowance` next to `ratchetExpires`/`budgetIssue` in
+  `scripts/gosecsuppressions/baseline.go`, which puts the decision in a reviewable diff.
+
+Run `bash scripts/gosecsuppressions/probe.sh` to see it reject the trap, accept the
+fix, and refuse to be bought off.
+
 ### 9.6 Verification evidence
 
 All of the following was run locally against this change with gosec v2.25.0 (the
