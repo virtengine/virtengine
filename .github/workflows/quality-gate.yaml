@@ -19,8 +19,13 @@ on:
       - develop
       - "release/**"
 
+# Per-commit on push, per-ref on pull_request: see ci.yaml for the full
+# argument. A cancelled run publishes NO verdict, and 7 of this workflow's
+# develop push runs were cancelled that way before the per-commit component
+# existed. Pinned by .github/tests/test_ci_concurrency_verdict.py, which reads
+# the PARSED block.
 concurrency:
-  group: quality-gate-${{ github.workflow }}-${{ github.ref }}
+  group: quality-gate-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
   cancel-in-progress: true
 
 env:
@@ -405,6 +410,79 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: node scripts/ci/check-deploy-env-policies.mjs
 
+  sdk-publish-policy:
+    name: sdk-publish-policy
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Assert the SDK npm publish trigger is dispatch-only
+        # The defect class this prevents is a trigger that was too BROAD: the
+        # sibling sdk-publish.yaml used to fire on `release: types: [published]`,
+        # which would have run a live cargo publish the moment a release was cut.
+        # A "does it parse" check cannot see that -- such a file parses fine --
+        # so the triggers themselves are graded, and falsified below.
+        run: node scripts/ci/check-sdk-npm-publish-triggers.mjs
+
+      - name: Falsify the SDK publish trigger guard
+        # Plants each forbidden trigger into a COPY and requires the guard to
+        # go red. A guard that cannot fail is worse than no guard.
+        run: node scripts/ci/falsify-sdk-npm-publish-triggers.mjs
+
+      - name: Report the npm-publish environment approval state (NON-BLOCKING)
+        # Deliberately `continue-on-error`. This grades REPOSITORY SETTINGS, not
+        # code: `npm-publish` currently has zero protection rules, so
+        # `environment: npm-publish` gates nothing and a dispatch would publish
+        # unattended. Clearing it is a repo-settings change and is HUMAN-ONLY, so
+        # failing every PR until a human does it would make this step
+        # indistinguishable from a code defect and would train readers to
+        # ignore it. It stays visible and stays red until a human adds the
+        # required reviewers; then it goes green on its own.
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: node scripts/ci/check-env-approval-gate.mjs
+
+  pr-exclusive-jobs:
+    name: pr-exclusive-jobs
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v5
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: "20"
+
+      - name: Falsify the PR-exclusive job census
+        # Offline fixture suite + mutation harness first. If the classifier no
+        # longer works, the gate must say so rather than printing a census
+        # derived from a broken parser.
+        run: node scripts/ci/check-pr-exclusive-jobs.mjs --selftest
+
+      - name: Census jobs that cannot fail before merge
+        # REPORT-ONLY by design, and deliberately not --strict. A job gated on
+        # `refs/heads/main` is CORRECT when it deploys; failing here would train
+        # everyone to delete the gate instead. What this buys is that every such
+        # job is enumerated in review, so a NEW one (or a changed `if:`) is a
+        # visible diff rather than a defect that lands on main already merged --
+        # which is exactly how Build (macOS) stayed red 3/3 with every PR green.
+        #
+        # Exit 2 (could not build the evidence) is deliberately NOT a pass.
+        run: node scripts/ci/check-pr-exclusive-jobs.mjs
+
   economics-sim:
     name: economics-sim
     runs-on: ubuntu-latest
@@ -671,6 +749,7 @@ jobs:
       - vet
       - go-mod-download-selftest
       - build-linkmode-selftest
+      - pr-exclusive-jobs
       - build
       - test-go
       - agents-docs
@@ -713,6 +792,16 @@ jobs:
           # can stop that in a PR.
           if [ "${{ needs.build-linkmode-selftest.result }}" != "success" ]; then
             echo "::error::build-linkmode selftest failed"
+            failed=1
+          fi
+
+          # Unconditional for the same reason. The census itself is report-only,
+          # so it only goes red on exit 2 -- it could not read the workflows --
+          # and that must NOT read as a clean estate, because a census that
+          # silently measured nothing is precisely the failure it exists to
+          # catch.
+          if [ "${{ needs.pr-exclusive-jobs.result }}" != "success" ]; then
+            echo "::error::pr-exclusive job census failed"
             failed=1
           fi
 
