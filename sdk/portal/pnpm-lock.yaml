@@ -4,32 +4,6 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
-overrides:
-  '@cosmjs/amino': 0.36.2
-  '@cosmjs/crypto': 0.36.2
-  '@cosmjs/encoding': 0.36.2
-  '@cosmjs/math': 0.36.2
-  '@cosmjs/utils': 0.36.2
-  '@keplr-wallet/common': 0.13.8
-  '@keplr-wallet/cosmos': 0.13.8
-  '@keplr-wallet/crypto': 0.13.8
-  '@keplr-wallet/proto-types': 0.13.8
-  '@keplr-wallet/provider': 0.13.8
-  '@keplr-wallet/provider-extension': 0.13.8
-  '@keplr-wallet/router': 0.13.8
-  '@keplr-wallet/simple-fetch': 0.13.8
-  '@keplr-wallet/types': 0.13.8
-  '@keplr-wallet/unit': 0.13.8
-  tiny-secp256k1: 2.2.4
-  h3: ^1.15.11
-  defu: ^6.1.7
-  lodash: ^4.18.1
-  ws: ^7.5.13
-  picomatch@^2: ^2.3.2
-  protobufjs: ^7.6.3
-  bn.js: ^5.2.3
-  uuid: ^11.1.1
-
 importers:
 
   .:
@@ -45,19 +19,19 @@ importers:
         version: 0.36.2
       '@cosmos-kit/core':
         specifier: ^2.7.1
-        version: 2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
+        version: 2.18.1
       '@cosmos-kit/cosmostation':
         specifier: ^2.7.1
-        version: 2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(cosmjs-types@0.10.1)(starknet@8.9.2)(typescript@5.9.3)
+        version: 2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(cosmjs-types@0.10.1)(typescript@5.9.3)
       '@cosmos-kit/keplr':
         specifier: ^2.7.1
-        version: 2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)
+        version: 2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.11.0)(starknet@8.9.2)(typescript@5.9.3)
       '@cosmos-kit/leap':
         specifier: ^2.7.1
-        version: 2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(cosmjs-types@0.10.1)(starknet@8.9.2)(typescript@5.9.3)
+        version: 2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(cosmjs-types@0.10.1)(typescript@5.9.3)
       '@cosmos-kit/react':
         specifier: ^2.7.1
-        version: 2.24.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@interchain-ui/react@1.26.3(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(bitcoinjs-lib@6.1.7)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(starknet@8.9.2)
+        version: 2.24.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@interchain-ui/react@1.26.3(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@radix-ui/react-slot':
         specifier: ^1.0.2
         version: 1.2.4(@types/react@19.3.0)(react@19.3.0)
@@ -66,7 +40,7 @@ importers:
         version: 5.90.20(react@19.3.0)
       axios:
         specifier: ^1.18.0
-        version: 1.20.0
+        version: 1.20.0(debug@4.4.3)
       class-variance-authority:
         specifier: ^0.7.0
         version: 0.7.1
@@ -240,20 +214,33 @@ packages:
   '@chain-registry/utils@1.51.299':
     resolution: {integrity: sha512-BjXBvhR9qsl2RHqWjBbmFOrULtrO751q0Yorx0jU+sELTGaWASmC9bIDMeEnNfHjgTcpSGV41+LcL1RgJgnpNQ==}
 
+  '@cosmjs/amino@0.32.4':
+    resolution: {integrity: sha512-zKYOt6hPy8obIFtLie/xtygCkH9ZROiQ12UHfKsOkWaZfPQUvVbtgmu6R4Kn1tFLI/SRkw7eqhaogmW/3NYu/Q==}
+
   '@cosmjs/amino@0.36.2':
     resolution: {integrity: sha512-r4yV1bhl412gwHGlyaUaJHIJnmldtyGsAwyz3oHHVxduiECj06Rv6wqeyLZfQa9W6hU+MlZwy7LabSUkkyGwjA==}
 
   '@cosmjs/cosmwasm-stargate@0.36.2':
     resolution: {integrity: sha512-BU7i/gpvOkghR7XOhI5yT/KJuq3Sqexge2LrU+sBG//vN2ZKDdbLmjwP0S1IMP7aD8IWJfgEM41qbzWEILoPxw==}
 
+  '@cosmjs/crypto@0.32.4':
+    resolution: {integrity: sha512-zicjGU051LF1V9v7bp8p7ovq+VyC91xlaHdsFOTo2oVry3KQikp8L/81RkXmUIT8FxMwdx1T7DmFwVQikcSDIw==}
+    deprecated: This uses elliptic for cryptographic operations, which contains several security-relevant bugs. To what degree this affects your application is something you need to carefully investigate. See https://github.com/cosmos/cosmjs/issues/1708 for further pointers. Starting with version 0.34.0 the cryptographic library has been replaced. However, private keys might still be at risk.
+
   '@cosmjs/crypto@0.36.2':
     resolution: {integrity: sha512-QL4NHtcqR6DEKIN200aLeR8gKO433K0f5avKV0TVFP/g12UtnEGSk79PJq5Gv1PLc9GtATHgLLQI/3D8TEe+ig==}
+
+  '@cosmjs/encoding@0.32.4':
+    resolution: {integrity: sha512-tjvaEy6ZGxJchiizzTn7HVRiyTg1i4CObRRaTRPknm5EalE13SV+TCHq38gIDfyUeden4fCuaBVEdBR5+ti7Hw==}
 
   '@cosmjs/encoding@0.36.2':
     resolution: {integrity: sha512-i3+P1EKYoLcONAsmpJPhDAc3Wh3ajZNRHt/hczi/JEQXmleTJLVzv2mXUyllM6Qa+B6ybbr3Z2lnEFa8L3yLqg==}
 
   '@cosmjs/json-rpc@0.36.2':
     resolution: {integrity: sha512-3IRamylHVCxBevXGlnIoWUdJCLsP5LwHbXYUsBnC9T8UttZ5oYRN5gDf6+2dQEPk+p9xOv2i8xrCwNWxo7675Q==}
+
+  '@cosmjs/math@0.32.4':
+    resolution: {integrity: sha512-++dqq2TJkoB8zsPVYCvrt88oJWsy1vMOuSOKcdlnXuOA/ASheTJuYy4+oZlTQ3Fr8eALDLGGPhJI02W2HyAQaw==}
 
   '@cosmjs/math@0.36.2':
     resolution: {integrity: sha512-uJZRzxqnBk3MgxFgeyUwLgUzWkAIcmznWSB/tgGCjGCnUNebzI+44dA3ncEDCMqQysi/MZ+cSwAcDU7IY2PFeA==}
@@ -276,6 +263,9 @@ packages:
   '@cosmjs/tendermint-rpc@0.36.2':
     resolution: {integrity: sha512-76Z99C1NVf/Yv/1bWU0wul8MhRwVdqiZxqU5bcHqvJLoQ2nKUfGpSSYRdbMHfZ63J8ryRqQ95uPvPTfrBb+agw==}
 
+  '@cosmjs/utils@0.32.4':
+    resolution: {integrity: sha512-D1Yc+Zy8oL/hkUkFUL/bwxvuDBzRGpc4cF7/SkdhxX4iHpSLgdOuTt1mhCh9+kl6NQREy9t7SYZ6xeW5gFe60w==}
+
   '@cosmjs/utils@0.36.2':
     resolution: {integrity: sha512-OOr2HU/Ph+/GI1Fx2UCf3LOyX9YTCP51d2HitTOjjEJRYnkfKXP3lMBl1FZo5QaFWxnfuBc+Cj+cSoiQUJRyzQ==}
 
@@ -285,7 +275,7 @@ packages:
   '@cosmos-kit/cosmostation-extension@2.18.1':
     resolution: {integrity: sha512-GqHCH+wCRglB7ty+3Ib+v92S4T+Z9cUZ2Pm3SoEGZWVVwcXF23dXmm0k3dN6GjpLRUejG1fX3dkd7yjfppjpZA==}
     peerDependencies:
-      '@cosmjs/amino': 0.36.2
+      '@cosmjs/amino': '>=0.32.3'
       '@cosmjs/proto-signing': '>=0.32.3'
       cosmjs-types: '>=0.9.0'
 
@@ -298,13 +288,13 @@ packages:
   '@cosmos-kit/keplr-extension@2.17.1':
     resolution: {integrity: sha512-81fxThFG4m4Am4cUaNVYo99nF0KBfWN+Zz6Kmgskff7FBdOlh8wGk0kEHKExX7GOnpTV2xK50lf3cVJ1ZQTYKA==}
     peerDependencies:
-      '@cosmjs/amino': 0.36.2
+      '@cosmjs/amino': '>=0.32.3'
       '@cosmjs/proto-signing': '>=0.32.3'
 
   '@cosmos-kit/keplr-mobile@2.17.1':
     resolution: {integrity: sha512-QyxgnoVT5GMAgTmGNRhMuM/mxBBY/6CCh2ZRGh02A2rO7wqwxdAzBN27r0YDtkaKppWVPY6mxSIoTl+6fraOXw==}
     peerDependencies:
-      '@cosmjs/amino': 0.36.2
+      '@cosmjs/amino': '>=0.32.3'
       '@cosmjs/proto-signing': '>=0.32.3'
 
   '@cosmos-kit/keplr@2.17.1':
@@ -313,13 +303,13 @@ packages:
   '@cosmos-kit/leap-extension@2.17.1':
     resolution: {integrity: sha512-LXvCSAvRmAexnoqa9iYaKa8bGwIoHKIOl/YznBFBiWrkdjwOwabMXhOJ/UN+sZzhu0syBsinPoZVB+2amLsOjQ==}
     peerDependencies:
-      '@cosmjs/amino': 0.36.2
+      '@cosmjs/amino': '>=0.32.3'
       '@cosmjs/proto-signing': '>=0.32.3'
 
   '@cosmos-kit/leap-metamask-cosmos-snap@0.17.1':
     resolution: {integrity: sha512-/DSziXSePt72fYsc1/UIt64bYLSx/bjelGZPeWmJFDwNRjU8FUdvdvZxQHrLOLCwKFfzYgyB1Vvc4MPprM7kMw==}
     peerDependencies:
-      '@cosmjs/amino': 0.36.2
+      '@cosmjs/amino': '>=0.32.3'
       '@cosmjs/proto-signing': '>=0.32.3'
       cosmjs-types: '>=0.9.0'
 
@@ -349,7 +339,7 @@ packages:
   '@cosmos-kit/walletconnect@2.15.1':
     resolution: {integrity: sha512-KinnhgLbrxDpP3Teic8dZaDkD3NNHBTM341B89ua5MCz63T7bqPi6KeViHQZZeL89/hA4W4V/3ZrMg4tkdRHog==}
     peerDependencies:
-      '@cosmjs/amino': 0.36.2
+      '@cosmjs/amino': '>=0.32.3'
       '@cosmjs/proto-signing': '>=0.32.3'
       '@walletconnect/types': 2.11.0
 
@@ -359,7 +349,7 @@ packages:
   '@dao-dao/cosmiframe@1.0.0':
     resolution: {integrity: sha512-xPaD9MV1tUueYl+VIJD7CEi4+MCdcgo4E1R9w8XplKlM7pvmBaSBeTz88HwITpKxWKI+DWoJngeCWu5/8oqLJQ==}
     peerDependencies:
-      '@cosmjs/amino': 0.36.2
+      '@cosmjs/amino': '>= ^0.32'
       '@cosmjs/proto-signing': '>= ^0.32'
 
   '@emotion/hash@0.9.2':
@@ -612,44 +602,44 @@ packages:
   '@jridgewell/trace-mapping@0.3.31':
     resolution: {integrity: sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw==}
 
-  '@keplr-wallet/common@0.13.8':
-    resolution: {integrity: sha512-9y01kzcnmh9dgqJ3T3EZ4T37bQ1dTiHeDieZiQVnLuLD/8PjY4ofbt6I6FEPJtX8McUA2f6OvW9UXpN217R5mA==}
+  '@keplr-wallet/common@0.12.28':
+    resolution: {integrity: sha512-ESQorPZw8PRiUXhsrxED+E1FEWkAdc6Kwi3Az7ce204gMBQDI2j0XJtTd4uCUp+C24Em9fk0samdHzdoB4caIg==}
 
-  '@keplr-wallet/cosmos@0.13.8':
-    resolution: {integrity: sha512-4cdmti0h9B3e0JC2uLytVEIPfxVmAVzznP0T07rTpxY6SKZ8zYpVzhlXTwoxaTN/CIZOs0pI8G8fmc5EzohDeg==}
+  '@keplr-wallet/cosmos@0.12.28':
+    resolution: {integrity: sha512-IuqmSBgKgIeWBA0XGQKKs28IXFeFMCrfadCbtiZccNc7qnNr5Y/Cyyk01BPC8Dd1ZyEyAByoICgrxvtGN0GGvA==}
 
-  '@keplr-wallet/crypto@0.13.8':
-    resolution: {integrity: sha512-Bk4B333WvZ6mDpAFBjdunSGh2TgS4XjeJdeznWO4XTGOnQ2HLlOM31h12sfpO5WNeEcY6ZD662I79fBWNzQqDw==}
-    peerDependencies:
-      bitcoinjs-lib: ^6
-      starknet: ^8
+  '@keplr-wallet/crypto@0.12.28':
+    resolution: {integrity: sha512-le1je+78/4213qshSMgQTYqhCCvzsL9+YfhjXg1kd/ali69MLWK8L8Z09ducHPS6C+LqQXXTNJQpbH2uiFSd5w==}
 
-  '@keplr-wallet/proto-types@0.13.8':
-    resolution: {integrity: sha512-uWoGakNee1K+xPq25zcfBH0u13VTZfD1GiLyamcGYBO14QbXV5AGNpcYCwL+nNcT+LyyGeJsaKExAaAKAYejDw==}
+  '@keplr-wallet/proto-types@0.12.28':
+    resolution: {integrity: sha512-ukti/eCTltPUP64jxtk5TjtwJogyfKPqlBIT3KGUCGzBLIPeYMsffL5w5aoHsMjINzOITjYqzXyEF8LTIK/fmw==}
 
-  '@keplr-wallet/provider-extension@0.13.8':
-    resolution: {integrity: sha512-1kNPwXWZCVxKrPC2I4h03RkOHylIuMmgmlZmLRxtVgtrRMxh1lVFOeZ+/Jann81cNawmt4u9CQ+/QPpuF9wOgQ==}
+  '@keplr-wallet/provider-extension@0.12.313':
+    resolution: {integrity: sha512-ffIXfUiZUfakEzcn1cE6gcnUs3p8IDRpopb1Xu87W+8aGVKv8HCDReIesE/jmJ6cj2TZc11BjKh4EdXKCscX2w==}
     peerDependencies:
       starknet: ^8
 
-  '@keplr-wallet/provider@0.13.8':
-    resolution: {integrity: sha512-IiFtECdRwoatwaxC90lWR5jKHyngh99uFYH5Xzkrzj6aa70jT/L4IH9nDUObhv21sjGPdk40433k1GC6b/bexQ==}
+  '@keplr-wallet/provider@0.12.313':
+    resolution: {integrity: sha512-hZP0Z4TX/1H9XY/KkRoE9vGaYHVdiF0xTVRS47LoIkrl0hplc5M40q7bcfO7qePDoNp32FMxsRw1fHnDzKPVUQ==}
     peerDependencies:
       starknet: ^8
 
-  '@keplr-wallet/router@0.13.8':
-    resolution: {integrity: sha512-wS7Tz6swq4ZFUgRxMtTMTfjVExzkYc47GNGUlJlMxKM3xFmOSfOtDYp41uLHFsBKE9tquOkXNISOt0iimuX63g==}
+  '@keplr-wallet/router@0.12.313':
+    resolution: {integrity: sha512-MofZchl2fhpAEzwxPnwkeEPQ0VXZho2A3vYR6gj0VIbfTOXcL1QpZuTOzCkGTN63LehhII/pRnQMhs5a1aXwYg==}
 
-  '@keplr-wallet/simple-fetch@0.13.8':
-    resolution: {integrity: sha512-tO5yPgKnZZKoCToMrqiP8OQlVQK0reXieDoWSkiV4Sjd0wCKWQgHCb2G50Qnr4Jme82df4RJ+Lw85rBSlCI0zw==}
+  '@keplr-wallet/simple-fetch@0.12.28':
+    resolution: {integrity: sha512-T2CiKS2B5n0ZA7CWw0CA6qIAH0XYI1siE50MP+i+V0ZniCGBeL+BMcDw64vFJUcEH+1L5X4sDAzV37fQxGwllA==}
 
-  '@keplr-wallet/types@0.13.8':
-    resolution: {integrity: sha512-PFW3LPp0kychF8TnFyTsDGF2TGIUgD+D8ENhGMcri1SVDQ2hIJTcCVaerE2Y1dOc+6vIsY7Mrk0/CKJUcNlbLA==}
+  '@keplr-wallet/types@0.12.28':
+    resolution: {integrity: sha512-EcM9d46hYDm3AO4lf4GUbTSLRySONtTmhKb7p88q56OQOgJN3MMjRacEo2p9jX9gpPe7gRIjMUalhAfUiFpZoQ==}
+
+  '@keplr-wallet/types@0.12.313':
+    resolution: {integrity: sha512-of3e8ISp8h9skE6NXHvaj7yKoNLhVkSdbFgcjSKH6JGg584zSIRrlyawjbNg3JI1kqi3MiuuOrFQZ+SOztGK9Q==}
     peerDependencies:
       starknet: ^8
 
-  '@keplr-wallet/unit@0.13.8':
-    resolution: {integrity: sha512-4nOb1AGFtXHDmgvbCweXt61Qqo6i3C/a3PPJ8x05FtvwFskIVh9jt1lYjcKJttJkzKszu4f+i6IUuogbRbnlNw==}
+  '@keplr-wallet/unit@0.12.28':
+    resolution: {integrity: sha512-kpXigHDBJGOmhtPkv9hqsQid9zkFo7OQPeKgO2n8GUlOINIXW6kWG5LXYTi/Yg9Uiw1CQF69gFMuZCJ8IzVHlA==}
 
   '@keplr-wallet/wc-client@0.12.313':
     resolution: {integrity: sha512-lXWv3qN9Z2JIa7Z+O0QUMEau4bog3ZAAwGUt0QfMfKKD9QySDvu4K6H7SwTRe2Br/RlOWS2LbLG8QxNUMu9LCw==}
@@ -745,6 +735,9 @@ packages:
 
   '@protobufjs/float@1.0.2':
     resolution: {integrity: sha512-Ddb+kVXlXst9d+R9PfTIxh1EdNkgoRe5tOX6t01f1lYWOvJnSPDBlG241QLzcyPdoNTsblLUdujGSE4RzrTZGQ==}
+
+  '@protobufjs/inquire@1.1.2':
+    resolution: {integrity: sha512-pa0vFRuws4wkvaXKK1uXZMAwAX4/t8ANaJo45iw/oQHNQ9q5xUzwgFmVJGXiga2BeN+zpX7Vf9vmsiIa2J+MUw==}
 
   '@protobufjs/path@1.1.2':
     resolution: {integrity: sha512-6JOcJ5Tm08dOHAbdR3GrvP+yUUfkjG5ePsHYczMFLq3ZmMkAD98cDgcT2iA1lJ9NVwFd4tH/iSSoe44YWkltEA==}
@@ -1368,66 +1361,79 @@ packages:
     resolution: {integrity: sha512-F8sWbhZ7tyuEfsmOxwc2giKDQzN3+kuBLPwwZGyVkLlKGdV1nvnNwYD0fKQ8+XS6hp9nY7B+ZeK01EBUE7aHaw==}
     cpu: [arm]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-arm-musleabihf@4.57.1':
     resolution: {integrity: sha512-rGfNUfn0GIeXtBP1wL5MnzSj98+PZe/AXaGBCRmT0ts80lU5CATYGxXukeTX39XBKsxzFpEeK+Mrp9faXOlmrw==}
     cpu: [arm]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-linux-arm64-gnu@4.57.1':
     resolution: {integrity: sha512-MMtej3YHWeg/0klK2Qodf3yrNzz6CGjo2UntLvk2RSPlhzgLvYEB3frRvbEF2wRKh1Z2fDIg9KRPe1fawv7C+g==}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-arm64-musl@4.57.1':
     resolution: {integrity: sha512-1a/qhaaOXhqXGpMFMET9VqwZakkljWHLmZOX48R0I/YLbhdxr1m4gtG1Hq7++VhVUmf+L3sTAf9op4JlhQ5u1Q==}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-linux-loong64-gnu@4.57.1':
     resolution: {integrity: sha512-QWO6RQTZ/cqYtJMtxhkRkidoNGXc7ERPbZN7dVW5SdURuLeVU7lwKMpo18XdcmpWYd0qsP1bwKPf7DNSUinhvA==}
     cpu: [loong64]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-loong64-musl@4.57.1':
     resolution: {integrity: sha512-xpObYIf+8gprgWaPP32xiN5RVTi/s5FCR+XMXSKmhfoJjrpRAjCuuqQXyxUa/eJTdAE6eJ+KDKaoEqjZQxh3Gw==}
     cpu: [loong64]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-linux-ppc64-gnu@4.57.1':
     resolution: {integrity: sha512-4BrCgrpZo4hvzMDKRqEaW1zeecScDCR+2nZ86ATLhAoJ5FQ+lbHVD3ttKe74/c7tNT9c6F2viwB3ufwp01Oh2w==}
     cpu: [ppc64]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-ppc64-musl@4.57.1':
     resolution: {integrity: sha512-NOlUuzesGauESAyEYFSe3QTUguL+lvrN1HtwEEsU2rOwdUDeTMJdO5dUYl/2hKf9jWydJrO9OL/XSSf65R5+Xw==}
     cpu: [ppc64]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-linux-riscv64-gnu@4.57.1':
     resolution: {integrity: sha512-ptA88htVp0AwUUqhVghwDIKlvJMD/fmL/wrQj99PRHFRAG6Z5nbWoWG4o81Nt9FT+IuqUQi+L31ZKAFeJ5Is+A==}
     cpu: [riscv64]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-riscv64-musl@4.57.1':
     resolution: {integrity: sha512-S51t7aMMTNdmAMPpBg7OOsTdn4tySRQvklmL3RpDRyknk87+Sp3xaumlatU+ppQ+5raY7sSTcC2beGgvhENfuw==}
     cpu: [riscv64]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-linux-s390x-gnu@4.57.1':
     resolution: {integrity: sha512-Bl00OFnVFkL82FHbEqy3k5CUCKH6OEJL54KCyx2oqsmZnFTR8IoNqBF+mjQVcRCT5sB6yOvK8A37LNm/kPJiZg==}
     cpu: [s390x]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-x64-gnu@4.57.1':
     resolution: {integrity: sha512-ABca4ceT4N+Tv/GtotnWAeXZUZuM/9AQyCyKYyKnpk4yoA7QIAuBt6Hkgpw8kActYlew2mvckXkvx0FfoInnLg==}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@rollup/rollup-linux-x64-musl@4.57.1':
     resolution: {integrity: sha512-HFps0JeGtuOR2convgRRkHCekD7j+gdAuXM+/i6kGzQtFhlCtQkpwtNzkNj6QhCDp7DRJ7+qC/1Vg2jt5iSOFw==}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   '@rollup/rollup-openbsd-x64@4.57.1':
     resolution: {integrity: sha512-H+hXEv9gdVQuDTgnqD+SQffoWoc0Of59AStSzTEj/feWTBAnSfSD3+Dql1ZruJQxmykT/JVY0dE8Ka7z0DH1hw==}
@@ -1503,36 +1509,42 @@ packages:
     engines: {node: '>=10'}
     cpu: [arm64]
     os: [linux]
+    libc: [glibc]
 
   '@swc/core-linux-arm64-musl@1.15.24':
     resolution: {integrity: sha512-ZpF/pRe1guk6sKzQI9D1jAORtjTdNlyeXn9GDz8ophof/w2WhojRblvSDJaGe7rJjcPN8AaOkhwdRUh7q8oYIg==}
     engines: {node: '>=10'}
     cpu: [arm64]
     os: [linux]
+    libc: [musl]
 
   '@swc/core-linux-ppc64-gnu@1.15.24':
     resolution: {integrity: sha512-QZEsZfisHTSJlmyChgDFNmKPb3W6Lhbfo/O76HhIngfEdnQNmukS38/VSe1feho+xkV5A5hETyCbx3sALBZKAQ==}
     engines: {node: '>=10'}
     cpu: [ppc64]
     os: [linux]
+    libc: [glibc]
 
   '@swc/core-linux-s390x-gnu@1.15.24':
     resolution: {integrity: sha512-DLdJKVsJgglqQrJBuoUYNmzm3leI7kUZhLbZGHv42onfKsGf6JDS3+bzCUQfte/XOqDjh/tmmn1DR/CF/tCJFw==}
     engines: {node: '>=10'}
     cpu: [s390x]
     os: [linux]
+    libc: [glibc]
 
   '@swc/core-linux-x64-gnu@1.15.24':
     resolution: {integrity: sha512-IpLYfposPA/XLxYOKpRfeccl1p5dDa3+okZDHHTchBkXEaVCnq5MADPmIWwIYj1tudt7hORsEHccG5no6IUQRw==}
     engines: {node: '>=10'}
     cpu: [x64]
     os: [linux]
+    libc: [glibc]
 
   '@swc/core-linux-x64-musl@1.15.24':
     resolution: {integrity: sha512-JHy3fMSc0t/EPWgo74+OK5TGr51aElnzqfUPaiRf2qJ/BfX5CUCfMiWVBuhI7qmVMBnk1jTRnL/xZnOSHDPLYg==}
     engines: {node: '>=10'}
     cpu: [x64]
     os: [linux]
+    libc: [musl]
 
   '@swc/core-win32-arm64-msvc@1.15.24':
     resolution: {integrity: sha512-Txj+qUH1z2bUd1P3JvwByfjKFti3cptlAxhWgmunBUUxy/IW3CXLZ6l6Gk4liANadKkU71nIU1X30Z5vpMT3BA==}
@@ -1610,6 +1622,9 @@ packages:
 
   '@types/estree@1.0.8':
     resolution: {integrity: sha512-dWHzHa2WqEXI/O1E9OjrocMTKJl2mSrEolh1Iomrv6U+JuNwaHXsXx9bLu5gG7BUWFIN0skIQJQ/L1rIex4X6w==}
+
+  '@types/long@4.0.2':
+    resolution: {integrity: sha512-MqTGEo5bj5t157U6fA/BiDynNkn0YknVdh48CMPkTSpFTVmvao5UQmm7uEF6xBEo7qIMAlY/JSleYaE6VOdpaA==}
 
   '@types/node@10.12.18':
     resolution: {integrity: sha512-fh+pAqt4xRzPfqA6eh3Z2y6fyZavRIumvjhaCL753+TVkGKGhpPeyrJG2JftD0T9q4GF00KjefsQ+PQNDdWQaQ==}
@@ -1823,9 +1838,6 @@ packages:
   base-x@3.0.11:
     resolution: {integrity: sha512-xz7wQ8xDhdyP7tQxwdteLYeFfS68tSMNCZ/Y37WJ4bhGfKPpqEIlmIyueQHqOyoPhE6xNUqjzRr8ra0eF9VRvA==}
 
-  base-x@4.0.1:
-    resolution: {integrity: sha512-uAZ8x6r6S3aUM9rbHGVOIsR15U/ZSc82b3ymnCPsT45Gk1DDvhDPdIgB5MrhirZWt+5K0EEPQH985kNqZgNPFw==}
-
   base-x@5.0.1:
     resolution: {integrity: sha512-M7uio8Zt++eg3jPj+rHMfCC+IuygQHHCOU+IYsVtik6FWjuYpVt/+MRKcgsAMHh8mMFAwnB+Bs+mTrFiXjMzKg==}
 
@@ -1838,9 +1850,6 @@ packages:
 
   bech32@1.1.4:
     resolution: {integrity: sha512-s0IrSOzLlbvX7yp4WBfPITzpAU8sqQcpsmwXDiKwrG4r491vwCO/XpejasRNl0piBMe/DvP4Tz0mIS/X1DPJBQ==}
-
-  bech32@2.0.0:
-    resolution: {integrity: sha512-LcknSilhIGatDAsY1ak2I8VtGaHNhgMSYVxFrGLXv+xLHytaKZKcaUJJUE7qmBr7h33o5YQwP55pMI0xmkpJwg==}
 
   bfs-path@1.0.2:
     resolution: {integrity: sha512-KTKx2JJtAAAT7C/rJYDXXWA2VLPycAS4kwFktKsxUo0hj4UTtw/Gm5PJuY7Uf3xSlIQNo7HRCSWei2ivncVwbQ==}
@@ -1859,9 +1868,8 @@ packages:
     resolution: {integrity: sha512-Ceh+7ox5qe7LJuLHoY0feh3pHuUDHAcRUeyL2VYghZwfpkNIy/+8Ocg0a3UuSoYzavmylwuLWQOf3hl0jjMMIw==}
     engines: {node: '>=8'}
 
-  bip174@2.1.1:
-    resolution: {integrity: sha512-mdFV5+/v0XyNYXjBS6CQPLo9ekCx4gtKZFnJm5PMto7Fs9hTTDpkkzOB7/FtluRI6JbUUAu+snTYfJRgHLZbZQ==}
-    engines: {node: '>=8.0.0'}
+  bindings@1.5.0:
+    resolution: {integrity: sha512-p2q/t/mhvuOj/UeLlV6566GD/guowlr0hHxClI0W9m7MWYkL1F0hLo+0Aexs9HSPCtR1SXQ0TD3MMKrXZajbiQ==}
 
   bip32@2.0.6:
     resolution: {integrity: sha512-HpV5OMLLGTjSVblmrtYRfFFKuQB+GArM0+XP8HGWfJ5vxYBqo+DesvJwOdC2WJ3bCkZShGf0QIfoIpeomVzVdA==}
@@ -1870,12 +1878,11 @@ packages:
   bip39@3.1.0:
     resolution: {integrity: sha512-c9kiwdk45Do5GL0vJMe7tS95VjCii65mYAH7DfWl3uW8AVzXKQVUm64i3hzVybBDMp9r7j9iNxR85+ul8MdN/A==}
 
-  bitcoinjs-lib@6.1.7:
-    resolution: {integrity: sha512-tlf/r2DGMbF7ky1MgUqXHzypYHakkEnm0SZP23CJKIqNY/5uNAnMbFhMJdhjrL/7anfb/U8+AlpdjPWjPnAalg==}
-    engines: {node: '>=8.0.0'}
-
   blakejs@1.2.1:
     resolution: {integrity: sha512-QXUSXI3QVc/gJME0dBpXrag1kbzOqCjCX8/b54ntNyW6sjtoqxqRk3LTmXzaJoh71zMsDCjM+47jS7XiwN/+fQ==}
+
+  bn.js@4.12.5:
+    resolution: {integrity: sha512-3aRg6/JxfffFD+OlOjOFR3Vo79l39ooBTFucxx+MT3dhCtzn3EmiUPQo+6/OZuI2jbXi3YKgmiTFBgChQMwIRQ==}
 
   bn.js@5.2.5:
     resolution: {integrity: sha512-Vq886eXykuP5E6HcKSSStP3bJgrE6In5WKxVUvJ8XGpWWYs2xZHWqUwzCtGgEtBcxyd57KBFDPFoUfNzdaHCNg==}
@@ -1887,6 +1894,9 @@ packages:
     resolution: {integrity: sha512-yQbXgO/OSZVD2IsiLlro+7Hf6Q18EJrKSEsdoMzKePKXct3gvD8oLcOQdIzGupr5Fj+EDe8gO/lxc1BzfMpxvA==}
     engines: {node: '>=8'}
 
+  brorand@1.1.0:
+    resolution: {integrity: sha512-cKV8tMCEpQs4hK/ik71d6LrPOnpkpGBR0wzxqr68g2m/LB2GxVYQroAjMJZRVM1Y4BCjCKc3vAamxSzOY2RP+w==}
+
   browserslist@4.28.1:
     resolution: {integrity: sha512-ZC5Bd0LgJXgwGqUknZY/vkUQ04r8NXnJZ3yYi4vDmSiZmC/pdSN0NbNRPxZpbtO4uAfDUAFffO8IZoM3Gj8IkA==}
     engines: {node: ^6 || ^7 || ^8 || ^9 || ^10 || ^11 || ^12 || >=13.7}
@@ -1895,17 +1905,11 @@ packages:
   bs58@4.0.1:
     resolution: {integrity: sha512-Ok3Wdf5vOIlBrgCvTq96gBkJw+JUEzdBgyaza5HLtPm7yTHkjRy8+JzNyHF7BHa0bNWOQIp3m5YF0nnFcOIKLw==}
 
-  bs58@5.0.0:
-    resolution: {integrity: sha512-r+ihvQJvahgYT50JD05dyJNKlmmSlMoOGwn1lCcEzanPglg7TxYjioQUYehQ9mAR/+hOSd2jRc/Z2y5UxBymvQ==}
-
   bs58@6.0.0:
     resolution: {integrity: sha512-PD0wEnEYg6ijszw/u8s+iI3H17cTymlrwkKhDhPZq+Sokl3AU4htyBFTjAeNAlCCmg0f53g6ih3jATyCKftTfw==}
 
   bs58check@2.1.2:
     resolution: {integrity: sha512-0TS1jicxdU09dwJMNZtVAfzPi6Q6QeN0pM1Fkzrjn+XYHvzMKPU3pHVpva+769iNVSfIYWf7LJ6WR+BuuMf8cA==}
-
-  bs58check@3.0.1:
-    resolution: {integrity: sha512-hjuuJvoWEybo7Hn/0xOrczQKKEKD63WguEjlhLExYs2wUBcebDC1jDNK17eEAD2lYfw82d5ASC1d7K3SWszjaQ==}
 
   buffer@6.0.3:
     resolution: {integrity: sha512-FTiCpNxtwiZZHEZbcbTIcZjERVICn9yq/pDFkTl95/AxzD1naBctN7YO68riM/gLSDY7sdrMby8hofADYuuqOA==}
@@ -2011,6 +2015,10 @@ packages:
   crossws@0.3.5:
     resolution: {integrity: sha512-ojKiDvcmByhwa8YYqbQI/hg7MEU0NC03+pSdEq4ZUnZR9xXpwk7E43SMNGkn+JxJGPFtNvQ48+vV2p+P1ml5PA==}
 
+  crypto-js@4.2.0:
+    resolution: {integrity: sha512-KALDyEYgpY+Rlob/iriUtjV6d5Eq+Y191A5g4UqLAi8CyGP9N1+FdVbkc1SxKc2r4YAYqG8JzO2KGL+AizD70Q==}
+    deprecated: Active development of CryptoJS has been discontinued. This library is no longer maintained.
+
   css-what@6.2.2:
     resolution: {integrity: sha512-u/O3vwbptzhMs3L1fQE82ZSLHQQfto5gyZzwteVIEyeaY5Fc7R4dapF/BvRoSYFeqfBk4m0V1Vafq5Pjv25wvA==}
     engines: {node: '>= 6'}
@@ -2088,12 +2096,11 @@ packages:
   duplexify@4.1.3:
     resolution: {integrity: sha512-M3BmBhwJRZsSx38lZyhE53Csddgzl5R7xGJNk7CVddZD6CcmwMCH8J+7AprIrQKH7TonKxaCjcv27Qmf+sQ+oA==}
 
-  ecpair@2.1.0:
-    resolution: {integrity: sha512-cL/mh3MtJutFOvFc27GPZE2pWL3a3k4YvzUWEOvilnfZVlH3Jwgx/7d6tlD7/75tNk8TG2m+7Kgtz0SI1tWcqw==}
-    engines: {node: '>=8.0.0'}
-
   electron-to-chromium@1.5.286:
     resolution: {integrity: sha512-9tfDXhJ4RKFNerfjdCcZfufu49vg620741MNs26a9+bhLThdB+plgMeou98CAaHu/WATj2iHOOHTp1hWtABj2A==}
+
+  elliptic@6.6.1:
+    resolution: {integrity: sha512-RaddvvMatK2LJHqFJ+YA4WysVN5Ita9E35botqIYspQ4TkRAlCicdzKOjlyv/1Za5RyTNn7di//eEV0uTAfe3g==}
 
   emoji-regex@8.0.0:
     resolution: {integrity: sha512-MSjYzcWNOA0ewAHpz0MxpYFvwg6yjy1NG3xteoqz644VCo/RPgnr1/GGt+ic3iJTzQ8Eu3TdM14SawnVUmGE6A==}
@@ -2143,9 +2150,6 @@ packages:
   eth-rpc-errors@4.0.3:
     resolution: {integrity: sha512-Z3ymjopaoft7JDoxZcEb3pwdGh7yiYMhOwm2doUt6ASXlMavpNlK6Cre0+IMl2VSGyEU9rkiperQhp5iRxn5Pg==}
 
-  eventemitter3@4.0.7:
-    resolution: {integrity: sha512-8guHBZCwKnFhYdHr2ysuRWErTwhoN2X8XELRlrRwpmfeY2jjuUN4taQMsULKUVo1K4DvZl+0pgfyoysHxvmvEw==}
-
   eventemitter3@5.0.1:
     resolution: {integrity: sha512-GWkBvjiSZK87ELrYOSESUYeVIc9mvLLf/nXalMOS5dYrgZq9o5OVkbZAVM06CVxYsCwH9BDZFPlQTlPA1j4ahA==}
 
@@ -2186,6 +2190,9 @@ packages:
     peerDependenciesMeta:
       picomatch:
         optional: true
+
+  file-uri-to-path@1.0.0:
+    resolution: {integrity: sha512-0Zt+s3L7Vf1biwWZ29aARiVYLx7iMGnEUl9x33fbB/j3jR81u/O2LbqK+Bm1CDSNDKVtJ/YjwY7TUd5SkeLQLw==}
 
   fill-range@7.1.1:
     resolution: {integrity: sha512-YsGpe3WHLK8ZYi4tWDg2Jy3ebRz2rXowDxnld4bkQB00cc/1Zw9AWnC0i9ztDJitivtQvaI9KaLyKrc+hBW0yg==}
@@ -2279,6 +2286,9 @@ packages:
   hash-wasm@4.12.0:
     resolution: {integrity: sha512-+/2B2rYLb48I/evdOIhP+K/DD2ca2fgBjp6O+GBEnCDk2e4rpeXIK8GvIyRPjTezgmWn9gmKwkQjjx6BtqDHVQ==}
 
+  hash.js@1.1.7:
+    resolution: {integrity: sha512-taOaskGt4z4SOANNseOviYDvjEJinIkRgmp7LbKP2YTTmVxWBl87s/uzK9r+44BclBSp2X7K1hqeNfz9JbBeXA==}
+
   hasown@2.0.2:
     resolution: {integrity: sha512-0hJU9SCPvmMzIBdZFqNPXWa6dqh7WdH0cII9y+CyS8rG3nL48Bclra9HmKhVVUHyPWNH5Y7xDwAB7bfgSjkUMQ==}
     engines: {node: '>= 0.4'}
@@ -2286,6 +2296,9 @@ packages:
   hasown@2.0.4:
     resolution: {integrity: sha512-T2UbfbBEF32wiepXIsMlTW9+dDYC6wMh/t/vYA4tuOMKqWz/n3vr1NFSxQiyP+zk2mXsoMA/i/7qV6LKut1t1A==}
     engines: {node: '>= 0.4'}
+
+  hmac-drbg@1.0.1:
+    resolution: {integrity: sha512-Tti3gMqLdZfhOQY1Mzf/AanLiqh1WTiJgEj26ZuYQ9fbkLomzGchCws4FyrSd4VkpBfiNhaE1On+lOz894jvXg==}
 
   https-proxy-agent@5.0.1:
     resolution: {integrity: sha512-dFcAjpTQFgoLMzC2VwU+C/CbS7uRL0lWmxDITmqm7C+7F0Odmj6s9l6alZc6AELXhrnggM2CeWSXHGOdX2YtwA==}
@@ -2354,7 +2367,7 @@ packages:
   isomorphic-ws@4.0.1:
     resolution: {integrity: sha512-BhBvN2MBpWTaSHdWRb/bwdZJ1WaehQ2L1KngkCkfLUGF0mAWAT1sQUQacEmQ0jXkFw/czDXPNQSL5u2/Krsz1w==}
     peerDependencies:
-      ws: ^7.5.13
+      ws: '*'
 
   jiti@1.21.7:
     resolution: {integrity: sha512-/imKNG4EbWNrVjoNC/1H5/9GFy+tqjGBHCaSsN+P2RnPqjsLmv6UD3Ej+Kj8nBWaRAwyk7kK5ZUc+OEatnTR3A==}
@@ -2392,6 +2405,12 @@ packages:
 
   keyvaluestorage-interface@1.0.0:
     resolution: {integrity: sha512-8t6Q3TclQ4uZynJY9IGr2+SsIGwK9JHcO6ootkHCGA0CrQCRy+VkouYNO2xicET6b9al7QKzpebNow+gkpCL8g==}
+
+  libsodium-sumo@0.7.16:
+    resolution: {integrity: sha512-x6atrz2AdXCJg6G709x9W9TTJRI6/0NcL5dD0l5GGVqNE48UJmDsjO4RUWYTeyXXUpg+NXZ2SHECaZnFRYzwGA==}
+
+  libsodium-wrappers-sumo@0.7.16:
+    resolution: {integrity: sha512-gR0JEFPeN3831lB9+ogooQk0KH4K5LSMIO5Prd5Q5XYR2wHFtZfPg0eP7t1oJIWq+UIzlU4WVeBxZ97mt28tXw==}
 
   lilconfig@3.1.3:
     resolution: {integrity: sha512-/vlFKAoH5Cgt3Ie+JLhRbwOsCQePABiU3tJ1egGvyQ+33R/vcwM2Zl2QR/LzjsBeItPt3oSVXapn+m4nQDvpzw==}
@@ -2451,6 +2470,15 @@ packages:
     resolution: {integrity: sha512-ZDY+bPm5zTTF+YpCrAU9nK0UgICYPT0QtT1NZWFv4s++TNkcgVaT0g6+4R2uI4MjQjzysHB1zxuWL50hzaeXiw==}
     engines: {node: '>= 0.6'}
 
+  minimalistic-assert@1.0.1:
+    resolution: {integrity: sha512-UtJcAD4yEaGtjPezWuO9wC4nwUnVH/8/Im3yEHQP4b67cXlD/Qr9hdITCU1xDbSEXg2XKNaP8jsReV7vQd00/A==}
+
+  minimalistic-crypto-utils@1.0.1:
+    resolution: {integrity: sha512-JIYlbt6g8i5jKfJ3xz7rF0LXmv2TkDxBLUkiBeZ7bAx4GnnNMr8xFpGnOxn6GhTEHx3SjRrZEoU+j04prX1ktg==}
+
+  mobx@6.16.1:
+    resolution: {integrity: sha512-syNcDdX3KT+Jq3je6eGjBhuc24Z68td2VG0zNFqRswaE433D9SNH5VRy/xrGbJsUixfppLLccXhAW9JSf6n+SQ==}
+
   modern-ahocorasick@1.1.0:
     resolution: {integrity: sha512-sEKPVl2rM+MNVkGQt3ChdmD8YsigmXdn5NifZn6jiwn9LRJpWm8F3guhaqrJT/JOat6pwpbXEk6kv+b9DMIjsQ==}
 
@@ -2462,6 +2490,9 @@ packages:
 
   mz@2.7.0:
     resolution: {integrity: sha512-z81GNO7nnYMEhrGh9LeymoE4+Yr0Wn5McHIZMK5cfQCl+NDX08sCZgUc9/6MHni9IWuFLm1Z3HTCXu2z9fN62Q==}
+
+  nan@2.30.0:
+    resolution: {integrity: sha512-P5mokDkSvCGBz6mZDD/2l+w9QoICRXdCyZ9ONGmTePr40oihJg3Kpn0YU3twKd6PJnwSlLBWNQeOT6yWEV2c4A==}
 
   nanoid@3.3.16:
     resolution: {integrity: sha512-bzlKTyNJ7+LdGIIwy8ijFpIqEQIvafahV7eYykJ8Cvh42EdJeODoJ6gUJXpQJvej1BddH8OqTXZNE/KfbWAu8Q==}
@@ -2529,18 +2560,6 @@ packages:
     peerDependenciesMeta:
       typescript:
         optional: true
-
-  p-finally@1.0.0:
-    resolution: {integrity: sha512-LICb2p9CB7FS+0eR1oqWnHhp0FljGLZCWBE9aix0Uye9W8LTQPwMTYVGWQWIw9RdQiDg4+epXQODwIYJtSJaow==}
-    engines: {node: '>=4'}
-
-  p-queue@6.6.2:
-    resolution: {integrity: sha512-RwFpb72c/BhQLEXIZ5K2e+AhgNVmIejGlTgiB9MzZ0e93GRvqZ7uSi0dvRF7/XIXDeNkra2fNHBxTyPDGySpjQ==}
-    engines: {node: '>=8'}
-
-  p-timeout@3.2.0:
-    resolution: {integrity: sha512-rhIwUycgwwKcP9yTOOFK/AKsAopjjCakVqLHePO3CC6Mir1Z99xT+R63jZxAT5lFZLa2inS5h+ZS2GvR99/FBg==}
-    engines: {node: '>=8'}
 
   pako@2.1.0:
     resolution: {integrity: sha512-w+eufiZ1WuJYgPXbV/PO3NCMEc3xqylkKHzp8bxp1uW4qaSNQUkwmLLEc3kKsfz8lpV1F8Ht3U1Cm+9Srog2ug==}
@@ -2630,8 +2649,8 @@ packages:
     peerDependencies:
       postcss: ^8.2.14
 
-  postcss-selector-parser@6.1.2:
-    resolution: {integrity: sha512-Q8qQfPiZ+THO/3ZrOrO0cJJKfpYCagtMUkXbnEfmgUjwXg6z/WBeOyS9APBBPCTSiDV+s4SwQGu8yFsiMRIudg==}
+  postcss-selector-parser@6.1.4:
+    resolution: {integrity: sha512-bIoJLOmjCO1S9XdY/DcnR5hJxvrDir1PbGChrzXG3vw0/FOliy/fA3dmdhQ441kah4gKv+TwckGzex6wNS5cnQ==}
     engines: {node: '>=4'}
 
   postcss-value-parser@4.2.0:
@@ -2654,9 +2673,9 @@ packages:
     resolution: {integrity: sha512-vGrhOavPSTz4QVNuBNdcNXePNdNMaO1xj9yBeH1ScQPjk/rhg9sSlCXPhMkFuaNNW/syTvYqsnbIJxMBfRbbag==}
     engines: {node: '>= 8'}
 
-  protobufjs@7.6.6:
-    resolution: {integrity: sha512-dYDWdjSl5RNb7SgPxGQcRU+GtvP7s2fpkrY0r432PcOIaZ0/rBcxEZnQN67iJhFuQiVw754JDoPruPCNdGsbjg==}
-    engines: {node: '>=12.0.0'}
+  protobufjs@6.11.6:
+    resolution: {integrity: sha512-k8BHqgPBOtrlougZZqF2uUk5Z7bN8f0wj+3e8M3hvtSv0NBAz4VBy5f6R5Nxq/l+i7mRFTgNZb2trxqTpHNY/A==}
+    hasBin: true
 
   proxy-from-env@2.1.0:
     resolution: {integrity: sha512-cJ+oHTW1VAEa8cJslgmUZrc+sjRKgAKl3Zyse6+PV38hZe/V6Z14TbCuXcan9F9ghlz4QrFr2c92TNF82UkYHA==}
@@ -2679,9 +2698,6 @@ packages:
     peerDependencies:
       '@vanilla-extract/css': ^1
       '@vanilla-extract/dynamic': ^2
-
-  randombytes@2.1.0:
-    resolution: {integrity: sha512-vYl3iOX+4CKUWuxGi9Ukhie6fsqXqS9FE2Zaic4tNFD2N2QQaXOMFbuKK4QmDHC0JO6B1Zp41J0LpT0oR68amQ==}
 
   react-aria@3.46.0:
     resolution: {integrity: sha512-We0diSsMK35jw53JFjgF9w8obBjehAUI/TRiynnzSrjRd9eoHYQcecHlptke/HEFxvya/Gcm+LA21Im1+qnIeQ==}
@@ -2890,9 +2906,9 @@ packages:
   thread-stream@3.1.0:
     resolution: {integrity: sha512-OqyPZ9u96VohAyMfJykzmivOrY2wfMSf3C5TtFJVgN+Hm6aj+voFhlK+kZEIv2FBh1X6Xp3DlnCOfEQ3B2J86A==}
 
-  tiny-secp256k1@2.2.4:
-    resolution: {integrity: sha512-FoDTcToPqZE454Q04hH9o2EhxWsm7pOSpicyHkgTwKhdKWdsTUuqfP5MLq3g+VjAtl2vSx6JpXGdwA2qpYkI0Q==}
-    engines: {node: '>=14.0.0'}
+  tiny-secp256k1@1.1.7:
+    resolution: {integrity: sha512-eb+F6NabSnjbLwNoC+2o5ItbmP1kg7HliWue71JgLegQt6A5mTN8YbvTLCazdlg6e5SV6A+r8OGvZYskdlmhqQ==}
+    engines: {node: '>=6.0.0'}
 
   tinybench@2.9.0:
     resolution: {integrity: sha512-0+DUvqWMValLmha6lr4kD8iAMK1HzV0/aKnCtWb9v9641TnP/MFb7Pc2bxoxQjTXAErryXVgUOfv2YqNllqGeg==}
@@ -2949,10 +2965,6 @@ packages:
 
   ufo@1.6.3:
     resolution: {integrity: sha512-yDJTmhydvl5lJzBmy/hyOAA0d+aqCBuwl818haVdYCRrWV84o7YyeVm4QlVHStqNrrJSTb6jKuFAVqAFsr+K3Q==}
-
-  uint8array-tools@0.0.7:
-    resolution: {integrity: sha512-vrrNZJiusLWoFWBqz5Y5KMCgP9W9hnjZHzZiZRT8oNAkq3d5Z5Oe76jAvVVSRh4U8GGR90N2X1dWtrhvx6L8UQ==}
-    engines: {node: '>=14.0.0'}
 
   uint8arrays@3.1.1:
     resolution: {integrity: sha512-+QJa8QRnbdXVpHYjLoTpJIdCTiw9Ir62nocClWuXIq2JIh4Uta0cQsTSpFL678p2CN8B+XSApwcU+pQEqVpKWg==}
@@ -3047,12 +3059,19 @@ packages:
     resolution: {integrity: sha512-6Z7Ma2aVEWisaL6TvBCy7P8rm2LQoPv6dJ7ecIaIixHcwfbJ0x7mWdbcwlIM5IGQxPZSFYeqRCqlOOeKoJYMkw==}
     engines: {node: '>= 4'}
 
+  uuid@10.0.0:
+    resolution: {integrity: sha512-8XkAphELsDnEGrDxUOHB3RGvXz6TeuYSGEZBOjtTtPm2lwhGBjLgOzLHB63IUWfBpNucQjND6d3AOudO+H3RWQ==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+    hasBin: true
+
   uuid@11.1.1:
     resolution: {integrity: sha512-vIYxrBCC/N/K+Js3qSN88go7kIfNPssr/hHCesKCQNAjmgvYS2oqr69kIufEG+O4+PfezOH4EbIeHCfFov8ZgQ==}
     hasBin: true
 
-  varuint-bitcoin@1.1.2:
-    resolution: {integrity: sha512-4EVb+w4rx+YfVM32HQX42AbbT7/1f5zwAYhIujKXKk8NQK+JfRVl3pqT3hjNn/L+RstigmGGKVwHA/P0wgITZw==}
+  uuid@9.0.1:
+    resolution: {integrity: sha512-b+1eJOlsR9K8HJpow9Ok3fiWOWSIcIzXodvv0rQjVoOVNpWMpxf1wZNpt4y9h10odCNrqnYp1OBzRktckBe3sA==}
+    deprecated: uuid@10 and below is no longer supported.  For ESM codebases, update to uuid@latest.  For CommonJS codebases, use uuid@11 (but be aware this version will likely be deprecated in 2028).
+    hasBin: true
 
   vite-plugin-top-level-await@1.6.0:
     resolution: {integrity: sha512-bNhUreLamTIkoulCR9aDXbTbhLk6n1YE8NJUTTxl5RYskNRtzOR0ASzSjBVRtNdjIfngDXo11qOsybGLNsrdww==}
@@ -3359,15 +3378,12 @@ snapshots:
       '@chain-registry/utils': 1.51.299
       '@cosmostation/extension-client': 0.1.15
 
-  '@chain-registry/keplr@1.74.482(bitcoinjs-lib@6.1.7)(starknet@8.9.2)':
+  '@chain-registry/keplr@1.74.482':
     dependencies:
       '@chain-registry/types': 0.50.299
-      '@keplr-wallet/cosmos': 0.13.8(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@keplr-wallet/crypto': 0.13.8(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
+      '@keplr-wallet/cosmos': 0.12.28
+      '@keplr-wallet/crypto': 0.12.28
       semver: 7.7.4
-    transitivePeerDependencies:
-      - bitcoinjs-lib
-      - starknet
 
   '@chain-registry/types@0.46.15': {}
 
@@ -3378,6 +3394,13 @@ snapshots:
       '@chain-registry/types': 0.50.299
       bignumber.js: 9.1.2
       sha.js: 2.4.12
+
+  '@cosmjs/amino@0.32.4':
+    dependencies:
+      '@cosmjs/crypto': 0.32.4
+      '@cosmjs/encoding': 0.32.4
+      '@cosmjs/math': 0.32.4
+      '@cosmjs/utils': 0.32.4
 
   '@cosmjs/amino@0.36.2':
     dependencies:
@@ -3402,6 +3425,16 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
+  '@cosmjs/crypto@0.32.4':
+    dependencies:
+      '@cosmjs/encoding': 0.32.4
+      '@cosmjs/math': 0.32.4
+      '@cosmjs/utils': 0.32.4
+      '@noble/hashes': 1.8.0
+      bn.js: 5.2.5
+      elliptic: 6.6.1
+      libsodium-wrappers-sumo: 0.7.16
+
   '@cosmjs/crypto@0.36.2':
     dependencies:
       '@cosmjs/encoding': 0.36.2
@@ -3411,6 +3444,12 @@ snapshots:
       '@noble/curves': 1.9.7
       '@noble/hashes': 1.8.0
       hash-wasm: 4.12.0
+
+  '@cosmjs/encoding@0.32.4':
+    dependencies:
+      base64-js: 1.5.1
+      bech32: 1.1.4
+      readonly-date: 1.0.0
 
   '@cosmjs/encoding@0.36.2':
     dependencies:
@@ -3423,15 +3462,19 @@ snapshots:
       '@cosmjs/stream': 0.36.2
       xstream: 11.14.0
 
+  '@cosmjs/math@0.32.4':
+    dependencies:
+      bn.js: 5.2.5
+
   '@cosmjs/math@0.36.2': {}
 
   '@cosmjs/proto-signing@0.32.4':
     dependencies:
-      '@cosmjs/amino': 0.36.2
-      '@cosmjs/crypto': 0.36.2
-      '@cosmjs/encoding': 0.36.2
-      '@cosmjs/math': 0.36.2
-      '@cosmjs/utils': 0.36.2
+      '@cosmjs/amino': 0.32.4
+      '@cosmjs/crypto': 0.32.4
+      '@cosmjs/encoding': 0.32.4
+      '@cosmjs/math': 0.32.4
+      '@cosmjs/utils': 0.32.4
       cosmjs-types: 0.9.0
 
   '@cosmjs/proto-signing@0.36.2':
@@ -3486,12 +3529,14 @@ snapshots:
       - bufferutil
       - utf-8-validate
 
+  '@cosmjs/utils@0.32.4': {}
+
   '@cosmjs/utils@0.36.2': {}
 
-  '@cosmos-kit/core@2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)':
+  '@cosmos-kit/core@2.18.1':
     dependencies:
       '@chain-registry/client': 1.53.299
-      '@chain-registry/keplr': 1.74.482(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
+      '@chain-registry/keplr': 1.74.482
       '@chain-registry/types': 0.46.15
       '@cosmjs/amino': 0.36.2
       '@cosmjs/cosmwasm-stargate': 0.36.2
@@ -3503,7 +3548,7 @@ snapshots:
       cosmjs-types: 0.10.1
       events: 3.3.0
       nock: 13.5.4
-      uuid: 11.1.1
+      uuid: 9.0.1
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -3521,22 +3566,20 @@ snapshots:
       - '@vercel/functions'
       - '@vercel/kv'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
       - ioredis
-      - starknet
       - supports-color
       - uploadthing
       - utf-8-validate
 
-  '@cosmos-kit/cosmostation-extension@2.18.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(bitcoinjs-lib@6.1.7)(cosmjs-types@0.10.1)(starknet@8.9.2)':
+  '@cosmos-kit/cosmostation-extension@2.18.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(cosmjs-types@0.10.1)':
     dependencies:
       '@chain-registry/cosmostation': 1.72.482
-      '@cosmjs/amino': 0.36.2
+      '@cosmjs/amino': 0.32.4
       '@cosmjs/proto-signing': 0.36.2
-      '@cosmos-kit/core': 2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
+      '@cosmos-kit/core': 2.18.1
       cosmjs-types: 0.10.1
     transitivePeerDependencies:
       - '@azure/app-configuration'
@@ -3555,21 +3598,19 @@ snapshots:
       - '@vercel/functions'
       - '@vercel/kv'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
       - ioredis
-      - starknet
       - supports-color
       - uploadthing
       - utf-8-validate
 
-  '@cosmos-kit/cosmostation-mobile@2.16.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)':
+  '@cosmos-kit/cosmostation-mobile@2.16.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(typescript@5.9.3)':
     dependencies:
       '@chain-registry/cosmostation': 1.67.13
-      '@cosmos-kit/core': 2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmos-kit/walletconnect': 2.15.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)
+      '@cosmos-kit/core': 2.18.1
+      '@cosmos-kit/walletconnect': 2.15.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(typescript@5.9.3)
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -3590,22 +3631,20 @@ snapshots:
       - '@vercel/kv'
       - '@walletconnect/types'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
       - ioredis
-      - starknet
       - supports-color
       - typescript
       - uploadthing
       - utf-8-validate
       - zod
 
-  '@cosmos-kit/cosmostation@2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(cosmjs-types@0.10.1)(starknet@8.9.2)(typescript@5.9.3)':
+  '@cosmos-kit/cosmostation@2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(cosmjs-types@0.10.1)(typescript@5.9.3)':
     dependencies:
-      '@cosmos-kit/cosmostation-extension': 2.18.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(bitcoinjs-lib@6.1.7)(cosmjs-types@0.10.1)(starknet@8.9.2)
-      '@cosmos-kit/cosmostation-mobile': 2.16.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)
+      '@cosmos-kit/cosmostation-extension': 2.18.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(cosmjs-types@0.10.1)
+      '@cosmos-kit/cosmostation-mobile': 2.16.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(typescript@5.9.3)
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -3626,27 +3665,25 @@ snapshots:
       - '@vercel/kv'
       - '@walletconnect/types'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - cosmjs-types
       - db0
       - encoding
       - ioredis
-      - starknet
       - supports-color
       - typescript
       - uploadthing
       - utf-8-validate
       - zod
 
-  '@cosmos-kit/keplr-extension@2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)':
+  '@cosmos-kit/keplr-extension@2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(starknet@8.9.2)':
     dependencies:
-      '@chain-registry/keplr': 1.74.482(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmjs/amino': 0.36.2
+      '@chain-registry/keplr': 1.74.482
+      '@cosmjs/amino': 0.32.4
       '@cosmjs/proto-signing': 0.36.2
-      '@cosmos-kit/core': 2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@keplr-wallet/provider-extension': 0.13.8(starknet@8.9.2)
-      '@keplr-wallet/types': 0.13.8(starknet@8.9.2)
+      '@cosmos-kit/core': 2.18.1
+      '@keplr-wallet/provider-extension': 0.12.313(starknet@8.9.2)
+      '@keplr-wallet/types': 0.12.313(starknet@8.9.2)
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -3664,7 +3701,6 @@ snapshots:
       - '@vercel/functions'
       - '@vercel/kv'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
@@ -3674,16 +3710,16 @@ snapshots:
       - uploadthing
       - utf-8-validate
 
-  '@cosmos-kit/keplr-mobile@2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)':
+  '@cosmos-kit/keplr-mobile@2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.11.0)(starknet@8.9.2)(typescript@5.9.3)':
     dependencies:
-      '@chain-registry/keplr': 1.74.482(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmjs/amino': 0.36.2
+      '@chain-registry/keplr': 1.74.482
+      '@cosmjs/amino': 0.32.4
       '@cosmjs/proto-signing': 0.36.2
-      '@cosmos-kit/core': 2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmos-kit/keplr-extension': 2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmos-kit/walletconnect': 2.15.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)
-      '@keplr-wallet/provider-extension': 0.13.8(starknet@8.9.2)
-      '@keplr-wallet/wc-client': 0.12.313(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.23.4)(starknet@8.9.2)
+      '@cosmos-kit/core': 2.18.1
+      '@cosmos-kit/keplr-extension': 2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(starknet@8.9.2)
+      '@cosmos-kit/walletconnect': 2.15.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(typescript@5.9.3)
+      '@keplr-wallet/provider-extension': 0.12.313(starknet@8.9.2)
+      '@keplr-wallet/wc-client': 0.12.313(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.11.0)(starknet@8.9.2)
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -3703,7 +3739,6 @@ snapshots:
       - '@walletconnect/sign-client'
       - '@walletconnect/types'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
@@ -3715,10 +3750,10 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@cosmos-kit/keplr@2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)':
+  '@cosmos-kit/keplr@2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.11.0)(starknet@8.9.2)(typescript@5.9.3)':
     dependencies:
-      '@cosmos-kit/keplr-extension': 2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmos-kit/keplr-mobile': 2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)
+      '@cosmos-kit/keplr-extension': 2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(starknet@8.9.2)
+      '@cosmos-kit/keplr-mobile': 2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.11.0)(starknet@8.9.2)(typescript@5.9.3)
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -3740,7 +3775,6 @@ snapshots:
       - '@walletconnect/sign-client'
       - '@walletconnect/types'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
@@ -3752,12 +3786,12 @@ snapshots:
       - utf-8-validate
       - zod
 
-  '@cosmos-kit/leap-extension@2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)':
+  '@cosmos-kit/leap-extension@2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)':
     dependencies:
-      '@chain-registry/keplr': 1.74.482(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmjs/amino': 0.36.2
+      '@chain-registry/keplr': 1.74.482
+      '@cosmjs/amino': 0.32.4
       '@cosmjs/proto-signing': 0.36.2
-      '@cosmos-kit/core': 2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
+      '@cosmos-kit/core': 2.18.1
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -3775,22 +3809,20 @@ snapshots:
       - '@vercel/functions'
       - '@vercel/kv'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
       - ioredis
-      - starknet
       - supports-color
       - uploadthing
       - utf-8-validate
 
-  '@cosmos-kit/leap-metamask-cosmos-snap@0.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(bitcoinjs-lib@6.1.7)(cosmjs-types@0.10.1)(starknet@8.9.2)':
+  '@cosmos-kit/leap-metamask-cosmos-snap@0.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(cosmjs-types@0.10.1)':
     dependencies:
-      '@chain-registry/keplr': 1.74.482(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmjs/amino': 0.36.2
+      '@chain-registry/keplr': 1.74.482
+      '@cosmjs/amino': 0.32.4
       '@cosmjs/proto-signing': 0.36.2
-      '@cosmos-kit/core': 2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
+      '@cosmos-kit/core': 2.18.1
       '@leapwallet/cosmos-snap-provider': 0.1.26
       '@metamask/providers': 11.1.2
       cosmjs-types: 0.10.1
@@ -3811,21 +3843,19 @@ snapshots:
       - '@vercel/functions'
       - '@vercel/kv'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
       - ioredis
-      - starknet
       - supports-color
       - uploadthing
       - utf-8-validate
 
-  '@cosmos-kit/leap-mobile@2.16.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)':
+  '@cosmos-kit/leap-mobile@2.16.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(typescript@5.9.3)':
     dependencies:
-      '@chain-registry/keplr': 1.74.482(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmos-kit/core': 2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmos-kit/walletconnect': 2.15.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)
+      '@chain-registry/keplr': 1.74.482
+      '@cosmos-kit/core': 2.18.1
+      '@cosmos-kit/walletconnect': 2.15.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(typescript@5.9.3)
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -3846,23 +3876,21 @@ snapshots:
       - '@vercel/kv'
       - '@walletconnect/types'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
       - ioredis
-      - starknet
       - supports-color
       - typescript
       - uploadthing
       - utf-8-validate
       - zod
 
-  '@cosmos-kit/leap@2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(cosmjs-types@0.10.1)(starknet@8.9.2)(typescript@5.9.3)':
+  '@cosmos-kit/leap@2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(cosmjs-types@0.10.1)(typescript@5.9.3)':
     dependencies:
-      '@cosmos-kit/leap-extension': 2.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmos-kit/leap-metamask-cosmos-snap': 0.17.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(bitcoinjs-lib@6.1.7)(cosmjs-types@0.10.1)(starknet@8.9.2)
-      '@cosmos-kit/leap-mobile': 2.16.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)
+      '@cosmos-kit/leap-extension': 2.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)
+      '@cosmos-kit/leap-metamask-cosmos-snap': 0.17.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(cosmjs-types@0.10.1)
+      '@cosmos-kit/leap-mobile': 2.16.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(typescript@5.9.3)
     transitivePeerDependencies:
       - '@azure/app-configuration'
       - '@azure/cosmos'
@@ -3883,24 +3911,22 @@ snapshots:
       - '@vercel/kv'
       - '@walletconnect/types'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - cosmjs-types
       - db0
       - encoding
       - ioredis
-      - starknet
       - supports-color
       - typescript
       - uploadthing
       - utf-8-validate
       - zod
 
-  '@cosmos-kit/react-lite@2.18.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(bitcoinjs-lib@6.1.7)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(starknet@8.9.2)':
+  '@cosmos-kit/react-lite@2.18.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@chain-registry/types': 0.46.15
-      '@cosmos-kit/core': 2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@dao-dao/cosmiframe': 1.0.0(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)
+      '@cosmos-kit/core': 2.18.1
+      '@dao-dao/cosmiframe': 1.0.0(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)
       '@types/react': 19.3.0
       '@types/react-dom': 19.3.0(@types/react@19.3.0)
       react: 19.3.0
@@ -3924,21 +3950,19 @@ snapshots:
       - '@vercel/functions'
       - '@vercel/kv'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
       - ioredis
-      - starknet
       - supports-color
       - uploadthing
       - utf-8-validate
 
-  '@cosmos-kit/react@2.24.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@interchain-ui/react@1.26.3(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(bitcoinjs-lib@6.1.7)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(starknet@8.9.2)':
+  '@cosmos-kit/react@2.24.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@interchain-ui/react@1.26.3(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0))(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)':
     dependencies:
       '@chain-registry/types': 0.46.15
-      '@cosmos-kit/core': 2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@cosmos-kit/react-lite': 2.18.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(bitcoinjs-lib@6.1.7)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)(starknet@8.9.2)
+      '@cosmos-kit/core': 2.18.1
+      '@cosmos-kit/react-lite': 2.18.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@types/react-dom@19.3.0(@types/react@19.3.0))(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@interchain-ui/react': 1.26.3(@types/react@19.3.0)(react-dom@19.3.0(react@19.3.0))(react@19.3.0)
       '@react-icons/all-files': 4.1.0(react@19.3.0)
       '@types/react': 19.3.0
@@ -3964,23 +3988,21 @@ snapshots:
       - '@vercel/functions'
       - '@vercel/kv'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
       - ioredis
-      - starknet
       - supports-color
       - uploadthing
       - utf-8-validate
 
-  '@cosmos-kit/walletconnect@2.15.1(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.23.4)(bitcoinjs-lib@6.1.7)(starknet@8.9.2)(typescript@5.9.3)':
+  '@cosmos-kit/walletconnect@2.15.1(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)(@walletconnect/types@2.11.0)(typescript@5.9.3)':
     dependencies:
-      '@cosmjs/amino': 0.36.2
+      '@cosmjs/amino': 0.32.4
       '@cosmjs/proto-signing': 0.36.2
-      '@cosmos-kit/core': 2.18.1(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
+      '@cosmos-kit/core': 2.18.1
       '@walletconnect/sign-client': 2.23.4(typescript@5.9.3)
-      '@walletconnect/types': 2.23.4
+      '@walletconnect/types': 2.11.0
       '@walletconnect/utils': 2.23.4(typescript@5.9.3)
       events: 3.3.0
     transitivePeerDependencies:
@@ -4000,12 +4022,10 @@ snapshots:
       - '@vercel/functions'
       - '@vercel/kv'
       - aws4fetch
-      - bitcoinjs-lib
       - bufferutil
       - db0
       - encoding
       - ioredis
-      - starknet
       - supports-color
       - typescript
       - uploadthing
@@ -4014,11 +4034,17 @@ snapshots:
 
   '@cosmostation/extension-client@0.1.15': {}
 
+  '@dao-dao/cosmiframe@1.0.0(@cosmjs/amino@0.32.4)(@cosmjs/proto-signing@0.36.2)':
+    dependencies:
+      '@cosmjs/amino': 0.32.4
+      '@cosmjs/proto-signing': 0.36.2
+      uuid: 9.0.1
+
   '@dao-dao/cosmiframe@1.0.0(@cosmjs/amino@0.36.2)(@cosmjs/proto-signing@0.36.2)':
     dependencies:
       '@cosmjs/amino': 0.36.2
       '@cosmjs/proto-signing': 0.36.2
-      uuid: 11.1.1
+      uuid: 9.0.1
 
   '@emotion/hash@0.9.2': {}
 
@@ -4253,92 +4279,86 @@ snapshots:
       '@jridgewell/resolve-uri': 3.1.2
       '@jridgewell/sourcemap-codec': 1.5.5
 
-  '@keplr-wallet/common@0.13.8(bitcoinjs-lib@6.1.7)(starknet@8.9.2)':
+  '@keplr-wallet/common@0.12.28':
     dependencies:
-      '@keplr-wallet/crypto': 0.13.8(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@keplr-wallet/types': 0.13.8(starknet@8.9.2)
+      '@keplr-wallet/crypto': 0.12.28
+      '@keplr-wallet/types': 0.12.28
       buffer: 6.0.3
       delay: 4.4.1
-      p-queue: 6.6.2
-    transitivePeerDependencies:
-      - bitcoinjs-lib
-      - starknet
+      mobx: 6.16.1
 
-  '@keplr-wallet/cosmos@0.13.8(bitcoinjs-lib@6.1.7)(starknet@8.9.2)':
+  '@keplr-wallet/cosmos@0.12.28':
     dependencies:
       '@ethersproject/address': 5.8.0
-      '@keplr-wallet/common': 0.13.8(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@keplr-wallet/crypto': 0.13.8(bitcoinjs-lib@6.1.7)(starknet@8.9.2)
-      '@keplr-wallet/proto-types': 0.13.8
-      '@keplr-wallet/simple-fetch': 0.13.8
-      '@keplr-wallet/types': 0.13.8(starknet@8.9.2)
-      '@keplr-wallet/unit': 0.13.8(starknet@8.9.2)
+      '@keplr-wallet/common': 0.12.28
+      '@keplr-wallet/crypto': 0.12.28
+      '@keplr-wallet/proto-types': 0.12.28
+      '@keplr-wallet/simple-fetch': 0.12.28
+      '@keplr-wallet/types': 0.12.28
+      '@keplr-wallet/unit': 0.12.28
       bech32: 1.1.4
       buffer: 6.0.3
       long: 4.0.0
-      protobufjs: 7.6.6
-      utility-types: 3.11.0
-    transitivePeerDependencies:
-      - bitcoinjs-lib
-      - starknet
+      protobufjs: 6.11.6
 
-  '@keplr-wallet/crypto@0.13.8(bitcoinjs-lib@6.1.7)(starknet@8.9.2)':
+  '@keplr-wallet/crypto@0.12.28':
     dependencies:
-      '@noble/curves': 1.9.7
-      '@noble/hashes': 1.8.0
+      '@ethersproject/keccak256': 5.8.0
       bip32: 2.0.6
       bip39: 3.1.0
-      bitcoinjs-lib: 6.1.7
       bs58check: 2.1.2
       buffer: 6.0.3
-      ecpair: 2.1.0
-      starknet: 8.9.2
+      crypto-js: 4.2.0
+      elliptic: 6.6.1
+      sha.js: 2.4.12
 
-  '@keplr-wallet/proto-types@0.13.8':
+  '@keplr-wallet/proto-types@0.12.28':
     dependencies:
       long: 4.0.0
-      protobufjs: 7.6.6
+      protobufjs: 6.11.6
 
-  '@keplr-wallet/provider-extension@0.13.8(starknet@8.9.2)':
+  '@keplr-wallet/provider-extension@0.12.313(starknet@8.9.2)':
     dependencies:
-      '@keplr-wallet/types': 0.13.8(starknet@8.9.2)
+      '@keplr-wallet/types': 0.12.313(starknet@8.9.2)
       deepmerge: 4.3.1
       long: 4.0.0
       starknet: 8.9.2
       uuid: 11.1.1
 
-  '@keplr-wallet/provider@0.13.8(starknet@8.9.2)':
+  '@keplr-wallet/provider@0.12.313(starknet@8.9.2)':
     dependencies:
-      '@keplr-wallet/router': 0.13.8
-      '@keplr-wallet/types': 0.13.8(starknet@8.9.2)
+      '@keplr-wallet/router': 0.12.313
+      '@keplr-wallet/types': 0.12.313(starknet@8.9.2)
       buffer: 6.0.3
       deepmerge: 4.3.1
       long: 4.0.0
       starknet: 8.9.2
 
-  '@keplr-wallet/router@0.13.8': {}
+  '@keplr-wallet/router@0.12.313': {}
 
-  '@keplr-wallet/simple-fetch@0.13.8': {}
+  '@keplr-wallet/simple-fetch@0.12.28': {}
 
-  '@keplr-wallet/types@0.13.8(starknet@8.9.2)':
+  '@keplr-wallet/types@0.12.28':
+    dependencies:
+      long: 4.0.0
+
+  '@keplr-wallet/types@0.12.313(starknet@8.9.2)':
     dependencies:
       long: 4.0.0
       starknet: 8.9.2
 
-  '@keplr-wallet/unit@0.13.8(starknet@8.9.2)':
+  '@keplr-wallet/unit@0.12.28':
     dependencies:
-      '@keplr-wallet/types': 0.13.8(starknet@8.9.2)
+      '@keplr-wallet/types': 0.12.28
       big-integer: 1.6.52
       utility-types: 3.11.0
-    transitivePeerDependencies:
-      - starknet
 
-  '@keplr-wallet/wc-client@0.12.313(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.23.4)(starknet@8.9.2)':
+  '@keplr-wallet/wc-client@0.12.313(@walletconnect/sign-client@2.23.4(typescript@5.9.3))(@walletconnect/types@2.11.0)(starknet@8.9.2)':
     dependencies:
-      '@keplr-wallet/provider': 0.13.8(starknet@8.9.2)
-      '@keplr-wallet/types': 0.13.8(starknet@8.9.2)
+      '@keplr-wallet/provider': 0.12.313(starknet@8.9.2)
+      '@keplr-wallet/types': 0.12.313(starknet@8.9.2)
       '@walletconnect/sign-client': 2.23.4(typescript@5.9.3)
-      '@walletconnect/types': 2.23.4
+      '@walletconnect/types': 2.11.0
       buffer: 6.0.3
       deepmerge: 4.3.1
       long: 5.3.2
@@ -4346,7 +4366,7 @@ snapshots:
 
   '@leapwallet/cosmos-snap-provider@0.1.26':
     dependencies:
-      '@cosmjs/amino': 0.36.2
+      '@cosmjs/amino': 0.32.4
       '@cosmjs/proto-signing': 0.32.4
       bignumber.js: 9.3.1
       long: 5.3.2
@@ -4428,6 +4448,8 @@ snapshots:
       '@protobufjs/aspromise': 1.1.2
 
   '@protobufjs/float@1.0.2': {}
+
+  '@protobufjs/inquire@1.1.2': {}
 
   '@protobufjs/path@1.1.2': {}
 
@@ -5635,6 +5657,8 @@ snapshots:
 
   '@types/estree@1.0.8': {}
 
+  '@types/long@4.0.2': {}
+
   '@types/node@10.12.18': {}
 
   '@types/node@22.19.9':
@@ -6086,9 +6110,9 @@ snapshots:
     dependencies:
       possible-typed-array-names: 1.1.0
 
-  axios@1.20.0:
+  axios@1.20.0(debug@4.4.3):
     dependencies:
-      follow-redirects: 1.16.0
+      follow-redirects: 1.16.0(debug@4.4.3)
       form-data: 4.0.6
       https-proxy-agent: 5.0.1
       proxy-from-env: 2.1.0
@@ -6100,8 +6124,6 @@ snapshots:
     dependencies:
       safe-buffer: 5.2.1
 
-  base-x@4.0.1: {}
-
   base-x@5.0.1: {}
 
   base64-js@1.5.1: {}
@@ -6109,8 +6131,6 @@ snapshots:
   baseline-browser-mapping@2.9.19: {}
 
   bech32@1.1.4: {}
-
-  bech32@2.0.0: {}
 
   bfs-path@1.0.2: {}
 
@@ -6122,7 +6142,9 @@ snapshots:
 
   binary-extensions@2.3.0: {}
 
-  bip174@2.1.1: {}
+  bindings@1.5.0:
+    dependencies:
+      file-uri-to-path: 1.0.0
 
   bip32@2.0.6:
     dependencies:
@@ -6130,7 +6152,7 @@ snapshots:
       bs58check: 2.1.2
       create-hash: 1.2.0
       create-hmac: 1.1.7
-      tiny-secp256k1: 2.2.4
+      tiny-secp256k1: 1.1.7
       typeforce: 1.18.0
       wif: 2.0.6
 
@@ -6138,16 +6160,9 @@ snapshots:
     dependencies:
       '@noble/hashes': 1.8.0
 
-  bitcoinjs-lib@6.1.7:
-    dependencies:
-      '@noble/hashes': 1.8.0
-      bech32: 2.0.0
-      bip174: 2.1.1
-      bs58check: 3.0.1
-      typeforce: 1.18.0
-      varuint-bitcoin: 1.1.2
-
   blakejs@1.2.1: {}
+
+  bn.js@4.12.5: {}
 
   bn.js@5.2.5: {}
 
@@ -6156,6 +6171,8 @@ snapshots:
   braces@3.0.3:
     dependencies:
       fill-range: 7.1.1
+
+  brorand@1.1.0: {}
 
   browserslist@4.28.1:
     dependencies:
@@ -6169,10 +6186,6 @@ snapshots:
     dependencies:
       base-x: 3.0.11
 
-  bs58@5.0.0:
-    dependencies:
-      base-x: 4.0.1
-
   bs58@6.0.0:
     dependencies:
       base-x: 5.0.1
@@ -6182,11 +6195,6 @@ snapshots:
       bs58: 4.0.1
       create-hash: 1.2.0
       safe-buffer: 5.2.1
-
-  bs58check@3.0.1:
-    dependencies:
-      '@noble/hashes': 1.8.0
-      bs58: 5.0.0
 
   buffer@6.0.3:
     dependencies:
@@ -6312,6 +6320,8 @@ snapshots:
     dependencies:
       uncrypto: 0.1.3
 
+  crypto-js@4.2.0: {}
+
   css-what@6.2.2: {}
 
   cssesc@3.0.0: {}
@@ -6369,13 +6379,17 @@ snapshots:
       readable-stream: 3.6.2
       stream-shift: 1.0.3
 
-  ecpair@2.1.0:
-    dependencies:
-      randombytes: 2.1.0
-      typeforce: 1.18.0
-      wif: 2.0.6
-
   electron-to-chromium@1.5.286: {}
+
+  elliptic@6.6.1:
+    dependencies:
+      bn.js: 4.12.5
+      brorand: 1.1.0
+      hash.js: 1.1.7
+      hmac-drbg: 1.0.1
+      inherits: 2.0.4
+      minimalistic-assert: 1.0.1
+      minimalistic-crypto-utils: 1.0.1
 
   emoji-regex@8.0.0: {}
 
@@ -6443,8 +6457,6 @@ snapshots:
     dependencies:
       fast-safe-stringify: 2.1.1
 
-  eventemitter3@4.0.7: {}
-
   eventemitter3@5.0.1: {}
 
   events@3.3.0: {}
@@ -6477,11 +6489,15 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.3
 
+  file-uri-to-path@1.0.0: {}
+
   fill-range@7.1.1:
     dependencies:
       to-regex-range: 5.0.1
 
-  follow-redirects@1.16.0: {}
+  follow-redirects@1.16.0(debug@4.4.3):
+    optionalDependencies:
+      debug: 4.4.3
 
   for-each@0.3.5:
     dependencies:
@@ -6578,6 +6594,11 @@ snapshots:
 
   hash-wasm@4.12.0: {}
 
+  hash.js@1.1.7:
+    dependencies:
+      inherits: 2.0.4
+      minimalistic-assert: 1.0.1
+
   hasown@2.0.2:
     dependencies:
       function-bind: 1.1.2
@@ -6585,6 +6606,12 @@ snapshots:
   hasown@2.0.4:
     dependencies:
       function-bind: 1.1.2
+
+  hmac-drbg@1.0.1:
+    dependencies:
+      hash.js: 1.1.7
+      minimalistic-assert: 1.0.1
+      minimalistic-crypto-utils: 1.0.1
 
   https-proxy-agent@5.0.1:
     dependencies:
@@ -6675,6 +6702,12 @@ snapshots:
 
   keyvaluestorage-interface@1.0.0: {}
 
+  libsodium-sumo@0.7.16: {}
+
+  libsodium-wrappers-sumo@0.7.16:
+    dependencies:
+      libsodium-sumo: 0.7.16
+
   lilconfig@3.1.3: {}
 
   lines-and-columns@1.2.4: {}
@@ -6724,6 +6757,12 @@ snapshots:
     dependencies:
       mime-db: 1.52.0
 
+  minimalistic-assert@1.0.1: {}
+
+  minimalistic-crypto-utils@1.0.1: {}
+
+  mobx@6.16.1: {}
+
   modern-ahocorasick@1.1.0: {}
 
   ms@2.1.3: {}
@@ -6735,6 +6774,8 @@ snapshots:
       any-promise: 1.3.0
       object-assign: 4.1.1
       thenify-all: 1.6.0
+
+  nan@2.30.0: {}
 
   nanoid@3.3.16: {}
 
@@ -6794,17 +6835,6 @@ snapshots:
       typescript: 5.9.3
     transitivePeerDependencies:
       - zod
-
-  p-finally@1.0.0: {}
-
-  p-queue@6.6.2:
-    dependencies:
-      eventemitter3: 4.0.7
-      p-timeout: 3.2.0
-
-  p-timeout@3.2.0:
-    dependencies:
-      p-finally: 1.0.0
 
   pako@2.1.0: {}
 
@@ -6887,9 +6917,9 @@ snapshots:
   postcss-nested@6.2.0(postcss@8.5.23):
     dependencies:
       postcss: 8.5.23
-      postcss-selector-parser: 6.1.2
+      postcss-selector-parser: 6.1.4
 
-  postcss-selector-parser@6.1.2:
+  postcss-selector-parser@6.1.4:
     dependencies:
       cssesc: 3.0.0
       util-deprecate: 1.0.2
@@ -6910,7 +6940,7 @@ snapshots:
 
   propagate@2.0.1: {}
 
-  protobufjs@7.6.6:
+  protobufjs@6.11.6:
     dependencies:
       '@protobufjs/aspromise': 1.1.2
       '@protobufjs/base64': 1.1.2
@@ -6918,11 +6948,13 @@ snapshots:
       '@protobufjs/eventemitter': 1.1.1
       '@protobufjs/fetch': 1.1.1
       '@protobufjs/float': 1.0.2
+      '@protobufjs/inquire': 1.1.2
       '@protobufjs/path': 1.1.2
       '@protobufjs/pool': 1.1.0
       '@protobufjs/utf8': 1.1.2
+      '@types/long': 4.0.2
       '@types/node': 22.19.9
-      long: 5.3.2
+      long: 4.0.0
 
   proxy-from-env@2.1.0: {}
 
@@ -6941,10 +6973,6 @@ snapshots:
     dependencies:
       '@vanilla-extract/css': 1.18.0
       '@vanilla-extract/dynamic': 2.1.5
-
-  randombytes@2.1.0:
-    dependencies:
-      safe-buffer: 5.2.1
 
   react-aria@3.46.0(react-dom@19.3.0(react@19.3.0))(react@19.3.0):
     dependencies:
@@ -7245,7 +7273,7 @@ snapshots:
       postcss-js: 4.1.0(postcss@8.5.23)
       postcss-load-config: 6.0.1(jiti@1.21.7)(postcss@8.5.23)
       postcss-nested: 6.2.0(postcss@8.5.23)
-      postcss-selector-parser: 6.1.2
+      postcss-selector-parser: 6.1.4
       resolve: 1.22.11
       sucrase: 3.35.1
     transitivePeerDependencies:
@@ -7268,9 +7296,13 @@ snapshots:
     dependencies:
       real-require: 0.2.0
 
-  tiny-secp256k1@2.2.4:
+  tiny-secp256k1@1.1.7:
     dependencies:
-      uint8array-tools: 0.0.7
+      bindings: 1.5.0
+      bn.js: 4.12.5
+      create-hmac: 1.1.7
+      elliptic: 6.6.1
+      nan: 2.30.0
 
   tinybench@2.9.0: {}
 
@@ -7317,8 +7349,6 @@ snapshots:
 
   ufo@1.6.3: {}
 
-  uint8array-tools@0.0.7: {}
-
   uint8arrays@3.1.1:
     dependencies:
       multiformats: 9.9.0
@@ -7356,18 +7386,18 @@ snapshots:
 
   utility-types@3.11.0: {}
 
+  uuid@10.0.0: {}
+
   uuid@11.1.1: {}
 
-  varuint-bitcoin@1.1.2:
-    dependencies:
-      safe-buffer: 5.2.1
+  uuid@9.0.1: {}
 
   vite-plugin-top-level-await@1.6.0(@swc/helpers@0.5.18)(rollup@4.57.1)(vite@7.3.6(@types/node@22.19.9)(jiti@1.21.7)):
     dependencies:
       '@rollup/plugin-virtual': 3.0.2(rollup@4.57.1)
       '@swc/core': 1.15.24(@swc/helpers@0.5.18)
       '@swc/wasm': 1.15.24
-      uuid: 11.1.1
+      uuid: 10.0.0
       vite: 7.3.6(@types/node@22.19.9)(jiti@1.21.7)
     transitivePeerDependencies:
       - '@swc/helpers'
