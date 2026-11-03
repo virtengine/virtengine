@@ -461,7 +461,7 @@ Two descriptions exist in the tree and they disagree; resolved here.
 
 **DECIDED (no human available):** cut the first release from `main`. Do **not**
 materialise `mainnet/main` as part of this release; reactivating a stable line is a
-launch-window decision (TestNet Jan 2027 / MainNet Mar 2027 per `RELEASE.md`) and would
+launch-window decision (TestNet / MainNet both 20XX, no date set, per `RELEASE.md`) and would
 need `RELEASE.md`, `README.md`, `docs/COMPATIBILITY.md`, `VERIFICATION.md` and
 `_docs/version-control.md` updated in the same change. Reversible, conservative, and
 consistent with the checked-in docs.

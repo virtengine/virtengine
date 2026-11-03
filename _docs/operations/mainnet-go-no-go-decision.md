@@ -1,12 +1,13 @@
 # Mainnet Go/No-Go Decision Record
 
-Last updated: 2026-09-01
+Last updated: 2026-11-04
 Owner: Release Management (Ops)
 
-> **Current status (2026-09-01):** The MainNet window originally approved below
+> **Current status (2026-11-04):** The MainNet window originally approved below
 > (2026-04-18 / 2026-04-19 UTC) did not proceed. The current two-stage plan is
-> **TestNet in January 2027** followed by **MainNet in March 2027**. The April
-> 2026 `GO` is historical and does not authorize either 2027 activation. A
+> **TestNet (20XX)** followed by **MainNet (20XX)**. **No launch date has been
+> set** for either network. The April 2026 `GO` is historical and does not
+> authorize either activation. A
 > fresh environment-specific go/no-go decision is required before each launch.
 > See `_docs/operations/network-launch-schedule.md`.
 
@@ -80,19 +81,20 @@ Owner: Release Management (Ops)
 ## Update — 2026-08-03: Superseded reschedule
 
 - At that time, the prior `GO` was reaffirmed and MainNet was provisionally
-  rescheduled to January 2027
+  rescheduled to a later window (since withdrawn; no date is set)
 - The approved 2026-04-18 / 2026-04-19 UTC window did not proceed as scheduled
-- That January MainNet plan was superseded on 2026-09-01 by the two-stage
+- That provisional MainNet plan was superseded on 2026-09-01 by the two-stage
   TestNet/MainNet schedule below
 - Prior sign-offs, checklist evidence, and the published genesis bundle remain
   historical baseline evidence only; they are not current launch approval
 
 ## Update — 2026-09-01: Two-stage launch plan
 
-- TestNet launch window: **January 2027**
-- MainNet launch window: **March 2027**
-- February is reserved for TestNet observation, remediation, re-tests,
-  evidence closure, production release freeze, and final launch coordination
+- TestNet launch date: **20XX** (no date set; see the 2026-11-04 update)
+- MainNet launch date: **20XX** (no date set; follows TestNet)
+- The interval after TestNet is reserved for TestNet observation, remediation,
+  re-tests, evidence closure, production release freeze, and final launch
+  coordination
 - TestNet is a resettable pre-production environment with no guarantee that
   its state or balances will migrate to MainNet
 - MainNet is the persistent production environment and requires successful
@@ -102,6 +104,13 @@ Owner: Release Management (Ops)
 
 | Action | Owner | Due date | Status |
 | --- | --- | --- | --- |
-| Approve the exact January TestNet date and refresh the TestNet launch packet | Release Manager | Before TestNet activation | Open |
+| Approve a TestNet launch date (none set) and refresh the TestNet launch packet | Release Manager | Before TestNet activation | Open |
 | Record TestNet exit evidence and close or re-test every launch-blocking finding | Release Manager | Before MainNet go/no-go | Open |
-| Approve the exact March MainNet date and record a fresh MainNet go/no-go decision | Release Manager | Before MainNet activation | Open |
+| Approve a MainNet launch date (none set) and record a fresh MainNet go/no-go decision | Release Manager | Before MainNet activation | Open |
+
+## Update — 2026-11-04: Launch dates not set
+
+- No TestNet or MainNet launch date has been set; both are recorded as `20XX`
+- `20XX` is a placeholder, not a target year or month
+- The two-stage sequence, TestNet exit criteria, and fresh `GO` requirement
+  above are unchanged

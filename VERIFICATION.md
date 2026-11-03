@@ -7,16 +7,16 @@ This document describes the public verification posture of the VirtEngine reposi
 As of `2026-09-01`:
 
 - the repository contains extensive CI, security, release, smoke, and DR automation;
-- **TestNet is planned for the January 2027 launch window** to produce public, multi-operator pre-production evidence;
-- **MainNet is planned for the March 2027 launch window**, contingent on TestNet exit criteria and a fresh production go/no-go approval;
+- **TestNet is planned for 20XX (no launch date set)** to produce public, multi-operator pre-production evidence;
+- **MainNet is planned for 20XX (no launch date set)**, contingent on TestNet exit criteria and a fresh production go/no-go approval;
 - April 2026 MainNet readiness material remains archived under `_docs/operations/` and `config/mainnet/`, but the windows did not proceed and those records are not current launch authority.
 
 Accordingly, the current verification posture is:
 
 - development and release-candidate validation: available;
 - production-grade automation evidence: present in many tracks and workflows;
-- TestNet launch verification: to be refreshed and completed for the January 2027 window;
-- MainNet launch verification: not complete until TestNet evidence is accepted, launch-blocking findings are closed and re-tested, final artifacts are verified, and a fresh `GO` decision is recorded for March 2027.
+- TestNet launch verification: to be refreshed and completed for the TestNet launch (20XX, no date set);
+- MainNet launch verification: not complete until TestNet evidence is accepted, launch-blocking findings are closed and re-tested, final artifacts are verified, and a fresh `GO` decision is recorded for the MainNet launch (20XX, no date set).
 
 ## Primary Verification Gates
 
@@ -50,19 +50,19 @@ The repository also contains [`.github/workflows/smoke-test.yaml`](.github/workf
 
 Launch verification is intentionally fail-closed and environment-specific.
 
-For **TestNet**, the January 2027 launch package must validate public
+For **TestNet**, the launch package must validate public
 multi-operator consensus, validator and provider onboarding, VEID, marketplace
 and settlement flows, upgrades, rollback, backup/restore, monitoring, and
 incident response. TestNet may be reset, its tokens have no production value,
 and its state is not guaranteed to migrate to MainNet.
 
-For **MainNet**, the March 2027 launch package must additionally show that
+For **MainNet**, the launch package must additionally show that
 TestNet exit criteria passed, every launch-blocking finding was closed and
 re-tested, canonical genesis and production artifacts were finalized and
 verified, and release management recorded a fresh `GO` decision. TestNet
 success does not automatically authorize MainNet.
 
-The separation reserves February for observation, remediation, repeated
+The separation reserves the interval after TestNet for observation, remediation, repeated
 validation, security and operational review, release freeze, and final
 validator coordination. See
 [docs/NETWORK_LAUNCH_SCHEDULE.md](docs/NETWORK_LAUNCH_SCHEDULE.md).
