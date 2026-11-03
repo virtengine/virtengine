@@ -1,18 +1,19 @@
 # Network Launch Schedule and Promotion Gate
 
-Last updated: 2026-09-01
+Last updated: 2026-11-04
 Owner: Release Management (Ops)
 
 ## Current schedule
 
-| Phase | Window | Control state |
+| Phase | Date | Control state |
 | --- | --- | --- |
-| TestNet launch | **January 2027** | Planned; exact UTC date and launch approval pending. |
-| Remediation and promotion review | **February 2027** | Reserved for observation, fixes, re-tests, evidence closure, release freeze, and final coordination. |
-| MainNet launch | **March 2027** | Planned; contingent on TestNet exit criteria and a fresh MainNet `GO` decision. |
+| TestNet launch | **20XX** (no date set) | Planned; launch date and launch approval not set. |
+| Remediation and promotion review | **20XX** (no date set; after TestNet) | Reserved for observation, fixes, re-tests, evidence closure, release freeze, and final coordination. |
+| MainNet launch | **20XX** (no date set; after remediation) | Planned; contingent on TestNet exit criteria and a fresh MainNet `GO` decision. |
 
-The windows specify target months only. Exact UTC start dates and control
-windows must be recorded in the relevant launch packet before activation.
+**No launch date has been set.** `20XX` is a placeholder, not a target year or
+month. Exact UTC start dates and control windows must be approved and recorded
+in the relevant launch packet before activation.
 
 ## Environment boundary
 
@@ -41,11 +42,11 @@ treated as automatic MainNet authorization.
 
 ## Reason for the separation
 
-The January-to-March separation creates an evidence-driven promotion gate.
-January supplies public TestNet evidence. February is deliberately available
-for observation, defect remediation, security review, repeated validation,
-artifact finalization, validator coordination, and a release freeze. March is
-the earliest MainNet launch window after those controls complete.
+The TestNet-to-MainNet separation creates an evidence-driven promotion gate.
+The TestNet phase supplies public evidence. The interval that follows is
+deliberately available for observation, defect remediation, security review,
+repeated validation, artifact finalization, validator coordination, and a
+release freeze. MainNet can launch only after those controls complete.
 
 This sequencing reduces the chance that consensus, security, economic,
 integration, capacity, or operating-model defects become embedded in
@@ -71,9 +72,9 @@ Release Management must record objective evidence for:
 The 2026-04-18 / 2026-04-19 MainNet windows did not proceed. Dated April 2026
 control records, rehearsal reports, evidence audits, and communications drafts
 remain historical evidence of the review conducted at that time. They do not
-authorize either the January 2027 TestNet launch or the March 2027 MainNet
-launch.
+authorize either the TestNet launch or the MainNet launch, neither of which
+has a date set.
 
 This document supersedes month or window claims in those historical records
 for current planning. The formal launch packets must be refreshed for each
-2027 environment before activation.
+environment before activation.

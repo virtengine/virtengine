@@ -2,7 +2,7 @@
 **Planned Functionality vs. Current Implementation**
 
 **Date:** September 2026
-**Target Launch Schedule:** TestNet Launch Window: January 2027 | MainNet Launch Window: March 2027
+**Target Launch Schedule:** TestNet: 20XX | MainNet: 20XX (no launch date has been set)
 **Status:** Comprehensive Analysis Report
 
 ---
@@ -11,7 +11,7 @@
 
 This report provides a detailed, evidence-based production readiness gap analysis for the **VirtEngine Protocol and Suite** (derived from patent AU2024203136B2). It compares originally planned architectural capabilities against currently implemented components in the codebase.
 
-While VirtEngine boasts a mature codebase (~250,000+ LOC across Cosmos SDK modules, Provider Daemon, ML inference sidecars, and Portal interfaces) and has achieved **deterministic local engineering completion** for core protocol tasks (Tasks 84A–85C), significant external, operational, testing, and security gaps remain before the platform can safely launch on public TestNet (January 2027) or MainNet (March 2027).
+While VirtEngine boasts a mature codebase (~250,000+ LOC across Cosmos SDK modules, Provider Daemon, ML inference sidecars, and Portal interfaces) and has achieved **deterministic local engineering completion** for core protocol tasks (Tasks 84A–85C), significant external, operational, testing, and security gaps remain before the platform can safely launch on public TestNet or MainNet (both 20XX; no launch date has been set).
 
 ---
 
@@ -145,7 +145,7 @@ While VirtEngine boasts a mature codebase (~250,000+ LOC across Cosmos SDK modul
 
 ## 3. Prioritized Action Plan & Roadmap to Launch
 
-To achieve production readiness for **January 2027 TestNet** and **March 2027 MainNet**, the following phased roadmap is recommended:
+To achieve production readiness for **TestNet** and **MainNet** (both 20XX; no launch date has been set), the following phased roadmap is recommended:
 
 ```
 +-----------------------------------------------------------------------------------+
@@ -165,7 +165,7 @@ To achieve production readiness for **January 2027 TestNet** and **March 2027 Ma
                                         │
                                         ▼
 +-----------------------------------------------------------------------------------+
-| Phase 3: January 2027 TestNet Launch & Multi-Operator Validation                  |
+| Phase 3: 20XX TestNet Launch & Multi-Operator Validation                          |
 | - Execute Genesis Ceremony with external multi-operator validators.                |
 | - Validate external DEX/Osmosis pool liquidity & provider payout webhooks.         |
 | - Observe 28-day continuous stability window (Milestone M).                       |
@@ -173,7 +173,7 @@ To achieve production readiness for **January 2027 TestNet** and **March 2027 Ma
                                         │
                                         ▼
 +-----------------------------------------------------------------------------------+
-| Phase 4: March 2027 MainNet Production Launch                                      |
+| Phase 4: 20XX MainNet Production Launch                                            |
 | - Final go/no-go executive sign-off & MainNet Genesis generation.                 |
 | - Deploy production TMKMS / vendor HSM signers & mainnet seed nodes.               |
 +-----------------------------------------------------------------------------------+
@@ -183,4 +183,4 @@ To achieve production readiness for **January 2027 TestNet** and **March 2027 Ma
 
 ## Conclusion
 
-VirtEngine's core protocol architecture and smart contract design are mature, robust, and aligned with patent AU2024203136B2. By systematically executing the remaining prototype tasks, closing external deployment/security gaps, and conducting load and DR drills during Q3/Q4 2026, the project will be fully prepared for its **January 2027 TestNet** and **March 2027 MainNet** launch windows.
+VirtEngine's core protocol architecture and smart contract design are mature, robust, and aligned with patent AU2024203136B2. By systematically executing the remaining prototype tasks, closing external deployment/security gaps, and conducting load and DR drills during Q3/Q4 2026, the project will be fully prepared for its **TestNet** and **MainNet** launches (both 20XX; no launch date has been set).

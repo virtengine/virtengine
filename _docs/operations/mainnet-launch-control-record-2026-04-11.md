@@ -1,8 +1,8 @@
 # Mainnet Launch Control Record - 2026-04-11
 
 > **Historical record:** The approved April 2026 window did not proceed and
-> this control record does not authorize a 2027 launch. The current plan is
-> TestNet in January 2027 and MainNet in March 2027; see
+> this control record does not authorize any future launch. The current plan
+> is TestNet then MainNet, both 20XX with no launch date set; see
 > `network-launch-schedule.md`.
 
 Last updated: 2026-04-11

@@ -1,17 +1,17 @@
 # VirtEngine Network Launch Schedule
 
-Last updated: 2026-09-01
+Last updated: 2026-11-04
 
-## Launch windows
+## Launch dates
 
-| Network | Launch window | Purpose |
+| Network | Launch date | Purpose |
 | --- | --- | --- |
-| **TestNet** | **January 2027** | Public pre-production validation, integration testing, and operator rehearsal. |
-| **MainNet** | **March 2027** | Production network launch after TestNet exit criteria and a fresh go/no-go approval are complete. |
+| **TestNet** | **20XX** (no date set) | Public pre-production validation, integration testing, and operator rehearsal. |
+| **MainNet** | **20XX** (no date set; after TestNet) | Production network launch after TestNet exit criteria and a fresh go/no-go approval are complete. |
 
-These are month-level launch windows, not guaranteed launch dates. Exact UTC
-dates and times will be published through the formal release and launch
-process. Neither network should be described as live until its launch is
+**No launch date has been set.** `20XX` is a placeholder, not a target year or
+month. Exact UTC dates and times will be published through the formal release
+and launch process. Neither network should be described as live until its launch is
 officially confirmed.
 
 ## TestNet and MainNet are different networks
@@ -34,12 +34,12 @@ authorize MainNet launch.
 
 The gap is an explicit safety and quality gate:
 
-1. January provides real multi-operator TestNet evidence under public network
+1. The TestNet phase provides real multi-operator evidence under public network
    conditions.
-2. February provides time to diagnose findings, remediate defects, repeat
+2. The interval after TestNet provides time to diagnose findings, remediate defects, repeat
    failed tests, complete security and operational reviews, and freeze the
    production release and genesis inputs.
-3. March is the MainNet window only after the TestNet exit criteria are met and
+3. MainNet can launch only after the TestNet exit criteria are met and
    release management records a fresh `GO` decision.
 
 Separating the launches prevents rehearsal evidence from being mistaken for
@@ -49,7 +49,7 @@ MainNet state.
 
 ## MainNet entry criteria
 
-Before the March 2027 MainNet window can be activated, the launch package must
+Before MainNet can be activated, the launch package must
 confirm at least:
 
 - stable TestNet consensus and acceptable reliability over the agreed

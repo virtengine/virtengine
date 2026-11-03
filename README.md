@@ -41,9 +41,9 @@ To become a contributor, please see the guide on [contributing](CONTRIBUTING.md)
 This repository currently ships active development from `main`.
 
 - The release automation and version helper scripts remain in place for tagged releases.
-- **TestNet is planned for the January 2027 launch window.** It is the public pre-production phase for multi-operator validation and may be reset.
-- **MainNet is planned for the March 2027 launch window.** It is the production launch and requires the TestNet exit criteria plus a fresh go/no-go approval.
-- The launches are separated so January TestNet evidence can be observed, remediated, and re-tested during February before production artifacts and approvals are finalized for March.
+- **TestNet is planned for 20XX; no launch date has been set.** It is the public pre-production phase for multi-operator validation and may be reset.
+- **MainNet is planned for 20XX, after TestNet; no launch date has been set.** It is the production launch and requires the TestNet exit criteria plus a fresh go/no-go approval.
+- The launches are separated so TestNet evidence can be observed, remediated, and re-tested before production artifacts and approvals are finalized for MainNet.
 - Neither TestNet nor MainNet should be described as live until its launch is officially confirmed. The April 2026 MainNet windows did not proceed and remain historical evidence only.
 
 See [docs/NETWORK_LAUNCH_SCHEDULE.md](docs/NETWORK_LAUNCH_SCHEDULE.md), [RELEASE.md](RELEASE.md), [VERIFICATION.md](VERIFICATION.md), and [_docs/operations/network-launch-schedule.md](_docs/operations/network-launch-schedule.md) for the current release and launch posture.
