@@ -13,8 +13,13 @@ on:
 permissions:
   contents: read
 
+# Same two properties as ml-determinism.yaml: per-commit on push, and
+# `github.workflow` FIRST because this is a reusable workflow whose callers
+# (ci.yaml, quality-gate.yaml, release.yaml) must not cancel one another.
+# A cancelled run publishes NO verdict. Pinned by
+# .github/tests/test_ci_concurrency_verdict.py.
 concurrency:
-  group: veid-e2e-${{ github.ref }}
+  group: veid-e2e-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
   cancel-in-progress: true
 
 env:

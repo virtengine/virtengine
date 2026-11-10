@@ -1,8 +1,8 @@
 # Mainnet Dress Rehearsal Report
 
 > **Historical record:** This report supports the April 2026 rehearsal. That
-> MainNet window did not proceed. The current plan is TestNet in January 2027
-> and MainNet in March 2027; see `network-launch-schedule.md`.
+> MainNet window did not proceed. The current plan is TestNet then MainNet,
+> both 20XX with no launch date set; see `network-launch-schedule.md`.
 
 Last updated: 2026-04-11
 Owner: Release Management (Ops)

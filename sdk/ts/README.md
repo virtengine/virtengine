@@ -28,6 +28,58 @@ To install the package, run:
 npm install @virtengine/chain-sdk@alpha
 ```
 
+## Publishing a new version (maintainers only)
+
+Publication is **human-triggered and human-approved**. Nothing publishes
+automatically: the workflow's only trigger is `workflow_dispatch`, so pushing a
+tag or cutting a GitHub Release has **no** publishing side effect. That property
+is deliberate (operator decision, 2026-09-29 — "Keep SDKs source-only") and it
+is asserted by `scripts/ci/check-sdk-npm-publish-triggers.mjs`, which fails if a
+`push:`, `push: tags:` or `release: types: [published]` trigger is ever added.
+
+**Before anything else**, the environment must actually gate. Check:
+
+```bash
+node scripts/ci/check-env-approval-gate.mjs   # must print GATED
+```
+
+If it prints `UNGATED`, **stop**. The `npm-publish` GitHub environment has no
+required reviewers, so a dispatch would publish unattended. Adding a reviewer is
+a repository-settings change: *Settings → Environments → npm-publish → Required
+reviewers*.
+
+Then:
+
+1. **Bump the version by hand** in `sdk/ts/package.json` (and
+   `sdk/.release-please-manifest.json` if you keep it in step). Commit and land
+   that on `develop`. There is no automated version bump — see the `//` note in
+   `sdk/release-please-config.json`.
+2. **Tag it.** The tag name must equal the version in `package.json`; the
+   workflow refuses anything else:
+   ```bash
+   git tag -a v1.0.0-alpha.21 -m "chain-sdk 1.0.0-alpha.21"
+   git push origin v1.0.0-alpha.21
+   ```
+3. **Dispatch the workflow** — Actions → *Publish @virtengine/chain-sdk to npm*
+   → *Run workflow*. Set `tag` to the tag above. **Leave `dry_run` ticked for
+   the first run**: it builds, tests and `npm pack --dry-run`s without touching
+   the registry.
+4. **Approve** the `npm-publish` environment gate when it appears.
+5. **Verify** the registry agrees:
+   ```bash
+   npm view @virtengine/chain-sdk versions --json
+   npm view @virtengine/chain-sdk@1.0.0-alpha.21 dist.integrity
+   ```
+   A re-run of an already-published version is a no-op, not an error.
+
+Authentication is npm **OIDC trusted publishing** — there is no long-lived
+`NPM_TOKEN` in this repository. A publish without provenance will be rejected by
+npm; the workflow always passes `--provenance`.
+
+> **Before the first real publish:** npm currently carries exactly one version,
+> `1.0.0-alpha.20`, published manually on 2026-02-12 and untouched since.
+> Confirm nobody is pinned to that stale alpha before moving the version on.
+
 ## Usage
 
 This package supports commonjs and ESM environments.

@@ -489,7 +489,7 @@ type assuranceHasher interface {
 // order, which Validate guarantees is canonical.
 func (v *AssuranceVector) ComputeCommitment() []byte {
 	h := sha256.New()
-	h.Write(assuranceVectorDomainSeparator) //nolint:errcheck // hash writes never fail
+	_, _ = h.Write(assuranceVectorDomainSeparator) // hash writes never fail
 
 	writeAssuranceBytes(h, []byte(v.Version))
 	writeAssuranceBytes(h, []byte(v.Account))

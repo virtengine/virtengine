@@ -7,18 +7,18 @@ This document describes the current release process for VirtEngine as it exists 
 As of `2026-09-01`:
 
 - the repository contains release automation, upgrade tests, and network-tag helper scripts;
-- **TestNet is planned for the January 2027 launch window** as the public pre-production validation network;
-- **MainNet is planned for the March 2027 launch window** as the production network;
+- **TestNet is planned for 20XX (no launch date set)** as the public pre-production validation network;
+- **MainNet is planned for 20XX (no launch date set)** as the production network, after TestNet;
 - the April 2026 MainNet windows did not proceed, and their dated decision and evidence records are historical rather than current launch authority;
-- neither 2027 launch has a confirmed UTC start date or final launch approval yet.
+- no launch date has been set for either network, and neither has final launch approval yet.
 
 Operationally, that means:
 
 - a tag can still be built and published through the release workflow;
 - operators must not infer that every published tag is approved for mainnet production use;
-- January TestNet is used to collect multi-operator consensus, integration, security, upgrade, recovery, and operational evidence;
-- February is the remediation, re-test, release-freeze, and promotion-review interval;
-- March MainNet production approval requires the TestNet exit criteria, refreshed launch packet, readiness checklist, final artifacts, and a fresh explicit `GO` decision.
+- TestNet is used to collect multi-operator consensus, integration, security, upgrade, recovery, and operational evidence;
+- the interval after TestNet is the remediation, re-test, release-freeze, and promotion-review interval;
+- MainNet production approval requires the TestNet exit criteria, refreshed launch packet, readiness checklist, final artifacts, and a fresh explicit `GO` decision.
 
 See [docs/NETWORK_LAUNCH_SCHEDULE.md](docs/NETWORK_LAUNCH_SCHEDULE.md) for the environment boundary and promotion criteria.
 

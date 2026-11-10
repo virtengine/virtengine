@@ -117,30 +117,20 @@ updates:
     commit-message:
       prefix: "chore(deps)"
 
-  # npm dependencies (Bosun)
-  - package-ecosystem: "npm"
-    directory: "/scripts/bosun"
-    target-branch: "develop"
-    schedule:
-      interval: "weekly"
-      day: "wednesday"
-      time: "06:00"
-      timezone: "UTC"
-    open-pull-requests-limit: 5
-    groups:
-      testing:
-        patterns:
-          - "vitest"
-          - "@vitest/*"
-      linting:
-        patterns:
-          - "eslint*"
-          - "prettier*"
-    labels:
-      - "dependencies"
-      - "javascript"
-    commit-message:
-      prefix: "build(deps-dev)"
+  # Bosun is a git SUBMODULE (.gitmodules: path = scripts/bosun).
+  #
+  # Dependabot does not descend into submodules, so an npm key here cannot
+  # resolve a manifest and never produces a run at all - it reads as coverage
+  # while scanning nothing. Bosun's own dependency scanning is configured and
+  # runs in the virtengine/bosun repository (that is where its dependabot PRs
+  # #624-#636 are raised). Removed here so the key list states only what is
+  # actually scanned.
+  #
+  # NOTE: /lib/portal below is the one remaining in-repo npm key that is also
+  # unscannable-by-config - it is a pnpm workspace member with no tracked
+  # package-lock.json. It is kept because it does receive version-update runs;
+  # see .github/tests/test_dependabot_manifest_coverage_policy.py for what is
+  # enforced.
 
   # npm dependencies (Portal library)
   - package-ecosystem: "npm"
@@ -172,6 +162,69 @@ updates:
       - "portal"
     commit-message:
       prefix: "chore(deps)"
+
+  # npm dependencies (SDK TypeScript)
+  #
+  # sdk/ts is installed by npm (`package-lock.json` is tracked and CI runs
+  # `npm ci`), so Dependabot must be pointed at the directory itself. Without
+  # this key, security advisories in sdk/ts (58 open alerts) can never raise a
+  # fix PR: the only npm keys that existed covered /scripts/bosun (a submodule,
+  # which Dependabot cannot scan at all) and /lib/portal.
+  - package-ecosystem: "npm"
+    directory: "/sdk/ts"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "npm"
+      - "sdk"
+    commit-message:
+      prefix: "build(deps)"
+
+  # npm dependencies (SDK portal workspace)
+  #
+  # sdk/portal ships its own tracked pnpm-lock.yaml (83 open alerts).
+  - package-ecosystem: "npm"
+    directory: "/sdk/portal"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "npm"
+      - "sdk"
+    commit-message:
+      prefix: "build(deps)"
+
+  # npm dependencies (mobile capture app)
+  #
+  # This directory is its own lockfile island, outside the root pnpm workspace:
+  # it carries a package-lock.json AND a pnpm-lock.yaml (48 open alerts across
+  # both). Dependabot reads the npm ecosystem, so it needs the key.
+  - package-ecosystem: "npm"
+    directory: "/mobile/veid-capture-app"
+    target-branch: "develop"
+    schedule:
+      interval: "weekly"
+      day: "wednesday"
+      time: "06:00"
+      timezone: "UTC"
+    open-pull-requests-limit: 5
+    labels:
+      - "dependencies"
+      - "npm"
+      - "mobile"
+    commit-message:
+      prefix: "build(deps)"
 
   # Docker base images
   - package-ecosystem: "docker"

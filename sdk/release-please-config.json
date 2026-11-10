@@ -1,6 +1,8 @@
 {
   "$schema": "https://raw.githubusercontent.com/googleapis/release-please/main/schemas/config.json",
 
+  "//": "NOT IN USE. Nothing reads this file: no workflow in this repository runs release-please, and `grep -rn 'release-please' .github/workflows/` is empty. It is kept only to record the ORIGINAL versioning INTENT for @virtengine/chain-sdk (prerelease alpha). DO NOT WIRE IT UP: release-please opens version-bump pull requests, and publication is human-approved and tag-scoped (see .github/workflows/sdk-npm-publish.yaml). Wiring it would create a second, implicit path to a version bump that a publish workflow might then consume unattended. Version bumps are made deliberately, by hand, in sdk/ts/package.json, and the publish workflow refuses any tag whose version does not match that file.",
+
   "separate-pull-requests": true,
   "tag-separator": "/",
   "include-component-in-tag": true,

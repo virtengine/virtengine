@@ -1,0 +1,225 @@
+# Publish @virtengine/chain-sdk to npm via OIDC Trusted Publishing
+#
+# THE LOAD-BEARING PROPERTY, and the reason this file is not a copy of
+# bosun/.github/workflows/publish.yaml: publication must stay human-triggered
+# and human-approved. Operator decision (2026-09-29, task t_9d3b0f86) is
+# "Keep SDKs source-only" precisely because a tag or release event must NEVER
+# have a publishing side effect. So the ONLY trigger here is `workflow_dispatch`.
+#
+#   `release: types: [published]`   -> deliberately ABSENT (was the 2026-09-29 bug)
+#   `push: tags: ['v*']`           -> deliberately ABSENT
+#   `push:` / `pull_request:`      -> deliberately ABSENT
+#
+# scripts/ci/check-sdk-npm-publish-triggers.mjs asserts those three absences and
+# the presence of workflow_dispatch. A guard that only asserted "the workflow
+# parses" would be decoration: the defect class this file prevents is a trigger
+# that was too BROAD, which parses perfectly well.
+#
+# The dispatch is additionally gated on a v* TAG REF (validate job), so a
+# dispatch from a random branch cannot publish. dry_run defaults to TRUE, so the
+# first and default dispatch cannot reach the registry.
+#
+# `.github/workflows/sdk-publish.yaml` (PyPI/crates.io) is DISABLED by the same
+# decision and is NOT touched by this change; those two SDKs stay source-only.
+#
+# Prerequisites (one-time, partly HUMAN):
+#   1. npm → Package → Settings → Publishing Access → Add Trusted Publisher
+#        Organization: virtengine
+#        Repository:   virtengine
+#        Workflow:     sdk-npm-publish.yaml
+#        Environment:  npm-publish
+#   2. GitHub → Settings → Environments → "npm-publish" → Required reviewers.
+#      *** THIS IS MISSING TODAY AND IS HUMAN-ONLY. ***
+#      Measured 2026-10-06: protection_rules = [], deployment_branch_policy =
+#      null, can_admins_bypass = true. Declaring `environment: npm-publish`
+#      therefore gates NOTHING right now and a dispatch publishes unattended.
+#      See scripts/ci/check-env-approval-gate.mjs, which is RED on exactly this
+#      and is expected to stay RED until a human adds the reviewers. That test
+#      failing is the correct state, not a broken guard -- read the runbook
+#      printed by it before dispatching anything real.
+#   3. The repository must allow GitHub Actions to create and approve pull
+#      requests is NOT required here; trusted publishing needs the environment
+#      only.
+name: Publish @virtengine/chain-sdk to npm
+
+env:
+  NODE_VERSION: "24"
+
+on:
+  # workflow_dispatch ONLY -- see the header. Keep the three absences.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (must be an existing v* tag, e.g. v1.0.0-alpha.21)"
+        type: string
+        required: true
+      dry_run:
+        description: "Dry run (build, test, npm pack --dry-run; NEVER reaches the registry)"
+        type: boolean
+        default: true
+      force:
+        description: "Publish even if the registry already has this version"
+        type: boolean
+        default: false
+
+concurrency:
+  group: sdk-npm-publish
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  validate:
+    name: Validate tag and versions
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.check.outputs.version }}
+      registry-version: ${{ steps.check.outputs.registry-version }}
+      should-publish: ${{ steps.check.outputs.should-publish }}
+      dry-run: ${{ steps.check.outputs.dry-run }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+          cache-dependency-path: sdk/ts/package-lock.json
+
+      - name: Refuse a non-tag or non-v* ref
+        run: |
+          set -euo pipefail
+          REF="${{ inputs.tag }}"
+          case "$REF" in
+            v[0-9]*.[0-9]*.[0-9]*) ;;
+            *)
+              echo "::error::input 'tag' must be an existing vMAJOR.MINOR.PATCH[-pre] tag; got '$REF'"
+              exit 1
+              ;;
+          esac
+          # A dispatch can name any string; the tag has to EXIST and to be a real
+          # v* tag. Without this a branch named v9.9.9 would satisfy the case
+          # statement above and publish unreleased code.
+          git fetch --force --tags origin
+          if ! git rev-parse --verify --quiet "refs/tags/$REF" >/dev/null; then
+            echo "::error::tag '$REF' does not exist in origin"
+            exit 1
+          fi
+          echo "::notice::dispatching publish for tag $REF"
+
+      - name: Compare local vs registry version
+        id: check
+        env:
+          DRY_RUN: ${{ inputs.dry_run }}
+          FORCE: ${{ inputs.force }}
+          REF: ${{ inputs.tag }}
+        run: |
+          set -euo pipefail
+          VERSION=$(node -p "require('./sdk/ts/package.json').version")
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+
+          # A failed lookup must NOT become a version. Falling back to "0.0.0"
+          # makes every released version "newer" and turns a dropped connection
+          # into a publish attempt; "unknown" makes the decision fail closed.
+          REGISTRY=$(npm view @virtengine/chain-sdk version 2>/dev/null || echo "")
+          echo "registry-version=${REGISTRY:-unknown}" >> "$GITHUB_OUTPUT"
+
+          # The tag must name the version being published. Without this the
+          # workflow would happily publish package.json's version under a tag
+          # that says something else, and the two would drift silently.
+          TAG="${REF#v}"
+          if [ "$TAG" != "$VERSION" ]; then
+            echo "::error::tag '$REF' does not match sdk/ts/package.json version '$VERSION'; refusing to publish"
+            exit 1
+          fi
+
+          if [ "$REGISTRY" = "$VERSION" ]; then
+            echo "::notice::registry already has $VERSION -- idempotent no-op"
+            echo "should-publish=false" >> "$GITHUB_OUTPUT"
+          elif [ "$REGISTRY" = "unknown" ]; then
+            echo "::error::registry lookup failed; refusing to publish blind"
+            echo "should-publish=false" >> "$GITHUB_OUTPUT"
+          elif [ "${FORCE}" = "true" ]; then
+            echo "::notice::--force: publishing $VERSION regardless of registry state"
+            echo "should-publish=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "should-publish=true" >> "$GITHUB_OUTPUT"
+          fi
+          echo "dry-run=${DRY_RUN}" >> "$GITHUB_OUTPUT"
+
+  publish:
+    name: Publish to npm
+    needs: validate
+    if: needs.validate.outputs.should-publish == 'true'
+    runs-on: ubuntu-latest
+    environment: npm-publish
+    # Job-level permissions REPLACE the workflow-level block, so both grants
+    # must be repeated here or the publish loses its OIDC token.
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ inputs.tag }}
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          registry-url: "https://registry.npmjs.org"
+          cache: "npm"
+          cache-dependency-path: sdk/ts/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Build
+        working-directory: sdk/ts
+        run: npm run build
+
+      - name: Test
+        working-directory: sdk/ts
+        run: npm test
+
+      - name: Pack (what would be published)
+        working-directory: sdk/ts
+        run: npm pack --dry-run
+
+      - name: Publish
+        if: ${{ !inputs.dry_run }}
+        working-directory: sdk/ts
+        run: npm publish --access public --provenance --tag alpha
+
+      - name: Dry run (never reaches the registry)
+        if: ${{ inputs.dry_run }}
+        working-directory: sdk/ts
+        run: |
+          echo "::notice::dry_run=true -- this run is NOT publishing."
+          echo "::notice::npm pack --dry-run above listed the exact tarball."
+
+  # Separate job, no OIDC token, so it can be reported without any possibility
+  # of reaching a registry from the same dispatch.
+  report:
+    name: Publish outcome
+    needs: [validate, publish]
+    if: always()
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Summarise
+        env:
+          VERSION: ${{ needs.validate.outputs.version }}
+          REGISTRY_VERSION: ${{ needs.validate.outputs.registry-version }}
+          DRY_RUN: ${{ needs.validate.outputs.dry-run }}
+        run: |
+          set -euo pipefail
+          echo "version=$VERSION registry=$REGISTRY_VERSION dry_run=$DRY_RUN"
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "::notice::DRY RUN — registry unchanged."
+          fi

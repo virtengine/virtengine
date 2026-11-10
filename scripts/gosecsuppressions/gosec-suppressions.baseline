@@ -1,0 +1,285 @@
+# Unreadable gosec suppression annotations, recorded 2026-10-06 (reviewed 2026-10-06, expires 2026-11-05).
+# 366 annotation(s). Tracking: virtengine/virtengine#1258
+# Regenerate with: go run ./scripts/gosecsuppressions -root . -write-baseline
+#
+# Format: path<TAB>count<TAB>comment-text-as-written. The key is path+text and
+# deliberately NOT path+line: inserting a line above shifts every line number in
+# the file, so a line-keyed baseline would fail on ordinary edits.
+# Falling entries are improvements -- drop them from this file when you re-record.
+app/app.go	1	//nolint:gosec // gasConsumed is clamped to MaxInt64 above
+app/export.go	1	//nolint:gosec // G404: simulation uses weak random for reproducibility, not security
+app/proposal_handler.go	1	//nolint:gosec // positivity checked before signed-to-unsigned conversion
+app/proposal_handler_test.go	1	//nolint:gosec // G204: fixed test-binary path and fixed test selector; no user-controlled command or argument.
+app/sim_test.go	4	//nolint:gosec // G404: deterministic simulation RNG for reproducibility
+app/sim_test.go	1	//nolint:gosec // G404: deterministic simulation seed
+app/sim_test.go	1	//nolint:gosec // G404: simulation tests use weak random for reproducibility, not security
+cmd/hpc-node-agent/main.go	3	// nolint:gosec
+cmd/hpc-node-agent/metrics.go	1	// CPU capacity is derived from the real scheduler pressure signal exposed by load average. //nolint:gosec // G115: NumCPU returns small positive int, safe f...
+cmd/hpc-node-agent/metrics.go	2	//nolint:gosec // G115: memory in GB is bounded well under int32 max
+cmd/hpc-node-agent/metrics.go	2	//nolint:gosec // G115: storage in GB is bounded well under int32 max
+cmd/hpc-node-agent/metrics.go	1	//nolint:gosec // G204: callers provide validated executable paths and fixed/sanitized args
+cmd/provider-daemon/main.go	2	//nolint:gosec // #nosec G101: CLI flag name, not a credential
+cmd/provider-daemon/main.go	1	//nolint:gosec // #nosec G101: webhook secret flag name, not a credential
+cmd/provider-daemon/main.go	1	//nolint:gosec // G304: filePath is a user-provided CLI argument for manifest validation
+cmd/provider-daemon/main.go	1	//nolint:gosec // flag name, not a credential
+cmd/virtengine/cmd/hsm/init.go	1	//nolint:gosec // slot is validated non-negative
+pkg/artifact_store/cid_validation.go	1	//nolint:gosec // G115: CID version is a small bounded value (0 or 1)
+pkg/artifact_store/filesystem_archive_backend.go	1	//nolint:gosec // size checked for negativity
+pkg/artifact_store/ipfs_backend.go	1	//nolint:gosec // G115: offset/chunkSize bounded by chunk count
+pkg/artifact_store/types.go	1	//nolint:gosec // G115: chunkCount is bounded by reasonable file sizes
+pkg/artifact_store/types.go	1	//nolint:gosec // G115: i bounded by m.ChunkCount
+pkg/artifact_store/types.go	3	//nolint:gosec // G115: len(m.Chunks) bounded by m.ChunkCount
+pkg/benchmark/memory_profile.go	1	//nolint:gosec // G115: GCCycles is positive uint32
+pkg/benchmark/memory_profile.go	1	//nolint:gosec // G115: Goroutine count is positive int
+pkg/benchmark/memory_profile.go	1	//nolint:gosec // G115: HeapObjects fits in int64
+pkg/benchmark/memory_profile.go	1	//nolint:gosec // G115: MaxGoroutines is positive int
+pkg/benchmark_daemon/runner.go	1	// Execute with validated path and arguments //nolint:gosec // G204: Executable path and arguments validated by security package
+pkg/benchmark_daemon/runner.go	1	// Get basic CPU info //nolint:gosec // G115: NumCPU returns small positive int, safe for int32
+pkg/capture_protocol/mobile/gallery_prevention.go	1	//nolint:gosec // G115: FrameNumber is positive int
+pkg/capture_protocol/mobile/gallery_prevention.go	1	//nolint:gosec // G115: MonotonicTimestamp is positive
+pkg/capture_protocol/mobile/signing.go	1	//nolint:gosec // G602: length equality verified above
+pkg/chaos/runner/kubernetes.go	3	// Execute with validated path and arguments //nolint:gosec // G204: Executable path and arguments validated by security package
+pkg/chaos/scenarios/resource.go	1	//nolint:gosec // G115: MemoryBytes/MB is bounded memory size
+pkg/chaos/scenarios/resource.go	1	//nolint:gosec // G115: duration.Seconds() returns small positive value
+pkg/chaos/scenarios/resource.go	1	//nolint:gosec // G115: memoryMB is positive user-provided value
+pkg/chaos/scenarios/resource.go	1	//nolint:gosec // G115: totalMB is positive bounded value
+pkg/chaos/slo/verifier.go	1	// Execute with validated path - probe.Command from trusted SLO configuration //nolint:gosec // G204: Executable path validated, probe.Command from trusted c...
+pkg/chaos/slo/verifier.go	1	// Execute with validated path and arguments //nolint:gosec // G204: Executable path and arguments validated by security package
+pkg/data_vault/erasure_coordinator.go	2	//nolint:gosec // G115: journal length is a bounded small count, never negative
+pkg/edugain/verification.go	1	// DigestAlgorithmSHA1 is SHA-1 digest algorithm (WEAK - DO NOT USE) //nolint:gosec // G401: SHA-1 constants required by SAML 2.0 spec (eduGAIN federation) -...
+pkg/edugain/verification.go	1	// SignatureAlgorithmDSASHA1 is DSA-SHA1 signature algorithm (WEAK - DO NOT USE) //nolint:gosec // G401: SHA-1 constants required by SAML 2.0 spec (eduGAIN f...
+pkg/edugain/verification.go	1	// SignatureAlgorithmRSASHA1 is RSA-SHA1 signature algorithm (WEAK - DO NOT USE) //nolint:gosec // G401: SHA-1 constants required by SAML 2.0 spec (eduGAIN f...
+pkg/enclave_runtime/crypto_common.go	1	//nolint:gosec // G602: loop starts at 1, bounds checked by len(certChain) in condition
+pkg/enclave_runtime/crypto_nitro.go	1	//nolint:gosec // G115: CBOR array length validated during parsing
+pkg/enclave_runtime/crypto_nitro.go	1	//nolint:gosec // G115: CBOR byte string length is validated during parsing
+pkg/enclave_runtime/crypto_nitro.go	1	//nolint:gosec // G115: CBOR map length validated during parsing
+pkg/enclave_runtime/crypto_nitro.go	1	//nolint:gosec // G115: CBOR text string length is validated during parsing
+pkg/enclave_runtime/crypto_nitro.go	1	//nolint:gosec // G115: PCR index validated in range 0-15
+pkg/enclave_runtime/crypto_nitro.go	1	//nolint:gosec // G115: Timestamp is milliseconds since epoch, safe for int64
+pkg/enclave_runtime/crypto_nitro.go	1	//nolint:gosec // G115: UnixMilli returns positive value in valid time range
+pkg/enclave_runtime/crypto_sgx.go	1	//nolint:gosec // G115: CryptoCertDataTypePCKCertChain is small constant
+pkg/enclave_runtime/crypto_sgx.go	1	//nolint:gosec // G115: len(fakePEM) is bounded cert chain size
+pkg/enclave_runtime/crypto_sgx.go	1	//nolint:gosec // G115: sigDataLen is bounded buffer size
+pkg/enclave_runtime/enclave_manager.go	2	//nolint:gosec // G115: latencyMs is positive duration in milliseconds
+pkg/enclave_runtime/enclave_manager.go	1	//nolint:gosec // G115: n is validated positive, modulo result fits in int
+pkg/enclave_runtime/enclave_manager_test.go	1	//nolint:gosec // G115: numRequests/2 is small positive test value
+pkg/enclave_runtime/hardware/mock_backend.go	1	//nolint:gosec // G115: time.Now().UnixNano() is always positive
+pkg/enclave_runtime/hardware_nitro.go	1	// Execute with validated path and arguments //nolint:gosec // G204: Executable path and arguments validated by security package
+pkg/enclave_runtime/hardware_nitro.go	1	//nolint:gosec // G115: Unix timestamp is positive and fits in uint64
+pkg/enclave_runtime/hardware_nitro.go	1	//nolint:gosec // G204: All arguments are validated via filepath.Clean and path validation above
+pkg/enclave_runtime/hardware_nitro.go	1	//nolint:gosec // G204: cliPath validated during initialization
+pkg/enclave_runtime/hardware_nitro.go	2	//nolint:gosec // G204: cliPath validated, enclaveID sanitized above
+pkg/enclave_runtime/hardware_sev.go	1	//nolint:gosec // rootKey is 0 or 1 enum value
+pkg/enclave_runtime/hardware_sgx.go	1	//nolint:gosec // G115: signature length is fixed 64 bytes
+pkg/enclave_runtime/memory_scrub.go	1	//nolint:gosec // G103: size only bounds the in-place scrub; no pointer arithmetic or address exposure.
+pkg/enclave_runtime/nitro/enclave.go	5	// Execute with validated path and arguments //nolint:gosec // G204: Executable path and arguments validated by security package
+pkg/enclave_runtime/nitro/nitro_test.go	2	//nolint:gosec // G115: timestamp won't overflow
+pkg/enclave_runtime/nitro/nsm.go	1	//nolint:gosec // timestamp is always positive
+pkg/enclave_runtime/nitro_enclave.go	1	//nolint:gosec // G115: UnixMilli timestamp is positive and fits in uint64
+pkg/enclave_runtime/sev/report.go	2	//nolint:gosec // G115: intentional narrowing for policy field
+pkg/enclave_runtime/sev/report.go	1	//nolint:gosec // intentional narrowing: extracting individual bytes from 64-bit value
+pkg/enclave_runtime/sev_enclave_test.go	1	// Verify individual byte positions //nolint:gosec // G115: extracting 8-bit values from uint64, safe for uint8
+pkg/enclave_runtime/sev_enclave_test.go	1	//nolint:gosec // G115: extracting 8-bit values from uint64, safe for uint8
+pkg/enclave_runtime/sev_production.go	4	//nolint:gosec // G115: TCB values are 8-bit fields extracted from report
+pkg/enclave_runtime/sgx_enclave.go	1	//nolint:gosec // G115: signature length is bounded by signing algorithm
+pkg/inference/conformance/conformance.go	1	//nolint:gosec // G304: path is constructed from trusted test data directory
+pkg/inference/conformance/conformance.go	1	//nolint:gosec // G304: path is provided by trusted caller/configuration
+pkg/inference/determinism.go	1	//nolint:gosec // G115: BlockHeight is a bounded blockchain block number
+pkg/inference/determinism.go	1	//nolint:gosec // G115: ScopeCount is a bounded small count value
+pkg/inference/model_loader.go	1	// Read and hash file contents //nolint:gosec // G304: path is from trusted model directory
+pkg/inference/model_loader.go	1	// Read and parse metadata //nolint:gosec // G304: metadataPath validated against model base directory
+pkg/inference/tensorflow_runtime.go	1	// Single file - hash it directly //nolint:gosec // G304: path is from trusted model directory
+pkg/inference/tensorflow_runtime.go	1	//nolint:gosec // G304: path is from trusted model directory
+pkg/inference/tensorflow_runtime_stub.go	1	//nolint:gosec // G304: path is from trusted model directory
+pkg/inference/test_vectors.go	1	//nolint:gosec // G115: seed is a positive test value used for deterministic embedding generation
+pkg/payment/offramp/service.go	1	// Calculate backoff delay //nolint:gosec // G115: attempt is small retry counter
+pkg/payment/paypal_adapter.go	2	//nolint:gosec // G704: a.baseURL validated by ValidateGatewayBaseURL at construction
+pkg/payment/paypal_adapter.go	2	//nolint:gosec // G704: request target is the validated a.baseURL
+pkg/platformsecurity/contracts/persisted_schema_test.go	2	//nolint:gosec // G204
+pkg/platformsecurity/uniqueness/fixture.go	2	//nolint:gosec // G115: bounded template coordinate/value; high bit cleared on decode
+pkg/platformsecurity/uniqueness/fixture.go	2	//nolint:gosec // G115: length is non-negative and bounded by explicit validation above
+pkg/platformsecurity/uniqueness/incident.go	1	//nolint:gosec // G115: validated non-negative counter; bounded by construction
+pkg/platformsecurity/uniqueness/incident_test.go	1	//nolint:gosec // G115: validated non-negative counter; bounded by construction
+pkg/pricefeed/retry.go	1	// Read random bytes and mask to ensure positive value // Use only 63 bits to avoid sign issues //nolint:gosec // G115: masked to 63 bits, safe for int64
+pkg/provider_daemon/ansible_adapter.go	1	// Create command (validated above) //nolint:gosec // G204: Command and arguments validated by security.CommandValidator
+pkg/provider_daemon/ansible_adapter.go	3	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
+pkg/provider_daemon/chain_client_provider_config.go	1	//nolint:gosec // G115: value is known non-negative here
+pkg/provider_daemon/domain_verification_checker.go	1	//nolint:gosec // configuration field name, not a credential value
+pkg/provider_daemon/fiat_conversion_dex_adapters.go	1	//nolint:gosec // bounded to MaxInt64 above.
+pkg/provider_daemon/fiat_conversion_dex_adapters.go	1	//nolint:gosec // positive int64 fits uint64.
+pkg/provider_daemon/fiat_conversion_orchestrator.go	1	//nolint:gosec // protocol bounded to 18 above.
+pkg/provider_daemon/fiat_conversion_orchestrator_test.go	1	//nolint:gosec // six fixed stages.
+pkg/provider_daemon/safe_conversion.go	4	//nolint:gosec // range checked above
+pkg/provider_daemon/settlement_pipeline.go	1	// Convert each resource type to normalized units // CPU: 1 unit = 1 CPU-hour //nolint:gosec // usage metrics should be non-negative
+pkg/provider_daemon/settlement_pipeline.go	1	// GPU: 1 unit = 1 GPU-hour //nolint:gosec // usage metrics should be non-negative
+pkg/provider_daemon/settlement_pipeline.go	1	// Memory: 1 unit = 1 GB-hour //nolint:gosec // usage metrics should be non-negative
+pkg/provider_daemon/settlement_pipeline.go	1	// Storage: 1 unit = 1 GB-hour //nolint:gosec // usage metrics should be non-negative
+pkg/provider_daemon/settlement_pipeline.go	5	//nolint:gosec // usage metrics should be non-negative
+pkg/provider_daemon/slurm_k8s/cli_clients.go	2	//nolint:gosec // G204: Command and arguments validated by security.CommandValidator
+pkg/provider_daemon/waldur_reconciliation_store.go	2	//nolint:gosec // bounded by slice length
+pkg/provider_daemon/workload_validator.go	1	//nolint:gosec // DefaultMemoryMBPerNode is always non-negative
+pkg/pruning/disk_monitor.go	1	//nolint:gosec // G115: conversion is safe for disk usage values in practice
+pkg/pruning/disk_monitor.go	1	//nolint:gosec // G115: conversion is safe, UsedBytes < criticalThreshold ensures positive result
+pkg/pruning/disk_monitor.go	1	//nolint:gosec // G115: conversion is safe, UsedBytes < warningThreshold ensures positive result
+pkg/pruning/disk_monitor.go	1	//nolint:gosec // G115: file sizes are non-negative, safe conversion
+pkg/pruning/disk_monitor.go	1	//nolint:gosec // G115: freeBytes is disk free space, safe for int64 conversion
+pkg/pruning/disk_monitor.go	3	//nolint:gosec // G115: growth rate is checked > 0, conversion is safe
+pkg/pruning/metrics.go	1	// Tier 1: Full retention //nolint:gosec // G115: Tier1Blocks is a configuration value bounded by practical limits
+pkg/pruning/metrics.go	1	// Tier 2: Sample every N blocks //nolint:gosec // G115: Tier2Blocks is a configuration value bounded by practical limits
+pkg/pruning/metrics.go	1	//nolint:gosec // G115: keepRecent is a configuration value bounded by practical limits
+pkg/pruning/snapshot_manager_test.go	1	//nolint:gosec // G115: i is a small loop index in test code
+pkg/security/command_validator.go	1	//nolint:gosec // G204: Command and args validated above
+pkg/security/filepath_validator_windows_test.go	1	//nolint:gosec // G204: path is the test's own t.TempDir() value, not external input
+pkg/security/path_test.go	1	//nolint:gosec // G302: requireAbsolute keeps the input absolute
+pkg/security/path_test.go	10	//nolint:gosec // G306: test file, 0644 permissions acceptable
+pkg/security/path_test.go	2	//nolint:gosec // G306: test fixture, 0644 permissions acceptable
+pkg/security/permissions_test.go	1	//nolint:gosec // G306: intentionally insecure for testing permission fix
+pkg/security/random.go	1	// Calculate exponential delay: base * 2^attempt // Safe because attempt is bounded and we check overflow below //nolint:gosec // G115: attempt is bounded to...
+pkg/slurm_adapter/ssh_client.go	1	// Explicit operator opt-in: host key verification is disabled only when // the operator sets HostKeyCallback="ignore". Every other path, including // the de...
+pkg/slurm_adapter/ssh_client.go	1	//nolint:gosec // G304: path validated via ValidateCLIPath
+pkg/usage/line_item_test.go	1	//nolint:gosec // Deterministic math/rand is required for reproducible property tests.
+pkg/usage/line_item_test.go	1	//nolint:gosec // G404: test-only deterministic randomness for reproducibility
+pkg/verification/sms/gateway.go	1	// Twilio uses HMAC-SHA1 for webhook validation //nolint:gosec // G401: HMAC-SHA1 required by Twilio webhook API - third-party service requirement // In prod...
+pkg/verification/sms/voip_detector.go	1	//nolint:gosec // range checked above
+pkg/waldur/client.go	1	// Calculate backoff with exponential increase //nolint:gosec // G115: attempt is bounded by MaxRetries configuration (typically < 10)
+pkg/workflow/engine.go	1	// Exponential backoff //nolint:gosec // G115: attempts is small retry counter
+pkg/workflow/workflow.go	1	//nolint:gosec // G115: attempt is bounded by maxAttempts configuration
+sdk/go/cli/auth_tx.go	1	//nolint unparam
+sdk/go/cli/configs.go	1	// nolint goerr113
+sdk/go/manifest/v2beta3/manifest_cross_validation_test.go	1	// nolint: gosec
+sdk/go/manifest/v2beta3/manifest_test.go	1	//nolint:gosec // G602: hosts is preallocated with size 1, index 0 is always valid
+sdk/go/node/migrate/deployment.go	1	// nolint gosec
+sdk/go/sdl/units.go	1	// nolint: gosec
+sim/agents/types.go	1	//nolint:gosec // G404: simulation agents use weak random for reproducibility, not security
+sim/analysis/monte_carlo.go	1	//nolint:gosec // G404: Monte Carlo simulation uses weak random for reproducibility, not security
+sim/core/engine.go	1	//nolint:gosec // G404: deterministic simulation uses weak random for reproducibility, not security
+tests/integration/consensus/task84a_consensus_test.go	1	//nolint:gosec // load count is positive and bounded to 5,000 above
+tests/integration/settlement/helpers_test.go	1	//nolint:gosec // bounded above
+tests/integration/settlement/task84b_process_boundary_test.go	1	//nolint:gosec // fixed current test binary and selector
+tests/integration/settlement/task84b_process_boundary_test.go	1	//nolint:gosec // non-negative height asserted above
+tests/load/scale/network_partition_test.go	1	// Choose random partition ratio //nolint:gosec // ratioCount checked above and modulo ensures in-range index.
+tests/load/scenarios_test.go	1	// Simulate processing delay //nolint:gosec // G404: weak random acceptable for test timing jitter
+tests/load/scenarios_test.go	1	//nolint:gosec // G404: load tests use weak random for timing jitter
+tests/load/scenarios_test.go	5	//nolint:gosec // G404: weak random acceptable for test timing jitter
+tools.go	1	// nolint
+upgrades/software/v1.0.0/audit.go	1	// Package v1_0_0 // nolint revive
+upgrades/software/v1.0.0/cert.go	1	// Package v1_0_0 // nolint revive
+upgrades/software/v1.0.0/deployment.go	1	// Package v1_0_0 // nolint revive
+upgrades/software/v1.0.0/escrow.go	1	// Package v1_0_0 // nolint revive
+upgrades/software/v1.0.0/init.go	1	// Package v1_0_0 // nolint revive
+upgrades/software/v1.0.0/market.go	1	// Package v1_0_0 // nolint revive
+upgrades/software/v1.0.0/provider.go	1	// Package v1_0_0 // nolint revive
+upgrades/software/v1.0.0/take.go	1	// Package v1_0_0 // nolint revive
+upgrades/software/v1.0.0/upgrade.go	1	// Package v1_0_0 // nolint revive
+upgrades/software/v1.1.0/init.go	1	// Package v1_1_0 // nolint revive
+upgrades/software/v1.1.0/upgrade.go	1	// Package v1_1_0 // nolint revive
+upgrades/software/v1.2.0/init.go	1	// Package v1_2_0 // nolint revive
+upgrades/software/v1.2.0/upgrade.go	1	// Package v1_2_0 // nolint revive
+upgrades/software/v1.3.0/init.go	1	// Package v1_3_0 // nolint revive
+upgrades/software/v1.3.0/upgrade.go	1	// Package v1_3_0 // nolint revive
+x/benchmark/types/evidence_envelope_test.go	1	//nolint:gosec // G115: validated non-negative counter; bounded by construction
+x/cert/keeper/grpc_query_test.go	2	//nolint:gosec
+x/deployment/handler/server.go	1	// nolint gosec
+x/deployment/keeper/msg_server.go	1	// nolint gosec
+x/deployment/module.go	1	// nolint staticcheck
+x/deployment/simulation/operations.go	1	//nolint:gosec // G404: simulation uses weak random for reproducibility, not security
+x/deployment/simulation/proposals.go	1	//nolint:gosec // G404: Cosmos SDK simulation uses weak random for reproducibility, not security
+x/enclave/ibc/keeper.go	1	//nolint:gosec // range checked above
+x/enclave/keeper/committee_test.go	1	//nolint:gosec // range checked above
+x/enclave/keeper/grpc_query.go	1	//nolint:gosec // range checked above
+x/enclave/keeper/rate_limit.go	2	//nolint:gosec // range checked above
+x/escrow/keeper/dispute.go	1	// Check evidence count limit //nolint:gosec // slice length is non-negative
+x/escrow/keeper/invoice.go	1	//nolint:gosec // range checked above
+x/escrow/keeper/reconciliation.go	1	//nolint:gosec // slice length is non-negative
+x/escrow/keeper/reconciliation.go	3	//nolint:gosec // slice lengths are non-negative
+x/escrow/types/billing/audit.go	2	//nolint:gosec // G115: timestamp is a Unix timestamp which is always positive
+x/escrow/types/billing/correction.go	1	//nolint:gosec // timestamp checked for negativity
+x/escrow/types/billing/dispute.go	1	//nolint:gosec // G115: escalation path length is bounded by practical dispute workflow limits
+x/escrow/types/billing/dispute_workflow.go	1	//nolint:gosec // timestamp checked for negativity
+x/escrow/types/billing/invoice_test.go	1	//nolint:gosec // G115: line items count is bounded by practical invoice limits
+x/escrow/types/billing/keys.go	1	//nolint:gosec // timestamp checked for negativity
+x/escrow/types/billing/ledger.go	2	//nolint:gosec // G115: entries count is bounded by practical ledger chain limits
+x/escrow/types/billing/ledger.go	1	//nolint:gosec // G115: line items count is bounded by practical invoice limits
+x/escrow/types/billing/reconciliation_service.go	1	//nolint:gosec // timestamp checked for negativity
+x/fraud/types/proto_types.go	8	//nolint:gosec // range checked above
+x/hpc/keeper/msg_server_templates.go	1	//nolint:gosec // resGB bounded by MaxInt32 above
+x/hpc/keeper/scheduling_test.go	1	// calculateClusterScore mirrors the keeper's scoring logic for testing // //nolint:gosec // G115: integer overflow conversion is acceptable in test code wit...
+x/hpc/keeper/scheduling_test.go	2	//nolint:gosec // test code
+x/hpc/keeper/test_helpers_test.go	1	//nolint:gosec // bounded by MaxUint32 check above
+x/market/handler/server.go	1	//nolint:gosec // bounded above
+x/market/keeper/keeper_benchmark_test.go	1	//nolint:gosec // G115: test code, i is bounded 0-19
+x/market/keeper/keeper_benchmark_test.go	1	//nolint:gosec // G115: test code, i is bounded 0-49
+x/market/keeper/keeper_benchmark_test.go	1	//nolint:gosec // range checked above
+x/market/module.go	1	// nolint staticcheck
+x/market/simulation/operations.go	5	// nolint revive
+x/market/simulation/operations.go	1	//nolint:gosec // G404: simulation uses weak random for reproducibility, not security
+x/market/simulation/proposals.go	1	//nolint:gosec // G404: Cosmos SDK simulation uses weak random for reproducibility, not security
+x/market/types/marketplace/economics.go	1	//nolint:gosec // range checked above
+x/market/types/marketplace/keeper/provisioning.go	1	//nolint:gosec // parsed is clamped to a safe 0-100 range above.
+x/market/types/marketplace/price_discovery.go	2	//nolint:gosec // range checked above
+x/mfa/keeper/fido2_verify.go	1	//nolint:gosec // range checked above
+x/mfa/keeper/keeper.go	1	//nolint:gosec // range checked above
+x/mfa/keeper/verification.go	1	//nolint:gosec // range checked above
+x/mfa/types/fido2.go	1	//nolint:gosec // range checked above
+x/mfa/types/proto_conversions.go	1	//nolint:gosec // range checked above
+x/mfa/types/proto_types.go	1	//nolint:gosec // range checked above
+x/oracle/keeper/keeper.go	1	//nolint:gosec // range checked above
+x/provider/genesis.go	2	//nolint:gosec // index is bounded by the in-memory genesis slice length
+x/provider/module.go	1	// nolint staticcheck
+x/provider/simulation/operations.go	1	//nolint:gosec // G404: Cosmos SDK simulation uses weak random for reproducibility, not security
+x/resources/keeper/allocation.go	1	//nolint:gosec // bounded to max duration
+x/resources/keeper/allocation.go	3	//nolint:gosec // bounds checked above
+x/resources/keeper/reservation.go	1	//nolint:gosec // positive int64 always fits uint64
+x/resources/keeper/reservation_test.go	1	//nolint:gosec // deterministic property sequence
+x/roles/keeper/keeper.go	1	//nolint:gosec // range checked above
+x/settlement/ibc/keeper.go	1	//nolint:gosec // block height is non-negative
+x/settlement/ibc/keeper.go	1	//nolint:gosec // block time is non-negative
+x/settlement/ibc/keeper_test.go	2	//nolint:gosec // test helper
+x/settlement/ibc/keeper_test.go	1	//nolint:gosec // test helper sequence
+x/settlement/ibc/replay_property_test.go	1	//nolint:gosec // deterministic property-test input
+x/settlement/ibc/replay_property_test.go	1	//nolint:gosec // rng.Intn(1<<16) is bounded to [0, 65535], which fits uint16
+x/settlement/keeper/fiat_conversion_migration.go	1	//nolint:gosec // observation history is bounded to 64 entries
+x/settlement/keeper/fiat_conversion_protocol.go	2	//nolint:gosec // checked against MaxInt64 above
+x/settlement/keeper/financial_case.go	2	//nolint:gosec
+x/settlement/keeper/financial_case_test.go	1	//nolint:gosec // deterministic property-test input, not security randomness
+x/settlement/keeper/price_aggregator.go	1	//nolint:gosec // positive duration checked above
+x/settlement/keeper/rewards.go	1	//nolint:gosec // range checked above
+x/settlement/keeper/settlement_test.go	1	//nolint:gosec // non-negative height checked above
+x/settlement/types/keys.go	1	//nolint:gosec // negative heights are normalized above
+x/staking/keeper/hooks.go	1	//nolint:gosec // range checked above
+x/staking/keeper/rewards.go	1	//nolint:gosec // range checked above
+x/take/module.go	1	// nolint staticcheck
+x/take/simulation/proposals.go	1	// nolint gosec
+x/take/simulation/proposals.go	1	//nolint:gosec // G404: Cosmos SDK simulation uses weak random for reproducibility, not security
+x/veid/ibc/types.go	1	//nolint:gosec // degradedScore is guaranteed non-negative and <= 1000
+x/veid/keeper/biometric_hash.go	3	//nolint:gosec // range checked above
+x/veid/keeper/consensus_system_tx.go	2	//nolint:gosec // positivity checked above
+x/veid/keeper/credential_issuance.go	1	//nolint:gosec // range checked above
+x/veid/keeper/fallback_handler.go	1	//nolint:gosec // slice length is non-negative
+x/veid/keeper/feature_extraction.go	1	//nolint:gosec // range checked above
+x/veid/keeper/geo_restrictions.go	1	//nolint:gosec // range checked above
+x/veid/keeper/grpc_query.go	1	// Apply offset and limit //nolint:gosec // slice length is non-negative
+x/veid/keeper/randomness.go	1	//nolint:gosec // height is bounded by consensus
+x/veid/keeper/randomness.go	1	//nolint:gosec // time is non-negative
+x/veid/keeper/rate_limiter.go	1	//nolint:gosec // block heights are always positive and bounded by int64 max
+x/veid/keeper/rate_limiter.go	1	//nolint:gosec // range checked above
+x/veid/keeper/score.go	1	// Apply pagination //nolint:gosec // G115: len(entries) is bounded by storage limits, safe uint32 conversion
+x/veid/keeper/score.go	1	//nolint:gosec // G115: len(entries) is bounded by storage limits, safe uint32 conversion
+x/veid/keeper/score_query.go	1	//nolint:gosec // range checked above
+x/veid/keeper/score_test.go	1	//nolint:gosec // bounded test data
+x/veid/keeper/scoring_model_test.go	2	//nolint:gosec // G115: test code, i is bounded 0-2
+x/veid/keeper/scoring_model_test.go	2	//nolint:gosec // bounded test data
+x/veid/keeper/sdk_query_server.go	1	//nolint:gosec // bounded above
+x/veid/keeper/trusted_setup.go	1	// Verify minimum participants //nolint:gosec // MinParticipants is bounded by MaxCeremonyParticipants (100)
+x/veid/keeper/verification_benchmark_test.go	1	//nolint:gosec // G115: benchmark, i%50 is bounded 0-49
+x/veid/keeper/verification_benchmark_test.go	1	//nolint:gosec // range checked above
+x/veid/keeper/vote_extension_legacy.go	1	//nolint:gosec // protocol version is bounded to one byte
+x/veid/keeper/vote_extension_test.go	2	//nolint:gosec // G115: test code, i is bounded 0-4
+x/veid/keeper/vote_extension_test.go	1	//nolint:gosec // G115: test code, i is bounded 0-9
+x/veid/types/artifact_reference.go	2	//nolint:gosec // range checked above
+x/veid/types/audit_export.go	1	//nolint:gosec // G101: audit export labels are not credentials
+x/veid/types/composite_scoring.go	1	// Composite scoring weight constants in basis points (10000 = 100%) // Per veid-flow-spec.md ML Score Calculation section // //nolint:gosec // composite rea...
+x/veid/types/composite_scoring.go	1	//nolint:gosec // range checked above
+x/veid/types/feature_extraction_metadata.go	1	//nolint:gosec // range checked above
+x/veid/types/proof_types.go	1	//nolint:gosec // safe: bounds checked above
+x/veid/types/scoring_model.go	2	//nolint:gosec // range checked above

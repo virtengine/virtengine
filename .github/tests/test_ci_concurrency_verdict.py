@@ -1,76 +1,78 @@
-"""The `concurrency` block of ci.yaml must not make a develop push unverifiable.
+"""No workflow in this repo may make a develop push unverifiable.
 
 The defect
 ----------
-On 2026-10-06 every ``ci.yaml`` develop *push* run for 32 straight hours ended
-``cancelled`` -- 35 consecutive runs, none of which ever published a
-conclusion. The most recent run with a real verdict was 37360715885
-(``fdaf43c3d``, created 2026-10-05T19:04:19Z, updated 2026-10-05T20:43:27Z).
-Three commits sat on ``develop`` afterwards with nothing at all reporting on
-them.
+``concurrency`` with ``cancel-in-progress: true`` and a group scoped only to
+``github.ref`` puts every run for a ref in ONE group. With
+``cancel-in-progress: true`` a later commit kills its predecessor -- and a
+**cancelled run publishes NO verdict**. The failure mode is therefore not "the
+gate is red" but "there is no gate". Measured on this repo:
 
-The cause was this block::
-
-    concurrency:
-      group: ${{ github.workflow }}-${{ github.ref }}
-      cancel-in-progress: true
-
-``group`` is per-ref, so every push to ``develop`` lands in the SAME group as
-the run already in flight. With ``cancel-in-progress: true`` each new commit
-kills its predecessor. A develop run takes ~1h39m and commits land faster than
-that, so a run is always cancelled before it finishes.
-
-Why this is worse than a red run
---------------------------------
-A cancelled run publishes NO verdict. So the failure mode is not "the gate is
-red" but "there is no gate". Anything that reads CI as a signal -- a required
-status check, the ``develop -> main`` integration PR's premise, or an agent
-reporting "local red vs CI red agrees" -- is reading an absence and calling it
-agreement. Three workflows in this repo already chose the other trade:
-``infrastructure.yaml``, ``dr-tools-image.yaml`` and ``dr-failover-test.yaml``
-all set ``cancel-in-progress: false``.
+  * ``ci.yaml``: 35 consecutive develop push runs ended ``cancelled`` over 32h.
+  * ``quality-gate.yaml``: 7 develop push runs cancelled, each killed by a run
+    created inside its own window (overlaps 34s-658s).
+  * ``supply-chain.yaml``: 1 develop push run cancelled, killed 65s in.
+  * ``license-compliance.yaml``: 1 cancelled run, NOT explained by overlap.
 
 What is pinned
 --------------
-1. The push path is per-commit, so no push can cancel another push. This is the
-   assertion the whole file exists for.
-2. The pull_request path is STILL per-ref and still cancellable. Cancelling a
-   superseded PR run is what makes iteration fast; a fix that also serialised
-   PR runs would trade a real problem for a worse one.
-3. ``cancel-in-progress`` is still declared explicitly. Dropping it would leave
-   the behaviour implicit and unpinned.
+1. Every workflow that can see a develop push scopes its push group per-commit
+   (``github.sha``), gated on the push event, so no push can cancel another.
+2. The pull_request path stays per-ref and cancellable. Cancelling a superseded
+   PR run is what makes iteration fast; serialising PR runs would trade a real
+   problem for a worse one.
+3. Reusable workflows namespace on ``github.workflow``. In a called workflow
+   ``github.workflow`` resolves to the CALLER's name, so a group omitting it
+   puts every caller in one shared group per ref -- ``ci.yaml``'s push run was
+   cancelled by ``quality-gate.yaml``'s run for the same commit.
 
-Why these assert the PARSED block, not the file text
-----------------------------------------------------
-ci.yaml carries long explanatory comments -- including the ones introduced by
-the fix that documents this defect -- whose vocabulary deliberately repeats the
-words ``cancel-in-progress``, ``group`` and ``push``. A substring search over
-the raw text would match a comment rather than the live setting, which is the
-same class of defect the 2026-10-05 integration-keeper note recorded about
-``x is not`` on tuples. Everything below reads ``yaml.safe_load`` output.
+Exposure is DERIVED, not listed
+-------------------------------
+The first version of this fix was scoped to ``ci.yaml`` alone and left the
+disease in five sibling files. Hand-maintaining that list is how it then missed
+two workflows, so this test computes exposure instead:
 
-The expression itself is not evaluated here (there is no GitHub context to
-evaluate it in), so the group is asserted by its *structure*: it must reference
-``github.sha``, and it must gate that reference on the push event. A group that
-mentions ``github.sha`` unconditionally would put PR runs and push runs in the
-same namespace, which is harmless; a group that does not mention it at all is
-the defect, and is what (1) catches.
+  * a workflow's own ``on: push`` branch filter, OR
+  * for a reusable workflow, the union of the push branch filters of every
+    workflow that calls it (``uses: ./.github/workflows/<name>``).
+
+The reusable derivation is the one that catches the real cases. Read from the
+``on:`` block alone, ``compatibility.yaml``/``ml-determinism.yaml``/
+``veid-e2e.yaml`` look safe because they do not list ``develop`` -- but they are
+invoked by workflows that do, and in a reusable call ``github.ref`` is the
+caller's ref.
+
+Why these assert the PARSED block
+---------------------------------
+The affected workflows carry explanatory comments whose vocabulary deliberately
+repeats the words ``cancel-in-progress``, ``group`` and ``push``. A substring
+search over raw text would match a comment instead of the live setting. Same
+class as the 2026-10-05 integration-keeper note on ``x is not`` on tuples.
+
+The ``github.sha`` expression is not evaluated (there is no GitHub context here),
+so the group is asserted by STRUCTURE: it must reference ``github.sha`` and gate
+that reference on ``github.event_name == 'push'``.
 """
 
 from __future__ import annotations
 
+import os
 import re
 import unittest
 from pathlib import Path
 
 import yaml
 
-REPO_ROOT = Path(__file__).resolve().parents[2]
-CI_YAML = REPO_ROOT / ".github" / "workflows" / "ci.yaml"
+# Overridable so the falsifier can drive this suite against a throwaway copy of
+# .github/workflows with one real block reverted, instead of mutating the
+# checkout. Absent the variable this is the repo root, so CI is unaffected.
+REPO_ROOT = Path(
+    os.environ.get("CONCURRENCY_TEST_ROOT") or Path(__file__).resolve().parents[2]
+)
+WORKFLOWS = REPO_ROOT / ".github" / "workflows"
 
-# Workflows in this repo that deliberately do NOT cancel in flight, kept as a
-# named set so the ci.yaml suite and any future sibling agree on what "the
-# other trade" looks like here.
+# Workflows that deliberately do NOT cancel in flight. Named so the comment in
+# ci.yaml and any future sibling cannot rot into fiction.
 UNCANCELLING_WORKFLOWS = (
     "infrastructure.yaml",
     "dr-tools-image.yaml",
@@ -78,126 +80,260 @@ UNCANCELLING_WORKFLOWS = (
 )
 
 
-def _workflow(name: str) -> dict:
-    path = REPO_ROOT / ".github" / "workflows" / name
-    return yaml.safe_load(path.read_text(encoding="utf-8"))
+def _load(name: str) -> dict:
+    return yaml.safe_load((WORKFLOWS / name).read_text(encoding="utf-8"))
 
 
-def _ci_concurrency() -> dict:
-    return _workflow("ci.yaml")["concurrency"]
+def _workflow_names() -> list[str]:
+    return sorted(p.name for p in WORKFLOWS.glob("*.y*ml"))
 
 
-class ConcurrencyPublishesAVerdictTest(unittest.TestCase):
-    """The defect, asserted against the parsed block."""
+def _on(doc: dict):
+    # PyYAML resolves the bare key `on` to the boolean True.
+    return doc.get(True, doc.get("on"))
 
-    def test_push_path_is_per_commit_so_no_push_cancels_another_push(self):
-        group = _ci_concurrency()["group"]
-        self.assertIn(
-            "github.sha",
-            group,
-            "ci.yaml's concurrency group must include github.sha on the push "
-            "path, otherwise every push to develop shares one group and "
-            "cancel-in-progress cancels the in-flight run. Measured: 35 "
-            "consecutive develop push runs ended 'cancelled' with no verdict.",
+
+def _push_branches(doc: dict) -> set | None:
+    """Branches this workflow's own push trigger accepts.
+
+    Returns ``None`` for "every branch", which includes develop.
+    """
+    on = _on(doc)
+    if isinstance(on, list):
+        return None if "push" in [str(x) for x in on] else set()
+    if isinstance(on, dict):
+        push = on.get("push")
+        if push is None:
+            return set()
+        if isinstance(push, dict):
+            branches = push.get("branches")
+            return set(branches) if branches else None
+        return None  # `on: {push: null}` == every branch
+    if on == "push":
+        return None
+    return set()
+
+
+def _is_reusable(doc: dict) -> bool:
+    on = _on(doc)
+    return isinstance(on, dict) and "workflow_call" in on
+
+
+def _has_pr_trigger(doc: dict) -> bool:
+    """Does this workflow ever run on pull_request?
+
+    A workflow with no pull_request trigger has no PR runs to serialise, so an
+    unconditional ``github.sha`` in its group is harmless. The PR-shape
+    assertions are scoped to workflows where that is not true.
+    """
+    on = _on(doc)
+    if isinstance(on, list):
+        return "pull_request" in [str(x) for x in on]
+    if isinstance(on, dict):
+        return "pull_request" in on
+    return False
+
+
+def _callers_of(target: str, docs: dict) -> set:
+    """Workflows that invoke ``target`` as a reusable workflow."""
+    out = set()
+    for name in docs:
+        text = (WORKFLOWS / name).read_text(encoding="utf-8")
+        if re.search(rf"uses:\s*\./\.github/workflows/{re.escape(target)}\b", text):
+            out.add(name)
+    return out
+
+
+def _sees_develop(name: str, docs: dict) -> bool:
+    """Does any run of this workflow execute against the develop ref?"""
+    doc = docs[name]
+    if _is_reusable(doc):
+        callers = _callers_of(name, docs)
+        if callers:
+            for caller in callers:
+                branches = _push_branches(docs[caller])
+                if branches is None or "develop" in branches:
+                    return True
+            return False
+    branches = _push_branches(doc)
+    return branches is None or "develop" in branches
+
+
+def _concurrency(doc: dict) -> dict:
+    conc = doc.get("concurrency")
+    return conc if isinstance(conc, dict) else {}
+
+
+class PushPathPublishesAVerdictTest(unittest.TestCase):
+    """The core defect, asserted against every derived-exposed workflow."""
+
+    def setUp(self):
+        self.docs = {n: _load(n) for n in _workflow_names()}
+
+    def _exposed(self) -> dict:
+        return {
+            n: self.docs[n]
+            for n in self.docs
+            if _sees_develop(n, self.docs)
+            and _concurrency(self.docs[n]).get("cancel-in-progress") is True
+        }
+
+    def test_at_least_one_workflow_is_covered(self):
+        # If this fails, the exposure derivation silently returned nothing and
+        # every other assertion below is vacuous. An empty result set is a
+        # suspect, not an all-clear.
+        self.assertGreaterEqual(
+            len(self._exposed()),
+            5,
+            "the derivation found fewer exposed workflows than the six measured "
+            "on 2026-10-06; if the workflows were deleted that is fine, but say "
+            "so rather than passing vacuously",
+        )
+
+    def test_no_exposed_workflow_loses_push_verdicts(self):
+        offenders = []
+        for name, doc in sorted(self._exposed().items()):
+            group = str(_concurrency(doc).get("group") or "")
+            if "github.sha" not in group:
+                offenders.append(f"{name}: {group!r}")
+        self.assertEqual(
+            offenders,
+            [],
+            "each of these can see a develop push but scopes its concurrency "
+            "group per-ref only, so cancel-in-progress cancels the in-flight "
+            "run and NO verdict is published:\n  " + "\n  ".join(offenders),
         )
 
     def test_the_per_commit_scoping_is_conditional_on_push(self):
-        # An unconditional `-${{ github.sha }}` would also be non-cancelling,
-        # but it would silently disable PR cancellation whenever two runs share
-        # a ref, and it hides the intent. Pin the intent.
-        group = _ci_concurrency()["group"]
-        self.assertIn(
-            "github.event_name",
-            group,
-            "the github.sha component must be gated on github.event_name so "
-            "pull_request runs keep the per-ref, cancellable group.",
+        for name, doc in sorted(self._exposed().items()):
+            if not _has_pr_trigger(doc):
+                continue  # see test_pr_shape_is_only_required_where_pr_runs_exist
+            with self.subTest(workflow=name):
+                group = str(_concurrency(doc).get("group") or "")
+                self.assertIn("github.sha", group, "sanity: derived exposed")
+                self.assertIn(
+                    "github.event_name",
+                    group,
+                    "the github.sha component must be gated on github.event_name "
+                    "so pull_request runs keep the per-ref, cancellable group",
+                )
+                self.assertRegex(
+                    group,
+                    r"event_name\s*==\s*'push'",
+                    "the per-commit component must apply to the push event "
+                    f"specifically; found: {group!r}",
+                )
+
+    def test_pr_shape_is_only_required_where_pr_runs_exist(self):
+        # The control for the two assertions above. security.yaml never runs on
+        # pull_request, so an UNCONDITIONAL github.sha there serialises nothing
+        # and is correct; demanding the push-gated form would be a false
+        # positive. This test exists so that narrowing is deliberate: if
+        # security.yaml ever gains a pull_request trigger, the narrowing stops
+        # applying to it and the strict assertions resume.
+        doc = _load("security.yaml")
+        self.assertFalse(
+            _has_pr_trigger(doc),
+            "security.yaml gained a pull_request trigger; the unconditional "
+            "github.sha in its group now serialises PR runs and must be "
+            "changed to the push-gated form",
         )
-        self.assertRegex(
-            group,
-            r"event_name\s*==\s*'push'",
-            "the per-commit component must apply to the push event specifically; "
-            "found a reference to github.event_name with no push test: "
-            f"{group!r}",
-        )
+        self.assertIn("github.sha", str(_concurrency(doc)["group"]))
 
     def test_pull_request_path_stays_per_ref_and_cancellable(self):
-        # Regression guard for the obvious wrong fix: serialising PR runs too.
-        # A superseded PR run is pure waste; cancelling it is the point.
-        group = _ci_concurrency()["group"]
-        self.assertIn(
-            "'pr'",
-            group,
-            "the non-push branch of the group must yield a constant per-ref "
-            "value, not the sha, so pull_request runs stay in one cancellable "
-            "group per ref.",
+        for name, doc in sorted(self._exposed().items()):
+            if not _has_pr_trigger(doc):
+                continue  # see test_pr_shape_is_only_required_where_pr_runs_exist
+            with self.subTest(workflow=name):
+                group = str(_concurrency(doc).get("group") or "")
+                self.assertIn(
+                    "'pr'",
+                    group,
+                    "the non-push branch of the group must yield a constant "
+                    "per-ref value, not the sha, so pull_request runs stay in "
+                    "one cancellable group per ref",
+                )
+
+    def test_reusable_workflows_namespace_on_the_caller(self):
+        # A second, independent defect: a called workflow that omits
+        # github.workflow shares one group per ref across ALL its callers.
+        offenders = []
+        for name, doc in sorted(self.docs.items()):
+            if not _is_reusable(doc):
+                continue
+            callers = _callers_of(name, self.docs)
+            if not callers:
+                continue
+            if _concurrency(doc).get("cancel-in-progress") is not True:
+                continue
+            group = str(_concurrency(doc).get("group") or "")
+            if "github.workflow" not in group:
+                who = ", ".join(sorted(callers))
+                offenders.append(f"{name} (callers: {who}): {group!r}")
+        self.assertEqual(
+            offenders,
+            [],
+            "these REUSABLE workflows cancel in progress without namespacing "
+            "on github.workflow, so callers cancel each other's runs for the "
+            "same commit:\n  " + "\n  ".join(offenders),
         )
 
     def test_cancel_in_progress_is_declared_explicitly(self):
-        # Implicit false would silently change behaviour on any future edit.
-        self.assertIs(
-            _ci_concurrency().get("cancel-in-progress"),
-            True,
-            "cancel-in-progress must stay an explicit, pinned decision.",
-        )
+        for name, doc in sorted(self._exposed().items()):
+            with self.subTest(workflow=name):
+                self.assertIs(
+                    _concurrency(doc).get("cancel-in-progress"),
+                    True,
+                    "cancel-in-progress must stay an explicit, pinned decision",
+                )
 
 
 class SiblingWorkflowTradeIsUnchangedTest(unittest.TestCase):
-    """The fix cites these three; do not let the citation rot into fiction."""
+    """The comments cite these three; do not let the citation rot."""
 
-    def test_the_uncancelling_workflows_named_in_the_comment_are_still_that_way(self):
+    def test_the_uncancelling_workflows_are_still_that_way(self):
         for name in UNCANCELLING_WORKFLOWS:
             with self.subTest(workflow=name):
-                concurrency = _workflow(name).get("concurrency") or {}
                 self.assertIs(
-                    concurrency.get("cancel-in-progress"),
+                    _concurrency(_load(name)).get("cancel-in-progress"),
                     False,
-                    f"{name} is cited in ci.yaml's comment as an existing "
-                    "uncancellable workflow; if it changed, the comment is now "
-                    "wrong.",
+                    f"{name} is cited as an existing uncancellable workflow; if "
+                    "it changed, the comment is now wrong",
                 )
 
 
 class MutantDiscriminationTest(unittest.TestCase):
-    """Proves the assertions above can actually fail.
-
-    A guard whose mutants all read INERT measures nothing, so each real
-    mutation is applied and the expected test is required to catch it.
-    """
-
-    def _group_for(self, text: str) -> str:
-        return yaml.safe_load(text)["concurrency"]["group"]
+    """Proves the assertions can fail. All-INERT guards measure nothing."""
 
     def _catch(self, group: str) -> bool:
-        """Would the per-commit assertions reject this group?"""
+        """Would the push-verdict assertions reject this group? True == caught."""
         ok = (
             "github.sha" in group
             and "github.event_name" in group
             and re.search(r"event_name\s*==\s*'push'", group) is not None
             and "'pr'" in group
         )
-        return not ok  # True == caught
+        return not ok
 
     def test_control_unmutated_group_is_accepted(self):
-        # The no-op control. If this fails, the harness is not measuring the
+        # The no-op control. If this fails the harness is not measuring the
         # property at all -- it is always answering "caught".
-        group = self._group_for(CI_YAML.read_text(encoding="utf-8"))
+        live = _concurrency(_load("ci.yaml"))["group"]
         self.assertFalse(
-            self._catch(group),
+            self._catch(live),
             "the live ci.yaml group was rejected by the harness; the harness "
             "does not implement the property it is supposed to test",
         )
 
     def test_the_pre_fix_group_is_caught(self):
-        # The exact configuration measured in production on 2026-10-06.
+        # The exact configuration measured in production.
         self.assertTrue(
             self._catch("${{ github.workflow }}-${{ github.ref }}"),
-            "the pre-fix group must be rejected; it is the configuration that "
-            "produced 35 consecutive verdicts-less cancelled runs",
+            "the pre-fix group must be rejected: it produced 35 consecutive "
+            "verdicts-less cancelled runs",
         )
 
     def test_unconditional_sha_is_caught(self):
-        # Remembers sha on PR runs too, disabling PR cancellation via a group
-        # that mentions every ref-scoping token. Structure must be checked.
         self.assertTrue(
             self._catch("${{ github.workflow }}-${{ github.ref }}-${{ github.sha }}"),
             "an unconditional github.sha must be caught: it looks right and "
@@ -211,18 +347,37 @@ class MutantDiscriminationTest(unittest.TestCase):
                 "${{ github.event_name == 'pull_request' && github.sha || 'pr' }}"
             ),
             "an inverted event test must be caught: PR runs would get the "
-            "per-commit group and push runs the shared one, which is the "
-            "defect wearing a fix's clothes",
+            "per-commit group and push runs the shared one",
         )
 
-    def test_missing_cancel_flag_is_caught(self):
-        text = CI_YAML.read_text(encoding="utf-8")
-        document = yaml.safe_load(text)
-        self.assertIs(
-            document["concurrency"].get("cancel-in-progress"),
-            True,
-            "sanity: the live workflow must currently declare cancel-in-progress",
+
+class ExposureDerivationTest(unittest.TestCase):
+    """The derivation itself is the load-bearing part of this file."""
+
+    def setUp(self):
+        self.docs = {n: _load(n) for n in _workflow_names()}
+
+    def test_reusable_workflow_is_exposed_through_its_caller(self):
+        # compatibility.yaml's own on: block does not list develop. It is still
+        # exposed because ci.yaml calls it and ci.yaml pushes to develop.
+        self.assertNotIn(
+            "develop", _push_branches(self.docs["compatibility.yaml"]) or set()
         )
+        self.assertTrue(
+            _sees_develop("compatibility.yaml", self.docs),
+            "a reusable workflow must inherit its callers' push branches",
+        )
+
+    def test_workflow_with_no_develop_path_is_not_exposed(self):
+        # The control for the derivation: pull_request-only.
+        self.assertFalse(
+            _sees_develop("labeler.yaml", self.docs),
+            "labeler.yaml is pull_request-only and must not be reported",
+        )
+
+    def test_own_push_filter_is_used_for_non_reusable(self):
+        self.assertTrue(_sees_develop("supply-chain.yaml", self.docs))
+        self.assertTrue(_sees_develop("quality-gate.yaml", self.docs))
 
 
 if __name__ == "__main__":  # pragma: no cover

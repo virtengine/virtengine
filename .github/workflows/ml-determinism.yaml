@@ -15,8 +15,21 @@ on:
         default: "false"
         type: boolean
 
+# Two properties, both load-bearing.
+#
+# 1. Per-commit on push, per-ref on pull_request (see ci.yaml for the argument).
+#    A cancelled run publishes NO verdict.
+# 2. `github.workflow` is REQUIRED and must come first. This is a REUSABLE
+#    workflow called by ci.yaml, quality-gate.yaml and release.yaml. In a called
+#    workflow `github.workflow` resolves to the CALLER's name, so omitting it
+#    puts all three callers into ONE group per ref: ci.yaml's push run was being
+#    cancelled by quality-gate.yaml's run for the same commit. Measured: sha
+#    abd751f2a carries a cancelled run and a successful run on the same ref.
+#
+# Pinned by .github/tests/test_ci_concurrency_verdict.py, which reads the PARSED
+# block and asserts both properties.
 concurrency:
-  group: ml-determinism-${{ github.ref }}
+  group: ml-determinism-${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || 'pr' }}
   cancel-in-progress: true
 
 permissions:

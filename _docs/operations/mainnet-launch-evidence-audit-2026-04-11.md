@@ -2,7 +2,7 @@
 
 > **Historical record:** This audit describes the April 2026 evidence state;
 > that MainNet window did not proceed. It does not approve the current TestNet
-> January 2027 or MainNet March 2027 windows. See
+> or MainNet launches, neither of which has a date set (20XX). See
 > `network-launch-schedule.md`.
 
 Last updated: 2026-04-11
