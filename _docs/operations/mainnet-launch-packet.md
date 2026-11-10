@@ -1,14 +1,14 @@
 # Mainnet Launch Packet (Evidence + Hashes)
 
 > **Historical baseline:** This packet was assembled for the April 2026
-> MainNet window, which did not proceed. It must be rebuilt with January 2027
-> TestNet exit evidence and fresh approvals before the March 2027 MainNet
-> launch. See `network-launch-schedule.md`.
+> MainNet window, which did not proceed. It must be rebuilt with TestNet exit
+> evidence and fresh approvals before the MainNet launch (20XX, no date set).
+> See `network-launch-schedule.md`.
 >
 > **Integrity note:** The manifest hashes below are the values recorded when
 > the April 2026 packet closed. Supersession notices added to the historical
 > Markdown records are intentionally not represented by those old hashes. The
-> 2027 launch packets must generate a new manifest and new hashes; this packet
+> future launch packets must generate a new manifest and new hashes; this packet
 > must not be reused as a current integrity manifest.
 
 Last updated: 2026-04-11
@@ -99,5 +99,5 @@ Record the hash outputs in the Evidence manifest table.
 - Update the launch runbook to reference this packet
 - The packet historically recorded `GO` for the scheduled 2026-04-18 UTC
   launch window and the 2026-04-19 UTC backup window; neither window proceeded
-- Current public documentation must use the January 2027 TestNet and March
-  2027 MainNet schedule in `network-launch-schedule.md`
+- Current public documentation must use the undated TestNet and MainNet
+  schedule (20XX, no date set) in `network-launch-schedule.md`

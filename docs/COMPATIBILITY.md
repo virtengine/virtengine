@@ -7,8 +7,8 @@ This document describes the compatibility posture that can be supported by check
 As of `2026-09-01`:
 
 - the repository contains active development on `main`;
-- **TestNet is planned for the January 2027 launch window**;
-- **MainNet is planned for the March 2027 launch window**, after TestNet exit criteria and a fresh go/no-go approval;
+- **TestNet is planned for 20XX; no launch date has been set**;
+- **MainNet is planned for 20XX; no launch date has been set**, after TestNet exit criteria and a fresh go/no-go approval;
 - no public stable MainNet support window or end-of-life calendar is approved in repository evidence.
 
 Because of that, VirtEngine still does **not** publish an `N-2` support policy or a guaranteed production maintenance window for older minor releases. TestNet is a pre-production proving environment and does not create a MainNet compatibility or support commitment.
