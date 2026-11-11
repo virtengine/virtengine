@@ -25,7 +25,7 @@ gdown==6.4.0
 
 # Image Processing
 opencv-python==4.8.1.78
-Pillow==12.3.0
+Pillow==13.0.0
 
 # Numerical Computing
 numpy==1.26.4
